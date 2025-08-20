@@ -1,10 +1,10 @@
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform } from 'react-native';
 
 import { HelloWave } from '@/components/HelloWave';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { TailwindText } from '@/components/TailwindText';
+import { TailwindView } from '@/components/TailwindView';
 
 export default function HomeScreen() {
   return (
@@ -13,63 +13,44 @@ export default function HomeScreen() {
       headerImage={
         <Image
           source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+          className="h-44 w-72 bottom-0 left-0 absolute"
         />
       }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
+      <TailwindView className="flex-row items-center gap-2">
+        <TailwindText variant="title">Welcome!</TailwindText>
         <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
+      </TailwindView>
+      <TailwindView className="gap-2 mb-2">
+        <TailwindText variant="subtitle">Step 1: Try it</TailwindText>
+        <TailwindText variant="body">
+          Edit <TailwindText variant="body" weight="medium">app/(tabs)/index.tsx</TailwindText> to see changes.
           Press{' '}
-          <ThemedText type="defaultSemiBold">
+          <TailwindText variant="body" weight="medium">
             {Platform.select({
               ios: 'cmd + d',
               android: 'cmd + m',
               web: 'F12',
             })}
-          </ThemedText>{' '}
+          </TailwindText>{' '}
           to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
+        </TailwindText>
+      </TailwindView>
+      <TailwindView className="gap-2 mb-2">
+        <TailwindText variant="subtitle">Step 2: Explore</TailwindText>
+        <TailwindText variant="body">
           {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
+        </TailwindText>
+      </TailwindView>
+      <TailwindView className="gap-2 mb-2">
+        <TailwindText variant="subtitle">Step 3: Get a fresh start</TailwindText>
+        <TailwindText variant="body">
           {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
+          <TailwindText variant="body" weight="medium">npm run reset-project</TailwindText> to get a fresh{' '}
+          <TailwindText variant="body" weight="medium">app</TailwindText> directory. This will move the current{' '}
+          <TailwindText variant="body" weight="medium">app</TailwindText> to{' '}
+          <TailwindText variant="body" weight="medium">app-example</TailwindText>.
+        </TailwindText>
+      </TailwindView>
     </ParallaxScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});

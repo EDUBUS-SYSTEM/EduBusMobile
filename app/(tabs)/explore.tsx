@@ -1,11 +1,11 @@
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform } from 'react-native';
 
 import { Collapsible } from '@/components/Collapsible';
 import { ExternalLink } from '@/components/ExternalLink';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { TailwindText } from '@/components/TailwindText';
+import { TailwindView } from '@/components/TailwindView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 
 export default function TabTwoScreen() {
@@ -17,94 +17,81 @@ export default function TabTwoScreen() {
           size={310}
           color="#808080"
           name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
+          className="text-gray-500 -bottom-22 -left-9 absolute"
         />
       }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
+      <TailwindView className="flex-row gap-2">
+        <TailwindText variant="title">Explore</TailwindText>
+      </TailwindView>
+      <TailwindText variant="body">This app includes example code to help you get started.</TailwindText>
       <Collapsible title="File-based routing">
-        <ThemedText>
+        <TailwindText variant="body">
           This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
+          <TailwindText variant="body" weight="medium">app/(tabs)/index.tsx</TailwindText> and{' '}
+          <TailwindText variant="body" weight="medium">app/(tabs)/explore.tsx</TailwindText>
+        </TailwindText>
+        <TailwindText variant="body">
+          The layout file in <TailwindText variant="body" weight="medium">app/(tabs)/_layout.tsx</TailwindText>{' '}
           sets up the tab navigator.
-        </ThemedText>
+        </TailwindText>
         <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
+          <TailwindText variant="body" className="text-blue-600 dark:text-blue-400">Learn more</TailwindText>
         </ExternalLink>
       </Collapsible>
       <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
+        <TailwindText variant="body">
           You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
+          <TailwindText variant="body" weight="medium">w</TailwindText> in the terminal running this project.
+        </TailwindText>
       </Collapsible>
       <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
+        <TailwindText variant="body">
+          For static images, you can use the <TailwindText variant="body" weight="medium">@2x</TailwindText> and{' '}
+          <TailwindText variant="body" weight="medium">@3x</TailwindText> suffixes to provide files for
           different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
+        </TailwindText>
+        <Image source={require('@/assets/images/react-logo.png')} className="self-center" />
         <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
+          <TailwindText variant="body" className="text-blue-600 dark:text-blue-400">Learn more</TailwindText>
         </ExternalLink>
       </Collapsible>
       <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
+        <TailwindText variant="body">
+          Open <TailwindText variant="body" weight="medium">app/_layout.tsx</TailwindText> to see how to load{' '}
+          <TailwindText variant="body" className="font-roboto-slab">
             custom fonts such as this one.
-          </ThemedText>
-        </ThemedText>
+          </TailwindText>
+        </TailwindText>
         <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
+          <TailwindText variant="body" className="text-blue-600 dark:text-blue-400">Learn more</TailwindText>
         </ExternalLink>
       </Collapsible>
       <Collapsible title="Light and dark mode components">
-        <ThemedText>
+        <TailwindText variant="body">
           This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
+          <TailwindText variant="body" weight="medium">useColorScheme()</TailwindText> hook lets you inspect
           what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
+        </TailwindText>
         <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
+          <TailwindText variant="body" className="text-blue-600 dark:text-blue-400">Learn more</TailwindText>
         </ExternalLink>
       </Collapsible>
       <Collapsible title="Animations">
-        <ThemedText>
+        <TailwindText variant="body">
           This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText>{' '}
+          <TailwindText variant="body" weight="medium">components/HelloWave.tsx</TailwindText> component uses
+          the powerful <TailwindText variant="body" weight="medium">react-native-reanimated</TailwindText>{' '}
           library to create a waving hand animation.
-        </ThemedText>
+        </TailwindText>
         {Platform.select({
           ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
+            <TailwindText variant="body">
+              The <TailwindText variant="body" weight="medium">components/ParallaxScrollView.tsx</TailwindText>{' '}
               component provides a parallax effect for the header image.
-            </ThemedText>
+            </TailwindText>
           ),
         })}
       </Collapsible>
     </ParallaxScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-});

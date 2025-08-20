@@ -10,6 +10,10 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    'RobotoSlab-Regular': require('../assets/fonts/RobotoSlab-Regular.ttf'),
+    'RobotoSlab-Light': require('../assets/fonts/RobotoSlab-Light.ttf'),
+    'RobotoSlab-Medium': require('../assets/fonts/RobotoSlab-Medium.ttf'),
+    'RobotoSlab-Bold': require('../assets/fonts/RobotoSlab-Bold.ttf'),
   });
 
   if (!loaded) {
@@ -20,6 +24,8 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
+        <Stack.Screen name="test" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
