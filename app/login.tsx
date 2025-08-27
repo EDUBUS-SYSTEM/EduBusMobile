@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { router } from 'expo-router';
 
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
@@ -279,6 +280,10 @@ export default function LoginScreen() {
             elevation: 6
           }}
           activeOpacity={0.8}
+          onPress={() => {
+            // Navigate to splash screen first
+            router.push('/splash' as any);
+          }}
         >
           <Text style={{
             color: '#FFFFFF',
