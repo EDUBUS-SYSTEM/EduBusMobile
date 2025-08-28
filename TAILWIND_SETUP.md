@@ -1,48 +1,48 @@
-# Tailwind CSS Setup với Font Roboto Slab
+# Tailwind CSS Setup with Roboto Slab Font
 
-Dự án này đã được cấu hình với Tailwind CSS và font Roboto Slab.
+This project is configured with Tailwind CSS and the Roboto Slab font.
 
-## Cấu hình đã hoàn thành
+## Completed Configuration
 
-### 1. Dependencies đã cài đặt
-- `nativewind`: Tailwind CSS cho React Native
-- `tailwindcss`: Framework CSS
-- `react-native-svg`: Hỗ trợ SVG
+### 1. Installed Dependencies
+- `nativewind`: Tailwind CSS for React Native
+- `tailwindcss`: CSS framework
+- `react-native-svg`: SVG support
 
-### 2. Font Roboto Slab
-Các font đã được tải và cấu hình:
+### 2. Roboto Slab Font
+The fonts have been loaded and configured:
 - `RobotoSlab-Regular.ttf`
 - `RobotoSlab-Light.ttf`
 - `RobotoSlab-Medium.ttf`
 - `RobotoSlab-Bold.ttf`
 
-### 3. Components mới
-- `TailwindText`: Component Text với Tailwind CSS và font Roboto Slab
-- `TailwindView`: Component View với Tailwind CSS
+### 3. New Components
+- `TailwindText`: Text component with Tailwind CSS and Roboto Slab font
+- `TailwindView`: View component with Tailwind CSS
 
-## Cách sử dụng
+## Usage
 
-### Sử dụng TailwindText
+### Using TailwindText
 ```tsx
 import { TailwindText } from '@/components/TailwindText';
 
-// Các variant có sẵn: 'default', 'title', 'subtitle', 'body', 'caption', 'button'
-// Các weight có sẵn: 'light', 'regular', 'medium', 'bold'
+// Available variants: 'default', 'title', 'subtitle', 'body', 'caption', 'button'
+// Available weights: 'light', 'regular', 'medium', 'bold'
 
-<TailwindText variant="title">Tiêu đề lớn</TailwindText>
-<TailwindText variant="subtitle" weight="medium">Tiêu đề phụ</TailwindText>
-<TailwindText variant="body">Nội dung văn bản</TailwindText>
-<TailwindText variant="caption" weight="light">Chú thích nhỏ</TailwindText>
+<TailwindText variant="title">Main Title</TailwindText>
+<TailwindText variant="subtitle" weight="medium">Subtitle</TailwindText>
+<TailwindText variant="body">Body text</TailwindText>
+<TailwindText variant="caption" weight="light">Small caption</TailwindText>
 ```
 
-### Sử dụng TailwindView
+### Using TailwindView
 ```tsx
 import { TailwindView } from '@/components/TailwindView';
 
-// Các variant có sẵn: 'default', 'container', 'card', 'section'
+// Available variants: 'default', 'container', 'card', 'section'
 
 <TailwindView variant="container" className="p-4">
-  <TailwindText>Nội dung</TailwindText>
+  <TailwindText>Content</TailwindText>
 </TailwindView>
 
 <TailwindView variant="card" className="m-4">
@@ -50,7 +50,7 @@ import { TailwindView } from '@/components/TailwindView';
 </TailwindView>
 ```
 
-### Sử dụng Tailwind CSS trực tiếp
+### Using Tailwind CSS directly
 ```tsx
 import { styled } from 'nativewind';
 import { View, Text } from 'react-native';
@@ -65,18 +65,18 @@ const StyledText = styled(Text);
 </StyledView>
 ```
 
-## Font Classes có sẵn
+## Available Font Classes
 - `font-roboto-slab`: Roboto Slab Regular
 - `font-roboto-slab-light`: Roboto Slab Light
 - `font-roboto-slab-medium`: Roboto Slab Medium
 - `font-roboto-slab-bold`: Roboto Slab Bold
 
-## Chạy dự án
+## Run the project
 ```bash
 npm start
 ```
 
-## Lưu ý
-- Đảm bảo Metro bundler được restart sau khi thay đổi cấu hình
-- Font sẽ được load tự động khi app khởi động
-- Dark mode được hỗ trợ tự động với các class `dark:`
+## Notes
+- Ensure the Metro bundler is restarted after configuration changes
+- Fonts will be loaded automatically when the app starts
+- Dark mode is automatically supported with the `dark:` classes

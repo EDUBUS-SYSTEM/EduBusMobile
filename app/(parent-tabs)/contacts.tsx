@@ -6,29 +6,29 @@ export default function ParentContactsScreen() {
   const contacts = [
     {
       id: 1,
-      name: 'Cô Nguyễn Thị Mai',
-      role: 'Giáo viên chủ nhiệm',
+      name: 'Ms. Nguyen Thi Mai',
+      role: 'Homeroom Teacher',
       phone: '0901 234 567',
       avatar: '👩‍🏫'
     },
     {
       id: 2,
-      name: 'Anh Trần Văn Nam',
-      role: 'Tài xế xe buýt',
+      name: 'Mr. Tran Van Nam',
+      role: 'Bus Driver',
       phone: '0901 234 568',
       avatar: '🚌'
     },
     {
       id: 3,
-      name: 'Cô Lê Thị Hoa',
-      role: 'Nhân viên văn phòng',
+      name: 'Ms. Le Thi Hoa',
+      role: 'Office Staff',
       phone: '0901 234 569',
       avatar: '👩‍💼'
     },
     {
       id: 4,
-      name: 'Anh Phạm Văn Minh',
-      role: 'Bảo vệ trường',
+      name: 'Mr. Pham Van Minh',
+      role: 'School Security',
       phone: '0901 234 570',
       avatar: '👮‍♂️'
     }
@@ -54,7 +54,7 @@ export default function ParentContactsScreen() {
           fontSize: 28,
           textAlign: 'center'
         }}>
-          Danh bạ liên hệ
+          Contacts
         </Text>
         <Text style={{
           color: '#000000',
@@ -63,7 +63,7 @@ export default function ParentContactsScreen() {
           textAlign: 'center',
           marginTop: 5
         }}>
-          Liên hệ với nhà trường và đội ngũ vận chuyển
+          Contact the school and transportation team
         </Text>
       </LinearGradient>
 
@@ -86,7 +86,7 @@ export default function ParentContactsScreen() {
             marginLeft: 10,
             flex: 1
           }}>
-            Tìm kiếm liên hệ...
+            Search contacts...
           </Text>
         </View>
 
@@ -107,7 +107,7 @@ export default function ParentContactsScreen() {
               color: '#F44336',
               marginLeft: 10
             }}>
-              Liên hệ khẩn cấp
+              Emergency Contact
             </Text>
           </View>
           <TouchableOpacity style={{
@@ -129,7 +129,7 @@ export default function ParentContactsScreen() {
                 fontSize: 16,
                 color: '#000000'
               }}>
-                Hotline khẩn cấp
+                Emergency Hotline
               </Text>
               <Text style={{
                 fontFamily: 'RobotoSlab-Regular',
@@ -150,7 +150,7 @@ export default function ParentContactsScreen() {
           color: '#000000',
           marginBottom: 15
         }}>
-          Liên hệ thường xuyên
+          Frequent Contacts
         </Text>
 
         {contacts.map((contact) => (

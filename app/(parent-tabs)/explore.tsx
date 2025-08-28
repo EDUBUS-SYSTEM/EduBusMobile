@@ -6,43 +6,43 @@ export default function ParentExploreScreen() {
   const features = [
     {
       id: 1,
-      title: 'Theo dõi xe buýt',
-      description: 'Xem vị trí xe buýt real-time',
+      title: 'Bus Tracking',
+      description: 'View bus location in real-time',
       icon: 'location',
       color: '#4CAF50'
     },
     {
       id: 2,
-      title: 'Lịch trình',
-      description: 'Xem lịch trình xe buýt hàng ngày',
+      title: 'Schedule',
+      description: 'View daily bus schedules',
       icon: 'calendar',
       color: '#2196F3'
     },
     {
       id: 3,
-      title: 'Báo cáo',
-      description: 'Xem báo cáo chi tiết về chuyến đi',
+      title: 'Reports',
+      description: 'View detailed trip reports',
       icon: 'analytics',
       color: '#FF9800'
     },
     {
       id: 4,
-      title: 'Thông báo',
-      description: 'Cài đặt thông báo cho chuyến đi',
+      title: 'Notifications',
+      description: 'Configure trip notifications',
       icon: 'notifications',
       color: '#9C27B0'
     },
     {
       id: 5,
-      title: 'Hướng dẫn',
-      description: 'Hướng dẫn sử dụng ứng dụng',
+      title: 'Guides',
+      description: 'How to use the application',
       icon: 'help-circle',
       color: '#607D8B'
     },
     {
       id: 6,
-      title: 'Phản hồi',
-      description: 'Gửi phản hồi và góp ý',
+      title: 'Feedback',
+      description: 'Send feedback and suggestions',
       icon: 'chatbubble',
       color: '#E91E63'
     }
@@ -51,21 +51,21 @@ export default function ParentExploreScreen() {
   const news = [
     {
       id: 1,
-      title: 'Cập nhật lịch trình mới',
-      date: 'Hôm nay',
-      content: 'Lịch trình xe buýt đã được cập nhật cho tuần tới'
+      title: 'New schedule update',
+      date: 'Today',
+      content: 'Bus schedules have been updated for next week'
     },
     {
       id: 2,
-      title: 'Thông báo bảo trì',
-      date: '2 ngày trước',
-      content: 'Xe buýt số 5 sẽ tạm ngưng hoạt động để bảo trì'
+      title: 'Maintenance notice',
+      date: '2 days ago',
+      content: 'Bus number 5 will be temporarily out of service for maintenance'
     },
     {
       id: 3,
-      title: 'Tính năng mới',
-      date: '1 tuần trước',
-      content: 'Thêm tính năng theo dõi vị trí real-time'
+      title: 'New feature',
+      date: '1 week ago',
+      content: 'Added real-time location tracking feature'
     }
   ];
 
@@ -89,7 +89,7 @@ export default function ParentExploreScreen() {
           fontSize: 28,
           textAlign: 'center'
         }}>
-          Khám phá
+          Explore
         </Text>
         <Text style={{
           color: '#000000',
@@ -98,7 +98,7 @@ export default function ParentExploreScreen() {
           textAlign: 'center',
           marginTop: 5
         }}>
-          Khám phá các tính năng mới và thông tin hữu ích
+          Discover new features and useful information
         </Text>
       </LinearGradient>
 
@@ -116,7 +116,7 @@ export default function ParentExploreScreen() {
             color: '#000000',
             marginBottom: 15
           }}>
-            Thống kê nhanh
+            Quick Stats
           </Text>
           <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
             <View style={{ alignItems: 'center' }}>
@@ -132,7 +132,7 @@ export default function ParentExploreScreen() {
                 fontSize: 12,
                 color: '#666'
               }}>
-                Chuyến đi
+                Trips
               </Text>
             </View>
             <View style={{ alignItems: 'center' }}>
@@ -148,7 +148,7 @@ export default function ParentExploreScreen() {
                 fontSize: 12,
                 color: '#666'
               }}>
-                Đúng giờ
+                On-time
               </Text>
             </View>
             <View style={{ alignItems: 'center' }}>
@@ -164,7 +164,7 @@ export default function ParentExploreScreen() {
                 fontSize: 12,
                 color: '#666'
               }}>
-                Đánh giá
+                Rating
               </Text>
             </View>
           </View>
@@ -177,7 +177,7 @@ export default function ParentExploreScreen() {
           color: '#000000',
           marginBottom: 15
         }}>
-          Tính năng chính
+          Key Features
         </Text>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
@@ -238,7 +238,7 @@ export default function ParentExploreScreen() {
             color: '#000000',
             marginBottom: 15
           }}>
-            Tin tức & Cập nhật
+            News & Updates
           </Text>
 
           {news.map((item) => (
@@ -292,7 +292,7 @@ export default function ParentExploreScreen() {
             color: '#000000',
             marginBottom: 15
           }}>
-            Thao tác nhanh
+            Quick Actions
           </Text>
 
           <View style={{ flexDirection: 'row', gap: 15 }}>
@@ -315,7 +315,7 @@ export default function ParentExploreScreen() {
                 color: '#FFFFFF',
                 marginTop: 5
               }}>
-                Làm mới
+                Refresh
               </Text>
             </TouchableOpacity>
 
@@ -338,7 +338,7 @@ export default function ParentExploreScreen() {
                 color: '#FFFFFF',
                 marginTop: 5
               }}>
-                Chia sẻ
+                Share
               </Text>
             </TouchableOpacity>
           </View>
