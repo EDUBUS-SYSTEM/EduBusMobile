@@ -4,27 +4,30 @@ export interface User {
     id: string;
     email: string;
     name: string;
-    role: "admin";
+    role: "Admin" | "Driver" | "Parent";
     avatar?: string;
     createdAt: string;
     updatedAt: string;
-  }
+}
   
-  export interface LoginCredentials {
+export interface LoginCredentials {
     email: string;
     password: string;
-  }
+}
   
-  export interface AuthResponse {
-    fullName: string;
-    role: "admin" | "user" | "moderator";
-    token: string;
+export interface AuthResponse {
+    accessToken: string;
     refreshToken: string;
-  }
+    fullName: string;
+    role: "Admin" | "Driver" | "Parent";
+    expiresAtUtc: string;
+}
   
-  export interface ApiResponse<T> {
+export interface ApiResponse<T> {
     success: boolean;
     data: T;
-    message?: string;
-    errors?: string[];
-  }
+    error?: {
+        code: string;
+        message: string;
+    };
+}

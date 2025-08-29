@@ -6,11 +6,11 @@ export default function TabBarDriver() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#FF9800',
+        tabBarActiveTintColor: '#01CBCA',
         tabBarInactiveTintColor: '#687076',
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#FFF3E0',
+          backgroundColor: '#FFF9C4',
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
@@ -24,53 +24,53 @@ export default function TabBarDriver() {
         },
       }}>
       <Tabs.Screen
-        name="route"
+        name="dashboard"
         options={{
-          title: 'Route',
+          title: 'Dashboard',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name="speedometer" 
+              size={24} 
+              color={focused ? '#01CBCA' : color} 
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="routes"
+        options={{
+          title: 'Routes',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
               name="map" 
               size={24} 
-              color={focused ? '#FF9800' : color} 
+              color={focused ? '#01CBCA' : color} 
             />
           ),
         }}
       />
       <Tabs.Screen
-        name="passengers"
+        name="students"
         options={{
-          title: 'Passengers',
+          title: 'Students',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
               name="people" 
               size={24} 
-              color={focused ? '#FF9800' : color} 
+              color={focused ? '#01CBCA' : color} 
             />
           ),
         }}
       />
       <Tabs.Screen
-        name="status"
+        name="account"
         options={{
-          title: 'Status',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name="checkmark-circle" 
-              size={24} 
-              color={focused ? '#FF9800' : color} 
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
+          title: 'Account',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
               name="person" 
               size={24} 
-              color={focused ? '#FF9800' : color} 
+              color={focused ? '#01CBCA' : color} 
             />
           ),
         }}

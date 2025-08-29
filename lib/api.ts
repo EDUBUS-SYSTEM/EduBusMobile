@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
 // Cấu hình base URL cho API (Expo uses EXPO_PUBLIC_* for client-side env)
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || '/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.12:5223/api';
 
 // Tạo axios instance với cấu hình mặc định
 export const apiClient = axios.create({
@@ -17,7 +17,7 @@ export const apiClient = axios.create({
 apiClient.interceptors.request.use(
   async (config) => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('accessToken');
       if (token) {
         config.headers = config.headers ?? {};
         (config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
@@ -36,7 +36,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !url.includes('/auth/login')) {
       // Xử lý khi token hết hạn
       try {
-        await AsyncStorage.removeItem('token');
+        await AsyncStorage.removeItem('accessToken');
       } catch {}
       // Ở mobile không có window.location; có thể phát broadcast / điều hướng ở nơi gọi
       // Tối thiểu: ghi log

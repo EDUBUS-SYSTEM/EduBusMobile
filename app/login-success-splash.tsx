@@ -1,55 +1,57 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useEffect } from 'react';
-import { Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Text, View, Animated } from 'react-native';
 import { authApi } from '@/lib/auth/auth.api';
 
-export default function SplashScreen() {
+export default function LoginSuccessSplash() {
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [scaleAnim] = useState(new Animated.Value(0.8));
+
   useEffect(() => {
-    // Check authentication status and route accordingly
-    const checkAuthAndRoute = async () => {
+    // Start animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Navigate after 2 seconds
+    const timer = setTimeout(async () => {
       try {
-        const isLoggedIn = await authApi.isLoggedIn();
+        const userInfo = await authApi.getUserInfo();
         
-        if (isLoggedIn) {
-          // User is logged in, get their role and route accordingly
-          const userInfo = await authApi.getUserInfo();
-          
-          if (userInfo.role === 'Driver') {
-            router.replace('/(driver-tabs)/dashboard' as any);
-          } else if (userInfo.role === 'Parent') {
-            router.replace('/(parent-tabs)/home' as any);
-          } else if (userInfo.role === 'Admin') {
-            // Admin accounts are not allowed, logout and go to login
-            console.log('Admin account detected - logging out');
-            await authApi.logout();
-            router.replace('/login' as any);
-          } else {
-            // Unknown role, logout and go to login
-            console.log('Unknown role detected - logging out');
-            await authApi.logout();
-            router.replace('/login' as any);
-          }
+        if (userInfo.role === 'Driver') {
+          router.replace('/(driver-tabs)/dashboard' as any);
+        } else if (userInfo.role === 'Parent') {
+          router.replace('/(parent-tabs)/home' as any);
         } else {
-          // User is not logged in, go to login screen
+          // If somehow we get here with Admin role, logout and go to login
+          console.error('Admin role detected in splash screen - this should not happen');
+          await authApi.logout();
           router.replace('/login' as any);
         }
       } catch (error) {
-        console.error('Error checking authentication:', error);
+        console.error('Error getting user info:', error);
         // Fallback to login screen
         router.replace('/login' as any);
       }
-    };
-
-    // Add a small delay for better UX
-    const timer = setTimeout(checkAuthAndRoute, 2000);
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-      {/* Top Yellow Circles (like login) */}
+      {/* Top Yellow Circles */}
       <View style={{
         paddingTop: 80,
         paddingBottom: 60,
@@ -160,8 +162,13 @@ export default function SplashScreen() {
           }} />
         </View>
 
-        {/* Welcome Text */}
-        <View style={{ alignItems: 'center', marginTop: 50 }}>
+        {/* Success Text */}
+        <Animated.View style={{ 
+          alignItems: 'center', 
+          marginTop: 50,
+          opacity: fadeAnim,
+          transform: [{ scale: scaleAnim }]
+        }}>
           <Text style={{
             fontFamily: 'RobotoSlab-Bold',
             fontSize: 42,
@@ -173,9 +180,9 @@ export default function SplashScreen() {
             textShadowRadius: 4,
             letterSpacing: 2,
           }}>
-            Welcome !
+            Welcome Back!
           </Text>
-        </View>
+        </Animated.View>
       </View>
 
       {/* Main Logo Section */}
@@ -185,10 +192,12 @@ export default function SplashScreen() {
         justifyContent: 'center',
         paddingHorizontal: 20,
       }}>
-        {/* Main Logo */}
-        <View style={{
+        {/* Main Logo with Animation */}
+        <Animated.View style={{
           alignItems: 'center',
           justifyContent: 'center',
+          opacity: fadeAnim,
+          transform: [{ scale: scaleAnim }]
         }}>
           <View style={{
             width: 280,
@@ -214,10 +223,22 @@ export default function SplashScreen() {
               contentFit="contain"
             />
           </View>
-        </View>
+        </Animated.View>
+
+        {/* Loading Text */}
+        <Animated.Text style={{
+          marginTop: 30,
+          fontSize: 18,
+          fontFamily: 'RobotoSlab-Regular',
+          color: '#666666',
+          textAlign: 'center',
+          opacity: fadeAnim,
+        }}>
+          Loading your dashboard...
+        </Animated.Text>
       </View>
 
-      {/* Bottom Yellow Circles (mirrored) */}
+      {/* Bottom Yellow Circles */}
       <View style={{
         paddingTop: 60,
         paddingBottom: 80,
@@ -234,7 +255,6 @@ export default function SplashScreen() {
           bottom: 0,
         }}>
           {/* Bottom Circles (mirrored from top) */}
-          {/* Circle 1 - Bottom Left (mirrored from top right) */}
           <View style={{
             position: 'absolute',
             bottom: 0,
@@ -246,7 +266,6 @@ export default function SplashScreen() {
             opacity: 1
           }} />
           
-          {/* Circle 2 - Bottom Right (mirrored from top left) */}
           <View style={{
             position: 'absolute',
             bottom: 10,
@@ -258,7 +277,6 @@ export default function SplashScreen() {
             opacity: 1
           }} />
           
-          {/* Circle 3 - Bottom Center (mirrored from top center) */}
           <View style={{
             position: 'absolute',
             bottom: 10,
@@ -281,7 +299,6 @@ export default function SplashScreen() {
             opacity: 1
           }} />
           
-          {/* Circle 4 - Bottom Right (mirrored from top left) */}
           <View style={{
             position: 'absolute',
             bottom: -80,
@@ -293,7 +310,6 @@ export default function SplashScreen() {
             opacity: 1
           }} />
           
-          {/* Circle 5 - Bottom Left (mirrored from top right) */}
           <View style={{
             position: 'absolute',
             bottom: -80,
@@ -305,7 +321,6 @@ export default function SplashScreen() {
             opacity: 1
           }} />
           
-          {/* Circle 6 - Bottom Center (mirrored from top center) */}
           <View style={{
             position: 'absolute',
             bottom: -90,

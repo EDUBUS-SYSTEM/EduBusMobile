@@ -1,14 +1,72 @@
 import { authApi } from '@/lib/auth/auth.api';
+import { isRoleAllowed, getRoleErrorMessage } from '@/lib/auth/auth.utils';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { StatusBar, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StatusBar, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
 
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await authApi.login({ email, password });
+      console.log('Login response:', res);
+      
+      if (res.success && res.data) {
+        // Check if user role is allowed
+        if (!isRoleAllowed(res.data.role)) {
+          Alert.alert(
+            'Access Denied', 
+            getRoleErrorMessage(res.data.role),
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  // Clear any stored data and stay on login screen
+                  authApi.logout();
+                }
+              }
+            ]
+          );
+          return;
+        }
+        
+        console.log('Login success for role:', res.data.role);
+        // Navigate to splash screen which will handle routing based on role
+        router.push('/login-success-splash' as any);
+      } else {
+        // Handle API error response
+        const errorMessage = res.error?.message || 'Login failed. Please try again.';
+        Alert.alert('Login Failed', errorMessage);
+      }
+    } catch (e: any) {
+      console.log('Login error:', e);
+      let errorMessage = 'Login failed. Please try again.';
+      
+      // Handle different types of errors
+      if (e.response?.data?.error?.message) {
+        errorMessage = e.response.data.error.message;
+      } else if (e.message) {
+        errorMessage = e.message;
+      }
+      
+      Alert.alert('Login Failed', errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
          <View style={{ flex: 1, backgroundColor: '#FFFFFF', position: 'relative' }}>
@@ -194,10 +252,13 @@ export default function LoginScreen() {
               fontFamily: 'RobotoSlab-Regular',
               color: '#000000',
             }}
-            placeholder="User"
+            placeholder="Email"
             placeholderTextColor="#929191"
             value={email}
             onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
         
@@ -283,17 +344,12 @@ export default function LoginScreen() {
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.3,
             shadowRadius: 8,
-            elevation: 6
+            elevation: 6,
+            opacity: isLoading ? 0.7 : 1
           }}
           activeOpacity={0.8}
-          onPress={async () => {
-            try {
-              const res = await authApi.login({ email, password });
-              console.log('Login success:', res);
-            } catch (e) {
-              console.log('Login error:', e);
-            }
-          }}
+          onPress={handleLogin}
+          disabled={isLoading}
         >
           <Text style={{
             color: '#FFFFFF',
@@ -302,7 +358,7 @@ export default function LoginScreen() {
             fontSize: 18,
             fontWeight: '900'
           }}>
-            Sign in
+            {isLoading ? 'Signing in...' : 'Sign in'}
           </Text>
         </TouchableOpacity>
       </LinearGradient>
