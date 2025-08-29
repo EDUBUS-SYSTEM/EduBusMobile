@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import { authApi } from '@/lib/auth/auth.api';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function DriverAccountScreen() {
@@ -222,9 +223,18 @@ export default function DriverAccountScreen() {
         {menuItems.map((item) => (
           <TouchableOpacity
             key={item.id}
-            onPress={() => {
+            onPress={async () => {
               if (item.id === 1) {
                 router.push('/account-profile' as any);
+                return;
+              }
+              if (item.id === 7) {
+                try {
+                  await authApi.logout();
+                } finally {
+                  router.replace('/login');
+                }
+                return;
               }
               // Add more navigation logic for other menu items here
             }}

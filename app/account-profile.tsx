@@ -1,16 +1,74 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
+import { apiService } from '@/lib/api';
+
+type UserResponse = {
+  id: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  dateOfBirth?: string;
+};
+
+function decodeJwtPayload<T = any>(token: string): T | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = decodeURIComponent(
+      atob(payload)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
 
 export default function AccountProfileScreen() {
-  // Mock user data - in real app this would come from API
-  const userProfile = {
-    fullName: 'John Smith',
-    email: 'john.smith@email.com',
-    phoneNumber: '+1 (555) 123-4567',
-    dateOfBirth: '15 March 1985',
-    avatar: '👨' // This would be an actual image in real app
-  };
+  const [profile, setProfile] = useState<UserResponse | null>(null);
+  const [fullName, setFullName] = useState<string>('');
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const [token, cachedFullName] = await AsyncStorage.multiGet(['accessToken', 'userFullName']);
+        if (cachedFullName[1]) setFullName(cachedFullName[1]);
+
+        const accessToken = token[1];
+        if (!accessToken) return;
+
+        const payload: any = decodeJwtPayload(accessToken);
+        const userId: string | undefined =
+          payload?.nameid ||
+          payload?.sub ||
+          payload?.['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
+        if (!userId) return;
+
+        const raw = await apiService.get<any>(`/useraccount/${userId}`);
+        const normalized: UserResponse = {
+          id: raw.id || raw.Id,
+          email: raw.email || raw.Email,
+          firstName: raw.firstName || raw.FirstName,
+          lastName: raw.lastName || raw.LastName,
+          phoneNumber: raw.phoneNumber || raw.PhoneNumber,
+          dateOfBirth: raw.dateOfBirth || raw.DateOfBirth,
+        };
+        setProfile(normalized);
+        const name = [normalized.firstName, normalized.lastName].filter(Boolean).join(' ').trim();
+        if (name) setFullName(name);
+      } catch {
+        // noop
+      }
+    };
+    loadProfile();
+  }, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
@@ -113,7 +171,7 @@ export default function AccountProfileScreen() {
             color: '#000000',
             textAlign: 'center'
           }}>
-            {userProfile.fullName}
+            {fullName || 'Account'}
           </Text>
         </View>
 
@@ -156,7 +214,7 @@ export default function AccountProfileScreen() {
               color: '#666666',
               marginLeft: 55
             }}>
-              {userProfile.email}
+              {profile?.email || '—'}
             </Text>
           </View>
 
@@ -197,7 +255,7 @@ export default function AccountProfileScreen() {
               color: '#666666',
               marginLeft: 55
             }}>
-              {userProfile.fullName}
+              {fullName || '—'}
             </Text>
           </View>
 
@@ -238,7 +296,7 @@ export default function AccountProfileScreen() {
               color: '#666666',
               marginLeft: 55
             }}>
-              {userProfile.phoneNumber}
+              {profile?.phoneNumber || '—'}
             </Text>
           </View>
 
@@ -279,7 +337,7 @@ export default function AccountProfileScreen() {
               color: '#666666',
               marginLeft: 55
             }}>
-              {userProfile.dateOfBirth}
+              {profile?.dateOfBirth ? new Date(profile.dateOfBirth).toLocaleDateString() : '—'}
             </Text>
           </View>
         </View>
