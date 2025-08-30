@@ -6,7 +6,6 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 export default function ProfileStudent() {
   const [student, setStudent] = useState<any>(null);
 
-  // Gọi API khi màn hình load
   useEffect(() => {
     API.get("/Student/a1a07301-94b7-4241-8ddd-80b310708681") // 👈 ID test
       .then(res => {
