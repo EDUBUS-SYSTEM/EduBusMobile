@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Platform } from 'react-native';
+import { config } from './config';
 
-// Cấu hình base URL cho API (Expo uses EXPO_PUBLIC_* cho client-side env)
-const RAW_API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://localhost:7061/api';
+// Lấy baseURL từ config.ts
+const RAW_API_BASE_URL = config.API_URL;
 
 // Chuẩn hóa URL theo nền tảng: Android emulator không truy cập được localhost của host
 function normalizeBaseUrl(url: string): string {
@@ -12,25 +13,17 @@ function normalizeBaseUrl(url: string): string {
     const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
 
     if (Platform.OS === 'web' && !isLocalhost) {
-      // Với web dev, luôn dùng localhost như yêu cầu
       parsed.hostname = 'localhost';
     }
-
     if (Platform.OS === 'android' && isLocalhost) {
-      // Android emulator dùng gateway 10.0.2.2 để trỏ về host machine
       parsed.hostname = '10.0.2.2';
     }
-
-    // Chuẩn hóa cặp port/protocol mặc định của ASP.NET dev:
-    // - HTTPS: 7061, HTTP: 5223
     if (parsed.port === '7061' && parsed.protocol === 'http:') {
       parsed.protocol = 'https:';
     }
     if (parsed.port === '5223' && parsed.protocol === 'https:') {
       parsed.protocol = 'http:';
     }
-
-    // Loại bỏ dấu gạch chéo cuối nếu có để tránh double slash
     return parsed.toString().replace(/\/$/, '');
   } catch {
     return url;
@@ -49,8 +42,6 @@ export const apiClient = axios.create({
 });
 
 if (process.env.NODE_ENV !== 'production') {
-  // Log base URL để dễ debug trên web/devtools
-  // eslint-disable-next-line no-console
   console.log('API_BASE_URL =>', API_BASE_URL);
 }
 
@@ -75,12 +66,9 @@ apiClient.interceptors.response.use(
   async (error) => {
     const url = error.config?.url || '';
     if (error.response?.status === 401 && !url.includes('/auth/login')) {
-      // Xử lý khi token hết hạn
       try {
         await AsyncStorage.removeItem('accessToken');
       } catch {}
-      // Ở mobile không có window.location; có thể phát broadcast / điều hướng ở nơi gọi
-      // Tối thiểu: ghi log
       console.warn('Unauthorized - token cleared');
     }
     return Promise.reject(error);
