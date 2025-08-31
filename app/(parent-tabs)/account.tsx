@@ -324,6 +324,7 @@ export default function ParentAccountScreen() {
                   marginTop: 2,
                 }}
               >
+
                 {item.description}
               </Text>
             </View>

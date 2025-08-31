@@ -18,14 +18,12 @@ function normalizeBaseUrl(url: string): string {
     if (Platform.OS === 'android' && isLocalhost) {
       parsed.hostname = '10.0.2.2';
     }
-
     if (parsed.port === '7061' && parsed.protocol === 'http:') {
       parsed.protocol = 'https:';
     }
     if (parsed.port === '5223' && parsed.protocol === 'https:') {
       parsed.protocol = 'http:';
     }
-
     return parsed.toString().replace(/\/$/, '');
   } catch {
     return url;
