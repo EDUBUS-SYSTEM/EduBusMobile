@@ -50,12 +50,12 @@ export default function TabBarParent() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="children-list"
         options={{
-          title: 'Explore',
+          title: 'Children List',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
-              name="compass" 
+              name="people-circle" 
               size={24} 
               color={focused ? '#01CBCA' : color} 
             />
