@@ -11,6 +11,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ScrollView,
 } from "react-native";
 
 export default function ChildrenProfileScreen() {
@@ -30,16 +31,16 @@ function ChildrenProfileContent() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const childParam = params.child;
-  
+
   console.log("Received params:", params);
   console.log("Child param:", childParam);
-  
+
   // Parse child data from params to get childId
   let childId: string | null = null;
   let fallbackData = null;
-  
+
   try {
-    if (childParam && typeof childParam === 'string') {
+    if (childParam && typeof childParam === "string") {
       const parsedChild = JSON.parse(decodeURIComponent(childParam));
       childId = parsedChild.id;
       fallbackData = parsedChild;
@@ -48,17 +49,18 @@ function ChildrenProfileContent() {
   } catch (error) {
     console.log("Error parsing child param:", error);
   }
-  
+
   // Use API hook to fetch child data
   const { child: apiChild, loading, error } = useChild(childId);
-  
+
   // Fallback data if no params are passed or API fails
   const defaultChildData = {
     id: "1",
     firstName: "Tran Minh",
     lastName: "Hieu",
-    avatarUrl: "https://cdn.vietnam.vn/wp-content/uploads/2024/08/HIEUTHUHAI-khien-ca-Hieu-thu-nhat-cung-noi-tieng.jpg",
-    parentId: "", 
+    avatarUrl:
+      "https://cdn.vietnam.vn/wp-content/uploads/2024/08/HIEUTHUHAI-khien-ca-Hieu-thu-nhat-cung-noi-tieng.jpg",
+    parentId: "",
     className: "1B",
     schoolName: "FPT School",
     address: "105 Xuan Dieu",
@@ -68,7 +70,9 @@ function ChildrenProfileContent() {
   let childData;
   if (loading) {
     // Show loading state
-    childData = fallbackData ? childrenApi.formatChildForUI(fallbackData) : childrenApi.formatChildForUI(defaultChildData);
+    childData = fallbackData
+      ? childrenApi.formatChildForUI(fallbackData)
+      : childrenApi.formatChildForUI(defaultChildData);
   } else if (apiChild) {
     // Use API data
     childData = childrenApi.formatChildForUI(apiChild);
@@ -82,8 +86,15 @@ function ChildrenProfileContent() {
 
   if (loading && !fallbackData) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ fontSize: 18, color: '#000000' }}>Loading student...</Text>
+      <SafeAreaView
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <Text style={{ fontSize: 18, color: "#000000" }}>
+          Loading student...
+        </Text>
       </SafeAreaView>
     );
   }
@@ -107,79 +118,92 @@ function ChildrenProfileContent() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.headerButton}>
           <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
-        
+
         <Text style={styles.headerTitle}>Student Profile</Text>
-        
-        <TouchableOpacity onPress={handleNotification} style={styles.headerButton}>
+
+        <TouchableOpacity
+          onPress={handleNotification}
+          style={styles.headerButton}
+        >
           <Ionicons name="notifications" size={24} color="#000000" />
         </TouchableOpacity>
       </View>
 
-      {/* Profile Section */}
-      <View style={styles.profileSection}>
-        {/* Profile Picture with Yellow Rings */}
-        <View style={styles.profileImageContainer}>
-          <View style={styles.ringOuter}>
-            <View style={styles.ringMiddle}>
-              <View style={styles.ringInner}>
-                <Image source={childData.avatar} style={styles.profileImage} />
+      {/* Scrollable Content */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Profile Section */}
+        <View style={styles.profileSection}>
+          {/* Profile Picture with Yellow Rings */}
+          <View style={styles.profileImageContainer}>
+            <View style={styles.ringOuter}>
+              <View style={styles.ringMiddle}>
+                <View style={styles.ringInner}>
+                  <Image
+                    source={childData.avatar}
+                    style={styles.profileImage}
+                  />
+                </View>
               </View>
             </View>
           </View>
-        </View>
-        
-        <Text style={styles.studentName}>{childData.name}</Text>
-        <Text style={styles.studentStatus}>( {childData.status} )</Text>
-      </View>
 
-      {/* Information Cards */}
-      <View style={styles.cardsContainer}>
-        {/* Student ID Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.cardIconContainer}>
-            <Ionicons name="card" size={26} color="#FFFFFF" />
-          </View>
-          <View style={styles.cardTextContainer}>
-            <Text style={styles.cardText}>{childData.studentId}</Text>
-          </View>
+          <Text style={styles.studentName}>{childData.name}</Text>
+          <Text style={styles.studentStatus}>( {childData.status} )</Text>
         </View>
 
-        {/* Class Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.cardIconContainer}>
-            <Ionicons name="people" size={26} color="#FFFFFF" />
+        {/* Information Cards */}
+        <View style={styles.cardsContainer}>
+          {/* Student ID Card */}
+          <View style={styles.infoCard}>
+            <View style={styles.cardIconContainer}>
+              <Ionicons name="card" size={26} color="#FFFFFF" />
+            </View>
+            <View style={styles.cardTextContainer}>
+              <Text style={styles.cardText}>{childData.studentId}</Text>
+            </View>
           </View>
-          <View style={styles.cardTextContainer}>
-            <Text style={styles.cardText}>{childData.className}</Text>
-          </View>
-        </View>
 
-        {/* School Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.cardIconContainer}>
-            <Ionicons name="business" size={26} color="#FFFFFF" />
+          {/* Class Card */}
+          <View style={styles.infoCard}>
+            <View style={styles.cardIconContainer}>
+              <Ionicons name="people" size={26} color="#FFFFFF" />
+            </View>
+            <View style={styles.cardTextContainer}>
+              <Text style={styles.cardText}>{childData.className}</Text>
+            </View>
           </View>
-          <View style={styles.cardTextContainer}>
-            <Text style={styles.cardText}>{childData.schoolName}</Text>
-          </View>
-        </View>
 
-        {/* Address Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.cardIconContainer}>
-            <Ionicons name="location" size={26} color="#FFFFFF" />
+          {/* School Card */}
+          <View style={styles.infoCard}>
+            <View style={styles.cardIconContainer}>
+              <Ionicons name="business" size={26} color="#FFFFFF" />
+            </View>
+            <View style={styles.cardTextContainer}>
+              <Text style={styles.cardText}>{childData.schoolName}</Text>
+            </View>
           </View>
-          <View style={styles.cardTextContainer}>
-            <Text style={styles.cardText}>{childData.address}</Text>
+
+          {/* Address Card */}
+          <View style={styles.infoCard}>
+            <View style={styles.cardIconContainer}>
+              <Ionicons name="location" size={26} color="#FFFFFF" />
+            </View>
+            <View style={styles.cardTextContainer}>
+              <Text style={styles.cardText}>{childData.address}</Text>
+            </View>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -188,6 +212,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    paddingBottom: 50, // Add padding at bottom for better scrolling
   },
   header: {
     flexDirection: "row",
@@ -289,14 +319,14 @@ const styles = StyleSheet.create({
     width: 50,
     height: 60,
     borderRadius: 12,
-    backgroundColor: "#01CBCA", 
+    backgroundColor: "#01CBCA",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
   },
   cardTextContainer: {
     flex: 1,
-    backgroundColor: "#FCDC44", 
+    backgroundColor: "#FCDC44",
     borderRadius: 12,
     padding: 18,
     justifyContent: "center",

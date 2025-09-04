@@ -11,58 +11,58 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ScrollView,
 } from "react-native";
-
-
 
 export default function ChildrenListScreen() {
   const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
-  
+
   // Use API hook to fetch children data
   const { children: apiChildren, loading, error } = useChildrenList();
-  
+
   // Format API data for UI or use fallback data
-  const childrenData = apiChildren.length > 0 
-    ? apiChildren.map(child => childrenApi.formatChildForUI(child))
-    : [
-        {
-          id: "1",
-          name: "Tran Minh Hieu",
-          avatar: {
-            uri: "https://cdn.vietnam.vn/wp-content/uploads/2024/08/HIEUTHUHAI-khien-ca-Hieu-thu-nhat-cung-noi-tieng.jpg",
+  const childrenData =
+    apiChildren.length > 0
+      ? apiChildren.map((child) => childrenApi.formatChildForUI(child))
+      : [
+          {
+            id: "1",
+            name: "Tran Minh Hieu",
+            avatar: {
+              uri: "https://cdn.vietnam.vn/wp-content/uploads/2024/08/HIEUTHUHAI-khien-ca-Hieu-thu-nhat-cung-noi-tieng.jpg",
+            },
+            studentId: "HS001",
+            className: "1B",
+            schoolName: "FPT School",
+            address: "105 Xuan Dieu",
+            status: "Being on the bus",
           },
-          studentId: "HS001",
-          className: "1B",
-          schoolName: "FPT School",
-          address: "105 Xuan Dieu",
-          status: "Being on the bus",
-        },
-        {
-          id: "2",
-          name: "Tran Quang Huy",
-          avatar: {
-            uri: "https://www.elle.vn/wp-content/uploads/2024/01/21/567142/HIEUTHUHAI-3-scaled.jpg",
+          {
+            id: "2",
+            name: "Tran Quang Huy",
+            avatar: {
+              uri: "https://www.elle.vn/wp-content/uploads/2024/01/21/567142/HIEUTHUHAI-3-scaled.jpg",
+            },
+            studentId: "HS002",
+            className: "2A",
+            schoolName: "FPT School",
+            address: "105 Xuan Dieu",
+            status: "At school",
           },
-          studentId: "HS002",
-          className: "2A",
-          schoolName: "FPT School",
-          address: "105 Xuan Dieu",
-          status: "At school",
-        },
-        {
-          id: "3",
-          name: "HIEUTHUHAI",
-          avatar: {
-            uri: "https://www.elle.vn/wp-content/uploads/2024/01/21/567142/HIEUTHUHAI-3-scaled.jpg",
+          {
+            id: "3",
+            name: "HIEUTHUHAI",
+            avatar: {
+              uri: "https://www.elle.vn/wp-content/uploads/2024/01/21/567142/HIEUTHUHAI-3-scaled.jpg",
+            },
+            studentId: "HS003",
+            className: "3C",
+            schoolName: "FPT School",
+            address: "105 Xuan Dieu",
+            status: "At home",
           },
-          studentId: "HS003",
-          className: "3C",
-          schoolName: "FPT School",
-          address: "105 Xuan Dieu",
-          status: "At home",
-        },
-      ];
+        ];
 
   const handlePrev = () => {
     setCurrentIndex((prev) =>
@@ -78,15 +78,26 @@ export default function ChildrenListScreen() {
 
   const handleCardPress = () => {
     console.log("Card pressed, navigating to profile with:", currentChild);
-    router.push(`/children-profile?child=${encodeURIComponent(JSON.stringify(currentChild))}`);
+    router.push(
+      `/children-profile?child=${encodeURIComponent(
+        JSON.stringify(currentChild)
+      )}`
+    );
   };
 
   const currentChild = childrenData[currentIndex];
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ fontSize: 18, color: '#000000' }}>Loading children...</Text>
+      <SafeAreaView
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <Text style={{ fontSize: 18, color: "#000000" }}>
+          Loading children...
+        </Text>
       </SafeAreaView>
     );
   }
@@ -232,21 +243,32 @@ export default function ChildrenListScreen() {
         </View>
       </View>
 
-      {/* Main content card */}
-      <TouchableOpacity onPress={handleCardPress} style={styles.mainCard} activeOpacity={0.8}>
-        <Image source={currentChild.avatar} style={styles.childImage} />
-        <Text style={styles.childName}>{currentChild.name}</Text>
+      {/* Scrollable Content */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Main content card */}
+        <TouchableOpacity
+          onPress={handleCardPress}
+          style={styles.mainCard}
+          activeOpacity={0.8}
+        >
+          <Image source={currentChild.avatar} style={styles.childImage} />
+          <Text style={styles.childName}>{currentChild.name}</Text>
 
-        {/* Navigation arrows */}
-        <View style={styles.navRow}>
-          <TouchableOpacity onPress={handlePrev} style={styles.navBtn}>
-            <Ionicons name="chevron-back" size={22} color="#000000" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleNext} style={styles.navBtn}>
-            <Ionicons name="chevron-forward" size={22} color="#000000" />
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
+          {/* Navigation arrows */}
+          <View style={styles.navRow}>
+            <TouchableOpacity onPress={handlePrev} style={styles.navBtn}>
+              <Ionicons name="chevron-back" size={22} color="#000000" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleNext} style={styles.navBtn}>
+              <Ionicons name="chevron-forward" size={22} color="#000000" />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -255,6 +277,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF", // White background
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    paddingBottom: 50, // Add padding at bottom for better scrolling
   },
   logo: {
     width: 200,
