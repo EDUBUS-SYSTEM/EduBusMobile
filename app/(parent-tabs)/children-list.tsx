@@ -1,9 +1,11 @@
 import { useChildrenList } from "@/hooks/useChildren";
+import { useRegistrationStatus } from "@/hooks/useRegistration";
 import { childrenApi } from "@/lib/parent/children.api";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  Alert,
   Image,
   SafeAreaView,
   StatusBar,
@@ -20,6 +22,9 @@ export default function ChildrenListScreen() {
 
   // Use API hook to fetch children data
   const { children: apiChildren, loading, error } = useChildrenList();
+  
+  // Check registration status
+  const { status: registrationStatus, loading: registrationLoading } = useRegistrationStatus();
 
   // Format API data for UI or use fallback data
   const childrenData =
@@ -77,7 +82,74 @@ export default function ChildrenListScreen() {
   };
 
   const handleCardPress = () => {
-    console.log("Card pressed, navigating to profile with:", currentChild);
+    console.log("Card pressed, checking registration status...");
+    
+    // Check if user is registered and paid
+    if (!registrationStatus) {
+      Alert.alert(
+        "Service Not Registered",
+        "You need to register for student transportation service before viewing detailed information.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "Register Now", 
+            onPress: () => {
+              // Navigate to registration review screen
+              router.push({
+                pathname: "/registration-review",
+                params: { registrationId: "reg-123-456" } // Mock registration ID
+              });
+            }
+          },
+        ]
+      );
+      return;
+    }
+
+    if (!registrationStatus.isRegistered) {
+      Alert.alert(
+        "Service Not Registered",
+        "You need to register for student transportation service before viewing detailed information.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "Register Now", 
+            onPress: () => {
+              // Navigate to registration review screen
+              router.push({
+                pathname: "/registration-review",
+                params: { registrationId: "reg-123-456" } // Mock registration ID
+              });
+            }
+          },
+        ]
+      );
+      return;
+    }
+
+    if (!registrationStatus.isPaid) {
+      Alert.alert(
+        "Payment Required",
+        "You need to pay for the service before viewing your children's detailed information.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "Pay Now", 
+            onPress: () => {
+              // Navigate to registration review screen first
+              router.push({
+                pathname: "/registration-review",
+                params: { registrationId: registrationStatus.registrationId || "reg-123-456" }
+              });
+            }
+          },
+        ]
+      );
+      return;
+    }
+
+    // If registered and paid, navigate to children profile
+    console.log("Registration verified, navigating to profile with:", currentChild);
     router.push(
       `/children-profile?child=${encodeURIComponent(
         JSON.stringify(currentChild)
@@ -87,7 +159,7 @@ export default function ChildrenListScreen() {
 
   const currentChild = childrenData[currentIndex];
 
-  if (loading) {
+  if (loading || registrationLoading) {
     return (
       <SafeAreaView
         style={[
@@ -96,7 +168,7 @@ export default function ChildrenListScreen() {
         ]}
       >
         <Text style={{ fontSize: 18, color: "#000000" }}>
-          Loading children...
+          {loading ? "Loading children..." : "Checking registration status..."}
         </Text>
       </SafeAreaView>
     );
@@ -256,7 +328,13 @@ export default function ChildrenListScreen() {
           activeOpacity={0.8}
         >
           <Image source={currentChild.avatar} style={styles.childImage} />
-          <Text style={styles.childName}>{currentChild.name}</Text>
+          <Text 
+            style={styles.childName}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {currentChild.name}
+          </Text>
 
           {/* Navigation arrows */}
           <View style={styles.navRow}>
@@ -294,9 +372,10 @@ const styles = StyleSheet.create({
   mainCard: {
     backgroundColor: "#FFF8CF", // Light beige from color list
     borderRadius: 25,
-    marginHorizontal: 90, // Tăng margin để card hẹp hơn
+    marginHorizontal: 60, // Giảm margin để card rộng hơn
     marginTop: 30,
-    padding: 80, // Tăng padding để card dài hơn
+    paddingVertical: 40, // Giảm padding vertical để card ngắn hơn
+    paddingHorizontal: 60, // Giữ padding horizontal
     alignItems: "center",
     shadowColor: "#000000",
     shadowOpacity: 0.1,
@@ -305,18 +384,19 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   childImage: {
-    width: 250,
-    height: 320,
+    width: 200, // Giảm width để phù hợp với card ngắn hơn
+    height: 250, // Giảm height để phù hợp với card ngắn hơn
     borderRadius: 15,
     resizeMode: "cover",
     marginBottom: 10,
   },
   childName: {
-    fontSize: 20,
+    fontSize: 16, // Giảm font size để chữ nhỏ hơn
     fontWeight: "600",
     color: "#000000", // Black from color list
-    marginBottom: 25,
-    letterSpacing: 1,
+    marginBottom: 20, // Giảm margin bottom
+    letterSpacing: 0.5, // Giảm letter spacing
+    textAlign: "center", // Đảm bảo text căn giữa
   },
   navRow: {
     flexDirection: "row",

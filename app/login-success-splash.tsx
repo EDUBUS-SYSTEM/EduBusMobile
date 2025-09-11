@@ -47,7 +47,7 @@ export default function LoginSuccessSplash() {
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [fadeAnim, scaleAnim]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>

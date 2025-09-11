@@ -17,7 +17,6 @@ export default function TabTwoScreen() {
           size={310}
           color="#808080"
           name="chevron.left.forwardslash.chevron.right"
-          className="text-gray-500 -bottom-22 -left-9 absolute"
         />
       }>
       <TailwindView className="flex-row gap-2">

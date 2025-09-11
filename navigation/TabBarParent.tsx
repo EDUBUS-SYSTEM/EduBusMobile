@@ -52,7 +52,7 @@ export default function TabBarParent() {
       <Tabs.Screen
         name="children-list"
         options={{
-          title: 'Children List',
+          title: 'Children',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
               name="people-circle" 
