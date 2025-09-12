@@ -138,7 +138,7 @@ export default function DriverStudentsScreen() {
             color: '#000000',
             marginBottom: 15
           }}>
-            Today's Summary
+            Today&apos;s Summary
           </Text>
           <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
             <View style={{ alignItems: 'center' }}>

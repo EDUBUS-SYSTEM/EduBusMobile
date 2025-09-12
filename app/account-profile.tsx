@@ -1,5 +1,4 @@
 import { apiService } from "@/lib/api";
-import { API_CONFIG } from "@/constants/ApiConfig";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
@@ -12,7 +11,13 @@ type UserResponse = {
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;
+  address?: string;
   dateOfBirth?: string;
+  gender?: string;
+  userPhotoFileId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  isDeleted?: boolean;
 };
 
 function decodeJwtPayload<T = any>(token: string): T | null {
@@ -39,29 +44,54 @@ export default function AccountProfileScreen() {
   useEffect(() => {
     const loadProfile = async () => {
       try {
+        console.log("🔍 Starting profile load...");
+        
         const [token, cachedFullName] = await AsyncStorage.multiGet([
           "accessToken",
           "userFullName",
         ]);
+        
+        console.log("📱 Cached full name:", cachedFullName[1]);
         if (cachedFullName[1]) setFullName(cachedFullName[1]);
 
         const accessToken = token[1];
-        if (!accessToken) return;
+        console.log("🔑 Access token exists:", !!accessToken);
+        if (!accessToken) {
+          console.log("❌ No access token found");
+          return;
+        }
 
         const payload: any = decodeJwtPayload(accessToken);
+        console.log("🔓 JWT payload:", payload);
+        
         const userId: string | undefined =
           payload?.nameid ||
           payload?.sub ||
           payload?.[
             "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
           ];
-        if (!userId) return;
+        
+        console.log("👤 User ID from JWT:", userId);
+        if (!userId) {
+          console.log("❌ No user ID found in JWT");
+          return;
+        }
 
+        console.log("🌐 Making API call to:", `/UserAccount/${userId}`);
+        
+        // Test API connection first
+        try {
+          console.log("🧪 Testing API connection...");
+          const testResponse = await apiService.get<any>("/UserAccount");
+          console.log("✅ API connection test successful:", testResponse);
+        } catch (testError) {
+          console.log("❌ API connection test failed:", testError);
+        }
+        
         const raw = await apiService.get<any>(
-          `${API_CONFIG.ENDPOINTS.USER.PROFILE}/${userId}`
+          `/UserAccount/${userId}`
         );
-        console.log("Raw API response:", raw);
-        console.log("User ID from JWT:", userId);
+        console.log("📡 Raw API response:", JSON.stringify(raw, null, 2));
 
         const normalized: UserResponse = {
           id: raw.Id || raw.id,
@@ -69,9 +99,15 @@ export default function AccountProfileScreen() {
           firstName: raw.FirstName || raw.firstName,
           lastName: raw.LastName || raw.lastName,
           phoneNumber: raw.PhoneNumber || raw.phoneNumber,
+          address: raw.Address || raw.address,
           dateOfBirth: raw.DateOfBirth || raw.dateOfBirth,
+          gender: raw.Gender || raw.gender,
+          userPhotoFileId: raw.UserPhotoFileId || raw.userPhotoFileId,
+          createdAt: raw.CreatedAt || raw.createdAt,
+          updatedAt: raw.UpdatedAt || raw.updatedAt,
+          isDeleted: raw.IsDeleted || raw.isDeleted,
         };
-        console.log("Normalized profile:", normalized);
+        console.log("✅ Normalized profile:", JSON.stringify(normalized, null, 2));
 
         setProfile(normalized);
         const name = [normalized.firstName, normalized.lastName]
@@ -79,8 +115,10 @@ export default function AccountProfileScreen() {
           .join(" ")
           .trim();
         if (name) setFullName(name);
-      } catch {
-        // noop
+        console.log("📝 Final full name:", name);
+      } catch (error) {
+        console.log("❌ Error loading profile:", error);
+        console.log("❌ Error details:", JSON.stringify(error, null, 2));
       }
     };
     loadProfile();
@@ -383,6 +421,61 @@ export default function AccountProfileScreen() {
             </Text>
           </View>
 
+          {/* Address Card */}
+          <View
+            style={{
+              backgroundColor: "#F8F9FA",
+              borderRadius: 15,
+              padding: 12,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 3,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 8,
+              }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: "#E0F7FA",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: 15,
+                }}
+              >
+                <Ionicons name="location-outline" size={20} color="#01CBCA" />
+              </View>
+              <Text
+                style={{
+                  fontFamily: "RobotoSlab-Bold",
+                  fontSize: 16,
+                  color: "#000000",
+                }}
+              >
+                Address
+              </Text>
+            </View>
+            <Text
+              style={{
+                fontFamily: "RobotoSlab-Regular",
+                fontSize: 16,
+                color: "#666666",
+                marginLeft: 55,
+              }}
+            >
+              {profile?.address || "—"}
+            </Text>
+          </View>
+
           {/* Date of Birth Card */}
           <View
             style={{
@@ -437,6 +530,61 @@ export default function AccountProfileScreen() {
               {profile?.dateOfBirth
                 ? new Date(profile.dateOfBirth).toLocaleDateString()
                 : "—"}
+            </Text>
+          </View>
+
+          {/* Gender Card */}
+          <View
+            style={{
+              backgroundColor: "#F8F9FA",
+              borderRadius: 15,
+              padding: 12,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 3,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 8,
+              }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: "#E0F7FA",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: 15,
+                }}
+              >
+                <Ionicons name="person-outline" size={20} color="#01CBCA" />
+              </View>
+              <Text
+                style={{
+                  fontFamily: "RobotoSlab-Bold",
+                  fontSize: 16,
+                  color: "#000000",
+                }}
+              >
+                Gender
+              </Text>
+            </View>
+            <Text
+              style={{
+                fontFamily: "RobotoSlab-Regular",
+                fontSize: 16,
+                color: "#666666",
+                marginLeft: 55,
+              }}
+            >
+              {profile?.gender || "—"}
             </Text>
           </View>
         </View>

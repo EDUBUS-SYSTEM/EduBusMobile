@@ -30,6 +30,9 @@ export default function RootLayout() {
          <Stack.Screen name="(parent-tabs)" options={{ headerShown: false }} />
          <Stack.Screen name="(driver-tabs)" options={{ headerShown: false }} />
          <Stack.Screen name="account-profile" options={{ headerShown: false }} />
+         <Stack.Screen name="children-profile" options={{ headerShown: false }} />
+         <Stack.Screen name="registration-review" options={{ headerShown: false }} />
+         <Stack.Screen name="payment" options={{ headerShown: false }} />
          <Stack.Screen name="+not-found" />
          <Stack.Screen name="index" redirect />
        </Stack>

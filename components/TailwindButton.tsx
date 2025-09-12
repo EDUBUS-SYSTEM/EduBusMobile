@@ -43,21 +43,21 @@ export function TailwindButton({
         return {
           color: '#FFFFFF',
           fontFamily: 'RobotoSlab-Bold',
-          textAlign: 'center',
+          textAlign: 'center' as const,
           fontSize: 18,
         };
       case 'secondary':
         return {
           color: '#374151',
           fontFamily: 'RobotoSlab-Medium',
-          textAlign: 'center',
+          textAlign: 'center' as const,
           fontSize: 18,
         };
       default:
         return {
           color: '#FFFFFF',
           fontFamily: 'RobotoSlab-Bold',
-          textAlign: 'center',
+          textAlign: 'center' as const,
           fontSize: 18,
         };
     }

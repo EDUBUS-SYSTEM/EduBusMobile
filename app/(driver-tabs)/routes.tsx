@@ -149,7 +149,7 @@ export default function DriverRoutesScreen() {
           color: '#000000',
           marginBottom: 15
         }}>
-          Today's Routes
+          Today&apos;s Routes
         </Text>
 
         {routes.map((route) => (

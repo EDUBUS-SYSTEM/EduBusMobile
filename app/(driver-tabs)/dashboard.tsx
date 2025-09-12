@@ -153,7 +153,7 @@ export default function DriverDashboardScreen() {
             color: '#000000',
             marginBottom: 15
           }}>
-            Today's Schedule
+            Today&apos;s Schedule
           </Text>
 
           <View style={{
