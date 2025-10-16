@@ -63,6 +63,19 @@ export default function TabBarParent() {
         }}
       />
       <Tabs.Screen
+        name="payments"
+        options={{
+          title: 'Payments',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name="wallet" 
+              size={24} 
+              color={focused ? '#01CBCA' : color} 
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="account"
         options={{
           title: 'Account',
@@ -73,6 +86,18 @@ export default function TabBarParent() {
               color={focused ? '#01CBCA' : color} 
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="payment-detail"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="student/profile"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>
