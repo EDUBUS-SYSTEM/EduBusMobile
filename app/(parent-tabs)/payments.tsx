@@ -1,27 +1,28 @@
+import { paymentApi } from '@/lib/payment/payment.api';
+import {
+  TransactionStatus,
+  TransactionSummary,
+  formatCurrency,
+  formatDate,
+  getStatusColor,
+  getStatusText,
+} from '@/lib/payment/payment.type';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  StyleSheet,
 } from 'react-native';
-import { paymentApi } from '@/lib/payment/payment.api';
-import {
-  TransactionSummary,
-  TransactionStatus,
-  getStatusColor,
-  getStatusText,
-  formatCurrency,
-  formatDate,
-} from '@/lib/payment/payment.type';
 
 export default function PaymentsScreen() {
+  const { refresh } = useLocalSearchParams<{ refresh?: string }>();
   const [transactions, setTransactions] = useState<TransactionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -31,7 +32,7 @@ export default function PaymentsScreen() {
   const [totalCount, setTotalCount] = useState(0);
   const [filter, setFilter] = useState<'all' | 'pending' | 'paid'>('all');
 
-  const loadTransactions = async (pageNum: number = 1, refresh: boolean = false) => {
+  const loadTransactions = useCallback(async (pageNum: number = 1, refresh: boolean = false) => {
     try {
       if (refresh) {
         setRefreshing(true);
@@ -85,11 +86,17 @@ export default function PaymentsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [filter]);
 
   useEffect(() => {
     loadTransactions(1);
-  }, [filter]);
+  }, [filter, loadTransactions]);
+
+  useEffect(() => {
+    if (refresh === 'true') {
+      loadTransactions(1, true);
+    }
+  }, [refresh, loadTransactions]);
 
   const handleRefresh = () => {
     loadTransactions(1, true);
