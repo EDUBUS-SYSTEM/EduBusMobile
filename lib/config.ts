@@ -1,5 +1,5 @@
 const dev = {
-  API_URL: "http://192.168.1.21:5000/api", // local dev
+  API_URL: "http://192.168.110.145:5223/api", // local dev
 };
 
 const prod = {

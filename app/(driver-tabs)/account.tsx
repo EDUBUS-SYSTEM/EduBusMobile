@@ -26,24 +26,30 @@ export default function DriverAccountScreen() {
     },
     {
       id: 4,
+      title: 'Leave requests',
+      icon: 'calendar-outline',
+      description: 'Request and manage time off'
+    },
+    {
+      id: 5,
       title: 'Performance stats',
       icon: 'analytics-outline',
       description: 'Performance statistics'
     },
     {
-      id: 5,
+      id: 6,
       title: 'Settings',
       icon: 'settings-outline',
       description: 'Settings'
     },
     {
-      id: 6,
+      id: 7,
       title: 'Help',
       icon: 'help-circle-outline',
       description: 'Help'
     },
     {
-      id: 7,
+      id: 8,
       title: 'Logout',
       icon: 'log-out-outline',
       description: 'Logout'
@@ -228,7 +234,11 @@ export default function DriverAccountScreen() {
                 router.push('/account-profile' as any);
                 return;
               }
-              if (item.id === 7) {
+              if (item.id === 4) {
+                router.push('/(driver-leave)' as any);
+                return;
+              }
+              if (item.id === 8) {
                 try {
                   await authApi.logout();
                 } finally {
