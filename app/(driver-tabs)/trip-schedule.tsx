@@ -18,7 +18,7 @@ import { authApi } from '../../lib/auth/auth.api';
 export default function DriverScheduleScreen() {
   const [schedule, setSchedule] = useState<DriverSchedule>({ dots: [], byDate: {} });
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [schedules, setSchedules] = useState<ScheduleDto[]>([]);
@@ -117,7 +117,7 @@ export default function DriverScheduleScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Driver Schedule</Text>
+        <Text style={styles.headerTitle}>Schedules</Text>
         <View style={styles.placeholder} />
       </LinearGradient>
 
