@@ -44,7 +44,20 @@ export default function TabBarDriver() {
             <Ionicons 
               name="map" 
               size={24} 
-              color={focused ? '#01CBCA' : color} 
+                     color={focused ? '#01CBCA' : color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="trip-schedule"
+        options={{
+          title: 'Schedule',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name="calendar" 
+              size={24} 
+                     color={focused ? '#01CBCA' : color}
             />
           ),
         }}
