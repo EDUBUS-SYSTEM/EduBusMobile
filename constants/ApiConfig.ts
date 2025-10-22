@@ -21,6 +21,13 @@ export const API_CONFIG = {
         ROUTES: '/driver/routes',
         STUDENTS: '/driver/students',
         UPDATE_STATUS: '/driver/status',
+        MY_LEAVES: '/driver/my-leaves',
+        LEAVES: '/driver/leaves', // + /{id} for get/update/cancel
+        SEND_LEAVE_REQUEST: '/Driver/send-leave-request',
+      },
+      DRIVER_VEHICLE: {
+        CURRENT_DRIVER_VEHICLE: '/driverVehicle/current-vehicle',
+        CURRENT_VEHICLE_STUDENTS: '/driverVehicle/current-vehicle/students'
       },
       BUS: {
         TRACKING: '/bus/tracking',

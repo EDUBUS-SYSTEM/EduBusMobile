@@ -63,12 +63,12 @@ export default function TabBarDriver() {
         }}
       />
       <Tabs.Screen
-        name="students"
+        name="vehicle"
         options={{
-          title: 'Students',
+          title: 'Vehicle',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
-              name="people" 
+              name="car" 
               size={24} 
               color={focused ? '#01CBCA' : color} 
             />
