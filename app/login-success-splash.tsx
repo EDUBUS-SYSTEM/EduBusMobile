@@ -3,10 +3,13 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Text, View, Animated } from 'react-native';
 import { authApi } from '@/lib/auth/auth.api';
+import { signalRService } from '@/lib/signalr/signalr.service';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginSuccessSplash() {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [scaleAnim] = useState(new Animated.Value(0.8));
+  const [statusText, setStatusText] = useState('Loading your dashboard...');
 
   useEffect(() => {
     // Start animations
@@ -24,11 +27,47 @@ export default function LoginSuccessSplash() {
       }),
     ]).start();
 
-    // Navigate after 2 seconds
-    const timer = setTimeout(async () => {
+    // Initialize and navigate
+    const initializeAndNavigate = async () => {
       try {
+        console.log('🎯 Starting initializeAndNavigate...');
         const userInfo = await authApi.getUserInfo();
+        console.log('👤 User info:', userInfo);
         
+        const token = await AsyncStorage.getItem('accessToken'); // Fix: use 'accessToken' not 'token'
+        console.log('🔑 Token exists:', !!token);
+
+        // Initialize SignalR for Parent and Driver roles if not already connected
+        if (token && (userInfo.role === 'Parent' || userInfo.role === 'Driver')) {
+          console.log('✅ Conditions met for SignalR init. Role:', userInfo.role);
+          
+          try {
+            const isAlreadyConnected = signalRService.isConnected();
+            console.log('🔌 SignalR already connected?', isAlreadyConnected);
+            
+            if (!isAlreadyConnected) {
+              setStatusText('Connecting to real-time updates...');
+              console.log('🔌 [LOGIN-SPLASH] Initializing SignalR for', userInfo.role);
+              
+              await signalRService.initialize(token);
+              console.log('✅ [LOGIN-SPLASH] SignalR initialized successfully');
+            } else {
+              console.log('✅ [LOGIN-SPLASH] SignalR already connected, skipping');
+            }
+            setStatusText('Almost ready...');
+          } catch (signalRError) {
+            console.error('⚠️ [LOGIN-SPLASH] SignalR initialization failed:', signalRError);
+            // Continue anyway - SignalR is not critical for app function
+            setStatusText('Loading your dashboard...');
+          }
+        } else {
+          console.log('⏭️ Skipping SignalR init. Token:', !!token, 'Role:', userInfo?.role);
+        }
+
+        // Small delay to show "Almost ready" text
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Route based on role
         if (userInfo.role === 'Driver') {
           router.replace('/(driver-tabs)/dashboard' as any);
         } else if (userInfo.role === 'Parent') {
@@ -44,7 +83,10 @@ export default function LoginSuccessSplash() {
         // Fallback to login screen
         router.replace('/login' as any);
       }
-    }, 2000);
+    };
+
+    // Start initialization after 1 second (let animation play)
+    const timer = setTimeout(initializeAndNavigate, 1000);
 
     return () => clearTimeout(timer);
   }, []);
@@ -225,7 +267,7 @@ export default function LoginSuccessSplash() {
           </View>
         </Animated.View>
 
-        {/* Loading Text */}
+        {/* Loading Text - Now Dynamic */}
         <Animated.Text style={{
           marginTop: 30,
           fontSize: 18,
@@ -234,7 +276,7 @@ export default function LoginSuccessSplash() {
           textAlign: 'center',
           opacity: fadeAnim,
         }}>
-          Loading your dashboard...
+          {statusText}
         </Animated.Text>
       </View>
 

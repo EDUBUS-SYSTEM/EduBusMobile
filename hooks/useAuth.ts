@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { authApi } from '@/lib/auth/auth.api';
 import { isRoleAllowed, getRoleErrorMessage } from '@/lib/auth/auth.utils';
+import { signalRService } from '@/lib/signalr/signalr.service';
 
 interface UserInfo {
   role: "Admin" | "Driver" | "Parent" | null;
@@ -65,9 +66,17 @@ export const useAuth = () => {
 
   const logout = async () => {
     try {
+      // Disconnect SignalR before logging out
+      console.log('🔌 Disconnecting SignalR...');
+      await signalRService.stop();
+      
+      // Logout from API
       await authApi.logout();
+      
       setIsAuthenticated(false);
       setUserInfo({ role: null, fullName: null });
+      
+      console.log('✅ Logged out successfully');
     } catch (error) {
       console.error('Logout error:', error);
     }

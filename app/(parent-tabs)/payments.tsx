@@ -1,4 +1,4 @@
-import { paymentApi } from '@/lib/payment/payment.api';
+import { usePayment } from '@/hooks/usePayment';
 import {
   TransactionStatus,
   TransactionSummary,
@@ -10,7 +10,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect } from 'react';
+
 import {
   ActivityIndicator,
   FlatList,
@@ -23,88 +24,38 @@ import {
 
 export default function PaymentsScreen() {
   const { refresh } = useLocalSearchParams<{ refresh?: string }>();
-  const [transactions, setTransactions] = useState<TransactionSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [totalCount, setTotalCount] = useState(0);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'paid'>('all');
+  const {
+    filteredTransactions: transactions,  
+    totalCount,
+    filter,
+    loadingList: loading,
+    errorList: error,
+    hasMore,
+    page,
+    refreshing,
+    loadTransactions,
+    changeFilter,
+    refreshTransactions,
+  } = usePayment();
 
-  const loadTransactions = useCallback(async (pageNum: number = 1, refresh: boolean = false) => {
-    try {
-      if (refresh) {
-        setRefreshing(true);
-      } else if (pageNum === 1) {
-        setLoading(true);
-      }
-      setError(null);
-
-      // Get all transactions from backend
-      const response = await paymentApi.getMyTransactions(pageNum, 20);
-      
-      // Client-side filtering based on selected filter
-      let filteredTransactions = response.transactions;
-      if (filter === 'pending') {
-        filteredTransactions = response.transactions.filter(
-          t => t.status === TransactionStatus.Notyet
-        );
-      } else if (filter === 'paid') {
-        filteredTransactions = response.transactions.filter(
-          t => t.status === TransactionStatus.Paid
-        );
-      }
-      
-      if (refresh || pageNum === 1) {
-        setTransactions(filteredTransactions);
-      } else {
-        setTransactions(prev => [...prev, ...filteredTransactions]);
-      }
-      
-      // Update total count based on filter
-      if (filter === 'pending') {
-        const pendingCount = response.transactions.filter(
-          t => t.status === TransactionStatus.Notyet
-        ).length;
-        setTotalCount(pendingCount);
-      } else if (filter === 'paid') {
-        const paidCount = response.transactions.filter(
-          t => t.status === TransactionStatus.Paid
-        ).length;
-        setTotalCount(paidCount);
-      } else {
-        setTotalCount(response.totalCount);
-      }
-      
-      setHasMore(pageNum < response.totalPages);
-      setPage(pageNum);
-    } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Unable to load payment list');
-      console.error('Load transactions error:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [filter]);
 
   useEffect(() => {
     loadTransactions(1);
-  }, [filter, loadTransactions]);
-
+  }, [filter, loadTransactions]);  
+  
   useEffect(() => {
     if (refresh === 'true') {
-      loadTransactions(1, true);
+      refreshTransactions();  
     }
-  }, [refresh, loadTransactions]);
+  }, [refresh, refreshTransactions]);
 
   const handleRefresh = () => {
-    loadTransactions(1, true);
+    refreshTransactions();  
   };
-
+  
   const handleLoadMore = () => {
     if (!loading && hasMore) {
-      loadTransactions(page + 1);
+      loadTransactions(page + 1);  
     }
   };
 
@@ -175,7 +126,7 @@ export default function PaymentsScreen() {
     <View style={styles.filterContainer}>
       <TouchableOpacity
         style={[styles.filterTab, filter === 'all' && styles.filterTabActive]}
-        onPress={() => setFilter('all')}
+        onPress={() => changeFilter('all')}
       >
         <Ionicons 
           name="list" 
@@ -189,7 +140,7 @@ export default function PaymentsScreen() {
       
       <TouchableOpacity
         style={[styles.filterTab, filter === 'pending' && styles.filterTabActive]}
-        onPress={() => setFilter('pending')}
+        onPress={() => changeFilter('pending')}
       >
         <Ionicons 
           name="time" 
@@ -203,7 +154,7 @@ export default function PaymentsScreen() {
       
       <TouchableOpacity
         style={[styles.filterTab, filter === 'paid' && styles.filterTabActive]}
-        onPress={() => setFilter('paid')}
+        onPress={() => changeFilter('paid')}
       >
         <Ionicons 
           name="checkmark-circle" 
