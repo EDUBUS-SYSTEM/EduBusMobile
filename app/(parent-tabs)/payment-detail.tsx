@@ -1,12 +1,10 @@
-import { paymentApi } from "@/lib/payment/payment.api";
+import { usePayment } from '@/hooks/usePayment';
 import {
-  QrResponse,
-  TransactionDetail,
   TransactionStatus,
   formatCurrency,
   formatDate,
   getStatusColor,
-  getStatusText,
+  getStatusText
 } from "@/lib/payment/payment.type";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -25,154 +23,106 @@ import {
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { captureRef } from "react-native-view-shot";
-
+import { signalRService } from '@/lib/signalr/signalr.service';
+import { useDispatch } from 'react-redux';
+import { updateTransactionDetail } from '@/store/slices/paymentSlice';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 export default function PaymentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [transaction, setTransaction] = useState<TransactionDetail | null>(
-    null
-  );
-  const [qrCode, setQrCode] = useState<QrResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingQr, setLoadingQr] = useState(false);
+  const dispatch = useDispatch();
+  const {
+    transactionDetail: transaction,
+    qrCode,
+    loadingDetail: loading,
+    loadingQr,
+    errorDetail: error,
+    qrTimeRemaining: timeRemaining,
+    loadTransactionDetail,
+    generateQr,
+    clearQr,
+    setQrTimeRemaining,
+  } = usePayment();
+
   const [savingQr, setSavingQr] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [qrExpiryTimer, setQrExpiryTimer] = useState<number | null>(null);
-  const [paymentCheckTimer, setPaymentCheckTimer] = useState<number | null>(
-    null
-  );
-  const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const qrCodeRef = useRef<View>(null);
   const previousTransactionId = useRef<string | null>(null);
+  const qrExpiryTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const clearTimers = useCallback(() => {
-    if (qrExpiryTimer) {
-      clearInterval(qrExpiryTimer);
-      setQrExpiryTimer(null);
+    if (qrExpiryTimerRef.current) {
+      clearInterval(qrExpiryTimerRef.current);
+      qrExpiryTimerRef.current = null;
     }
-    if (paymentCheckTimer) {
-      clearInterval(paymentCheckTimer);
-      setPaymentCheckTimer(null);
-    }
-    setTimeRemaining(0);
-  }, [qrExpiryTimer, paymentCheckTimer]);
-
-  const loadTransactionDetail = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Don't clear QR state here - let the ID change effect handle it
-      // setQrCode(null);
-      // setPaymentSuccess(false);
-      // setIsGeneratingQr(false);
-      // clearTimers();
-
-      const data = await paymentApi.getTransactionDetail(id);
-      setTransaction(data);
-
-      // If transaction is paid, show success state
-      if (data.status === TransactionStatus.Paid) {
-        setPaymentSuccess(true);
-        setQrCode(null); // Only clear QR if transaction is paid
-        clearTimers();
-      }
-    } catch (err: any) {
-      setError(
-        err.response?.data?.message ||
-          err.message ||
-          "Unable to load transaction details"
-      );
-      console.error("Load transaction detail error:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [id, clearTimers]);
+    setQrTimeRemaining(0);  
+  }, [setQrTimeRemaining]);
 
   const handleGenerateQr = useCallback(async () => {
-    if (!id || isGeneratingQr || !transaction) return;
-
-    // Ensure we're generating QR for the correct transaction
-    if (transaction.id !== id) {
-      console.warn("Transaction ID mismatch, skipping QR generation");
-      return;
-    }
-
+    if (!id || !transaction) return;
+    
     try {
-      setIsGeneratingQr(true);
-      setLoadingQr(true);
-      const qr = await paymentApi.generateQrCode(id);
-      console.log("QR generated successfully:", qr);
-      console.log("Setting QR code state...");
-      setQrCode(qr);
-      console.log("QR code state set");
-
-      // Clear existing timers first
-      clearTimers();
-
-      // Start QR expiry timer
-      const expiryTime = new Date(qr.expiresAt).getTime();
-      const now = Date.now();
-      const remainingMs = expiryTime - now;
-
-      if (remainingMs > 0) {
-        setTimeRemaining(Math.floor(remainingMs / 1000));
-
-        const qrTimer = setInterval(() => {
-          const currentTime = Date.now();
-          const remaining = Math.floor((expiryTime - currentTime) / 1000);
-
-          if (remaining <= 0) {
-            // QR expired, regenerate automatically
-            clearInterval(qrTimer);
-            setQrExpiryTimer(null);
-            // Auto-refresh QR when expired
-            handleGenerateQr(); // Recursive call
-          } else {
-            // Update countdown every second for smooth display
-            setTimeRemaining(remaining);
-          }
-        }, 1000);
-
-        setQrExpiryTimer(qrTimer);
+      // Clear timers directly instead of calling clearTimers()
+      if (qrExpiryTimerRef.current) {
+        clearInterval(qrExpiryTimerRef.current);
+        qrExpiryTimerRef.current = null;
       }
-
-      // Start payment check timer only when QR is generated
-      const paymentTimer = setInterval(async () => {
-        try {
-          const updatedTransaction = await paymentApi.getTransactionDetail(id);
-
-          // Only update transaction if status changed to avoid unnecessary re-renders
-          if (updatedTransaction.status !== transaction?.status) {
-            setTransaction(updatedTransaction);
-          }
-
-          if (updatedTransaction.status === TransactionStatus.Paid) {
-            // Payment successful, clear QR and stop timers
-            setQrCode(null);
-            setPaymentSuccess(true);
-            clearTimers();
-          }
-        } catch (err) {
-          console.error("Payment check error:", err);
-        }
-      }, 3000); // Check every 3 seconds
-
-      setPaymentCheckTimer(paymentTimer);
+      setQrTimeRemaining(0);
+      
+      await generateQr(id);
     } catch (err: any) {
-      Alert.alert(
-        "Error",
-        err.response?.data?.message ||
-          err.message ||
-          "Unable to generate QR code"
-      );
-      console.error("Generate QR error:", err);
-    } finally {
-      setLoadingQr(false);
-      setIsGeneratingQr(false);
+      Alert.alert("Error", err.response?.data?.message || "Unable to generate QR code");
     }
-  }, [id, clearTimers, isGeneratingQr, transaction]);
+  }, [id, transaction, generateQr, setQrTimeRemaining]);
+
+  // Use ref to avoid recreating useEffect when handleGenerateQr changes
+  const handleGenerateQrRef = useRef(handleGenerateQr);
+  useEffect(() => {
+    handleGenerateQrRef.current = handleGenerateQr;
+  }, [handleGenerateQr]);
+  
+
+  useEffect(() => {
+    if (!qrCode?.expiresAt) return;
+    
+    // Clear existing timer
+    if (qrExpiryTimerRef.current) {
+      clearInterval(qrExpiryTimerRef.current);
+      qrExpiryTimerRef.current = null;
+    }
+    
+    const expiryTime = new Date(qrCode.expiresAt).getTime();
+    const now = Date.now();
+    const remainingMs = expiryTime - now;
+  
+    if (remainingMs > 0) {
+      setQrTimeRemaining(Math.floor(remainingMs / 1000));
+      
+      const qrTimer = setInterval(() => {
+        const currentTime = Date.now();
+        const remaining = Math.floor((expiryTime - currentTime) / 1000);
+        
+        if (remaining <= 0) {
+          clearInterval(qrTimer);
+          qrExpiryTimerRef.current = null;
+          clearQr();
+          // Use ref to avoid dependency on handleGenerateQr
+          handleGenerateQrRef.current();
+        } else {
+          setQrTimeRemaining(remaining);
+        }
+      }, 1000) as unknown as NodeJS.Timeout;
+      
+      qrExpiryTimerRef.current = qrTimer;
+    }
+    
+    return () => {
+      if (qrExpiryTimerRef.current) {
+        clearInterval(qrExpiryTimerRef.current);
+        qrExpiryTimerRef.current = null;
+      }
+    };
+  }, [qrCode, clearQr, setQrTimeRemaining]); 
+
 
   const handleOpenCheckoutUrl = () => {
     if (qrCode?.checkoutUrl) {
@@ -183,15 +133,14 @@ export default function PaymentDetailScreen() {
   };
 
   const handleRefresh = () => {
-    // Clear all states first
-    setQrCode(null);
+    // Clear all states using Redux actions
+    clearQr();
     setPaymentSuccess(false);
-    setIsGeneratingQr(false);
-    setTimeRemaining(0);
+    setQrTimeRemaining(0);  // If you keep this local state
     clearTimers();
-
-    // Then reload transaction detail
-    loadTransactionDetail();
+  
+    //Reload transaction detail using Redux
+    loadTransactionDetail(id);
   };
 
   const handleSaveQrCode = async () => {
@@ -241,33 +190,118 @@ export default function PaymentDetailScreen() {
 
   useEffect(() => {
     if (id) {
-      loadTransactionDetail();
+      loadTransactionDetail(id);
     }
 
     // Cleanup timers on unmount
     return () => {
       clearTimers();
     };
-  }, [id, loadTransactionDetail, clearTimers]);
+  }, [id]);
+
+  // Listen for real-time payment updates
+  useEffect(() => {
+    if (!id || !signalRService) return;
+
+    const handlePaymentUpdate = (data: any) => {
+      console.log('💰 Real-time payment update received in payment-detail:', data);
+      
+      // If this is the current transaction, update directly from SignalR data
+      // NOTE: Server sends camelCase (transactionId, transaction), not PascalCase
+      if (data.transactionId === id && data.transaction) {
+        console.log('✅ Updating transaction detail from real-time data');
+        console.log('Transaction data:', JSON.stringify(data.transaction, null, 2));
+        
+        // Transform data: Server sends paidAtUtc, but frontend expects paidAt
+        const transformedTransaction = {
+          ...data.transaction,
+          paidAt: data.transaction.paidAtUtc || data.transaction.paidAt,
+          createdAt: data.transaction.createdAtUtc || data.transaction.createdAt,
+        };
+        
+        console.log('📝 Transformed paidAtUtc:', data.transaction.paidAtUtc, '→ paidAt:', transformedTransaction.paidAt);
+        
+        // Dispatch action to update Redux state directly (no API call needed!)
+        dispatch(updateTransactionDetail(transformedTransaction));
+      }
+    };
+
+    // Wait a bit for SignalR connection if needed
+    const subscribeWithRetry = async () => {
+      let retries = 0;
+      const maxRetries = 10; // Increased to 10 to allow more time for reconnection
+      
+      while (retries < maxRetries) {
+        const state = signalRService.getState();
+        console.log(`⏳ SignalR state: ${state} (attempt ${retries + 1}/${maxRetries})`);
+        
+        // If already connected, subscribe immediately
+        if (signalRService.isConnected()) {
+          console.log('📡 Subscribing to TransactionStatusUpdated event');
+          signalRService.on('TransactionStatusUpdated', handlePaymentUpdate);
+          return; // Success!
+        }
+        
+        // If connecting or reconnecting, wait for it to complete
+        if (state === 'Reconnecting' || state === 'Connecting') {
+          console.log(`⏳ SignalR is ${state}, waiting for connection...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          retries++;
+          continue;
+        }
+        
+        // If disconnected, try to reconnect manually
+        if (state === 'Disconnected' || !state) {
+          console.log('🔄 SignalR disconnected, attempting to reconnect...');
+          try {
+            const token = await AsyncStorage.getItem('accessToken');
+            if (token) {
+              await signalRService.initialize(token);
+              console.log('✅ SignalR reconnected successfully');
+              continue; // Try to subscribe in the next iteration
+            } else {
+              console.warn('⚠️ No token found, cannot reconnect SignalR');
+              break;
+            }
+          } catch (error) {
+            console.error('❌ Failed to reconnect SignalR:', error);
+            retries++;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            continue;
+          }
+        }
+        
+        // Default wait
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        retries++;
+      }
+      
+      console.error('❌ SignalR not connected after retries. Real-time updates will not work.');
+      console.log('💡 You can still refresh manually to see payment updates.');
+    };
+
+    subscribeWithRetry();
+
+    // Cleanup
+    return () => {
+      try {
+        signalRService.off('TransactionStatusUpdated');
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    };
+  }, [id, dispatch]);
 
   // Clear QR state when transaction ID changes
   useEffect(() => {
-    // Only clear if we're actually changing to a different transaction
     if (previousTransactionId.current !== id) {
-      console.log(
-        "Clearing QR state for transaction ID:",
-        id,
-        "Previous:",
-        previousTransactionId.current
-      );
-      setQrCode(null);
+      console.log("Clearing QR state for transaction ID:", id);
+      clearQr();  
       setPaymentSuccess(false);
-      setIsGeneratingQr(false);
-      setTimeRemaining(0);
       clearTimers();
       previousTransactionId.current = id;
     }
-  }, [id, clearTimers]);
+  }, [id]);
 
   // Auto-generate QR when entering the page for pending transactions
   useFocusEffect(
@@ -472,13 +506,13 @@ export default function PaymentDetailScreen() {
                   {/* Debug log removed to reduce console spam */}
                   <TouchableOpacity
                     onPress={handleGenerateQr}
-                    disabled={loadingQr || isGeneratingQr}
+                    disabled={loadingQr}
                     style={[
                       styles.generateQrButton,
-                      (loadingQr || isGeneratingQr) && styles.buttonDisabled,
+                      (loadingQr) && styles.buttonDisabled,
                     ]}
                   >
-                    {loadingQr || isGeneratingQr ? (
+                    {loadingQr ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                       <View style={styles.buttonContent}>
