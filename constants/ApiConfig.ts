@@ -44,6 +44,7 @@ export const API_CONFIG = {
         CREATE: '/payment/create',
         VERIFY: '/payment/verify',
         HISTORY: '/payment/history',
+        UNPAID_FEES: '/payment/unpaid-fees'
       },
     },
     TIMEOUT: 10000,

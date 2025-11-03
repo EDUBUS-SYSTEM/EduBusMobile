@@ -3,7 +3,8 @@ import { apiService } from '../api';
 import {
   QrResponse,
   TransactionDetail,
-  TransactionListResponse
+  TransactionListResponse,
+  UnpaidFeesResponse
 } from './payment.type';
 
 /**
@@ -61,6 +62,12 @@ export const paymentApi = {
     return apiService.get(
       `${API_CONFIG.ENDPOINTS.TRANSACTION.BY_STUDENT}/${studentId}`,
       { page, pageSize }
+    );
+  },
+
+  checkUnpaidFees: async (): Promise<UnpaidFeesResponse> => {
+    return apiService.get<UnpaidFeesResponse>(
+      API_CONFIG.ENDPOINTS.PAYMENT.UNPAID_FEES
     );
   },
 };

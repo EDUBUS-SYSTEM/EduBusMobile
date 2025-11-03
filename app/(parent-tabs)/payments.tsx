@@ -1,4 +1,4 @@
-import { usePayment } from '@/hooks/usePayment';
+import { usePayment } from '@/hooks/payments/usePayment';
 import {
   TransactionStatus,
   TransactionSummary,
