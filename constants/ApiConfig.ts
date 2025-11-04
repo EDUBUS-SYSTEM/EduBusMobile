@@ -1,7 +1,7 @@
 export const API_CONFIG = {
     ENDPOINTS: {
       USER: {
-        PROFILE: '/user/profile',
+        PROFILE: '/UserAccount',
         UPDATE: '/user/update',
         DELETE: '/user/delete',
       },

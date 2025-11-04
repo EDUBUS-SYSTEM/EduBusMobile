@@ -27,8 +27,8 @@ export default function RootLayout() {
     
     const initSignalRWithRetry = async () => {
       let retries = 0;
-      const maxRetries = 5;
-      const retryDelay = 200; // ms between retries
+      const maxRetries = 3; // Reduced retries
+      const retryDelay = 500; // ms between retries
       
       while (retries < maxRetries) {
         try {
@@ -36,8 +36,6 @@ export default function RootLayout() {
           
           // Try to read token from AsyncStorage
           const token = await AsyncStorage.getItem('accessToken');
-          console.log('📍 Token exists:', !!token);
-          console.log('📍 SignalR connected:', signalRService.isConnected());
           
           if (token && !signalRService.isConnected()) {
             console.log('🔌 Initializing SignalR connection from App Layout');
@@ -51,19 +49,30 @@ export default function RootLayout() {
             console.log('✅ SignalR already connected');
             return; // Already connected → exit
           }
-        } catch (error) {
-          console.error(`❌ SignalR init attempt ${retries + 1} failed:`, error);
+        } catch (error: any) {
           retries++;
+          
+          // Only log error if it's not a network/connection error
+          const isNetworkError = error?.message?.includes('Failed to fetch') || 
+                               error?.message?.includes('ERR_CONNECTION_TIMED_OUT') ||
+                               error?.message?.includes('negotiation');
+          
+          if (!isNetworkError) {
+            console.error(`❌ SignalR init attempt ${retries} failed:`, error);
+          } else if (retries === maxRetries) {
+            // Only log once at the end if all retries failed due to network
+            console.warn('⚠️ SignalR connection unavailable (server may be offline or network issue)');
+          }
           
           // If not the last retry, wait before trying again
           if (retries < maxRetries) {
-            console.log(`⏳ Retrying in ${retryDelay}ms...`);
             await new Promise(resolve => setTimeout(resolve, retryDelay));
           }
         }
       }
       
-      console.error('❌ SignalR initialization failed after all retries');
+      // Silent failure - SignalR is optional, app can work without it
+      console.warn('⚠️ SignalR initialization skipped (optional feature)');
     };
 
     // Start immediately (no arbitrary delay!)

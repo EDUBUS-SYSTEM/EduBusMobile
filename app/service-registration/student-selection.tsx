@@ -50,33 +50,50 @@ export default function StudentSelectionScreen() {
         const userInfo = await authApi.getUserInfo();
         if (!userInfo.userId) {
           setError('Unable to get user information. Please login again.');
+          setLoading(false);
           return;
         }
 
-        // Get parent email from user profile
+        // Get parent email from JWT token first (faster, no API call needed)
         const token = await AsyncStorage.getItem('accessToken');
         if (!token) {
           setError('Session expired. Please login again.');
+          setLoading(false);
           return;
         }
 
         const payload: any = decodeJwtPayload(token);
-        const userId: string | undefined =
-          payload?.nameid ||
-          payload?.sub ||
-          payload?.['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
         
-        if (!userId) {
-          setError('Unable to get user ID. Please login again.');
-          return;
-        }
+        // Try to get email from JWT token claims
+        // JWT includes ClaimTypes.Email which maps to different claim names
+        let email = payload?.email || 
+                   payload?.Email ||
+                   payload?.['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] ||
+                   payload?.['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/email'] ||
+                   '';
 
-        // Get user profile to get email
-        const userProfile = await apiService.get<any>(`${API_CONFIG.ENDPOINTS.USER.PROFILE}/${userId}`);
-        const email = userProfile?.Email || userProfile?.email || '';
+        // If email not in JWT, try to get from API
+        if (!email) {
+          const userId: string | undefined =
+            payload?.nameid ||
+            payload?.sub ||
+            payload?.['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
+          
+          if (userId) {
+            try {
+              // Use correct endpoint: /api/UserAccount/{userId}
+              const userProfile = await apiService.get<any>(`${API_CONFIG.ENDPOINTS.USER.PROFILE}/${userId}`);
+              email = userProfile?.Email || userProfile?.email || '';
+            } catch (apiError: any) {
+              console.warn('Could not get email from API, trying JWT token:', apiError);
+              // Continue - will show error if email still empty
+            }
+          }
+        }
         
         if (!email) {
-          setError('Unable to get email address. Please contact support.');
+          setError('Unable to get email address. Please login again or contact support.');
+          setLoading(false);
           return;
         }
 
@@ -398,4 +415,5 @@ export default function StudentSelectionScreen() {
     </ScrollView>
   );
 }
+
 
