@@ -97,6 +97,7 @@ export default function RootLayout() {
           <Stack.Screen name="(driver-vehicle)" options={{ headerShown: false }} />
           <Stack.Screen name="(driver-leave)" options={{ headerShown: false }} />
           <Stack.Screen name="account-profile" options={{ headerShown: false }} />
+          <Stack.Screen name="service-registration" options={{ headerShown: false }} />
           <Stack.Screen name="+not-found" />
           <Stack.Screen name="index" redirect />
         </Stack>
