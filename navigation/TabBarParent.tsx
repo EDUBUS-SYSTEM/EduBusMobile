@@ -100,6 +100,12 @@ export default function TabBarParent() {
           href: null, // Hide from tab bar
         }}
       />
+      <Tabs.Screen
+        name="payment-notification"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
     </Tabs>
   );
 }

@@ -104,6 +104,10 @@ export interface QrResponse {
   checkoutUrl: string;
   expiresAt: string;
 }
+export interface UnpaidFeesResponse {
+  hasUnpaidFees: boolean;
+  count: number;
+}
 
 // Helper functions
 export const getStatusText = (status: TransactionStatus): string => {
@@ -156,4 +160,5 @@ export const formatDate = (dateString: string): string => {
     minute: '2-digit',
   });
 };
+
 
