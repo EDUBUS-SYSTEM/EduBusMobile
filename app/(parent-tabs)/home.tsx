@@ -2,8 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 export default function ParentHomeScreen() {
+  const router = useRouter();
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       {/* Header with Logo */}
@@ -48,19 +51,23 @@ export default function ParentHomeScreen() {
         </Text>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
-          <TouchableOpacity style={{
-            backgroundColor: '#E0F7FA',
-            borderRadius: 15,
-            padding: 20,
-            width: '47%',
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 3
-          }}>
-            <Ionicons name="bus" size={32} color="#01CBCA" />
+          <TouchableOpacity 
+            onPress={() => router.push('/service-registration/student-selection')}
+            style={{
+              backgroundColor: '#FEFCE8',
+              borderRadius: 15,
+              padding: 20,
+              width: '47%',
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 3,
+              borderWidth: 2,
+              borderColor: '#FDC700'
+            }}>
+            <Ionicons name="clipboard" size={32} color="#D08700" />
             <Text style={{
               fontFamily: 'RobotoSlab-Medium',
               fontSize: 14,
@@ -68,7 +75,7 @@ export default function ParentHomeScreen() {
               marginTop: 8,
               textAlign: 'center'
             }}>
-              Register Bus
+              Register Service
             </Text>
           </TouchableOpacity>
 

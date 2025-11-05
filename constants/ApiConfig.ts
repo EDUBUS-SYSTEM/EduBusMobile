@@ -1,7 +1,7 @@
 export const API_CONFIG = {
     ENDPOINTS: {
       USER: {
-        PROFILE: '/user/profile',
+        PROFILE: '/UserAccount',
         UPDATE: '/user/update',
         DELETE: '/user/delete',
       },
@@ -44,6 +44,7 @@ export const API_CONFIG = {
         CREATE: '/payment/create',
         VERIFY: '/payment/verify',
         HISTORY: '/payment/history',
+        UNPAID_FEES: '/payment/unpaid-fees'
       },
     },
     TIMEOUT: 10000,

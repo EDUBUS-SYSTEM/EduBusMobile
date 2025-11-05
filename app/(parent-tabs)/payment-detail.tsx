@@ -1,4 +1,4 @@
-import { usePayment } from '@/hooks/usePayment';
+import { usePayment } from '@/hooks/payments/usePayment';
 import {
   TransactionStatus,
   formatCurrency,
@@ -6,7 +6,10 @@ import {
   getStatusColor,
   getStatusText
 } from "@/lib/payment/payment.type";
+import { signalRService } from '@/lib/signalr/signalr.service';
+import { updateTransactionDetail } from '@/store/slices/paymentSlice';
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from "@react-navigation/native";
 import * as MediaLibrary from "expo-media-library";
 import { router, useLocalSearchParams } from "expo-router";
@@ -23,10 +26,7 @@ import {
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { captureRef } from "react-native-view-shot";
-import { signalRService } from '@/lib/signalr/signalr.service';
 import { useDispatch } from 'react-redux';
-import { updateTransactionDetail } from '@/store/slices/paymentSlice';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 export default function PaymentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const dispatch = useDispatch();

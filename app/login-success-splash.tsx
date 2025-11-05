@@ -1,10 +1,11 @@
+import { authApi } from '@/lib/auth/auth.api';
+import { paymentApi } from '@/lib/payment/payment.api';
+import { signalRService } from '@/lib/signalr/signalr.service';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Text, View, Animated } from 'react-native';
-import { authApi } from '@/lib/auth/auth.api';
-import { signalRService } from '@/lib/signalr/signalr.service';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Animated, Text, View } from 'react-native';
 
 export default function LoginSuccessSplash() {
   const [fadeAnim] = useState(new Animated.Value(0));
@@ -71,7 +72,26 @@ export default function LoginSuccessSplash() {
         if (userInfo.role === 'Driver') {
           router.replace('/(driver-tabs)/dashboard' as any);
         } else if (userInfo.role === 'Parent') {
-          router.replace('/(parent-tabs)/home' as any);
+          setStatusText('Đang kiểm tra thanh toán...');
+          try {
+            const paymentStatus = await paymentApi.checkUnpaidFees();   
+            // Store in AsyncStorage for usePaymentStatus hook to read later
+            await AsyncStorage.setItem('paymentStatus', JSON.stringify(paymentStatus));
+            
+            // Decide navigation based on payment status
+            if (paymentStatus.hasUnpaidFees && paymentStatus.count > 0) {
+              console.log('⚠️ Parent has unpaid fees, navigating to notification');
+              router.replace('/(parent-tabs)/payment-notification' as any);
+            } else {
+              console.log('✅ Parent has no unpaid fees, navigating to home');
+              router.replace('/(parent-tabs)/home' as any);
+            }
+          } catch (paymentError) {
+            console.error('Error checking payment status:', paymentError);
+            // On error, go to home
+            router.replace('/(parent-tabs)/home' as any);
+          }
+          
         } else {
           // If somehow we get here with Admin role, logout and go to login
           console.error('Admin role detected in splash screen - this should not happen');
