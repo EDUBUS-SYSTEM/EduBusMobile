@@ -7,6 +7,8 @@ export interface DriverTrip {
   serviceDate: string;
   plannedStartAt: string;
   plannedEndAt: string;
+  startTime?: string;
+  endTime?: string;
   status: 'Scheduled' | 'InProgress' | 'Completed' | 'Cancelled' | 'Delayed';
   scheduleSnapshot: {
     scheduleId: string;
@@ -107,7 +109,7 @@ export const driverScheduleApi = {
     driverId: string,
     startDate: string,
     endDate: string,
-    schedules: ScheduleDto[]
+    schedules?: ScheduleDto[]
   ): Promise<DriverSchedule> {
     try {
       const trips = await driverTripApi.getDriverScheduleByRange(driverId, startDate, endDate);
@@ -119,6 +121,8 @@ export const driverScheduleApi = {
           serviceDate: trip.serviceDate,
           plannedStartAt: trip.plannedStartAt,
           plannedEndAt: trip.plannedEndAt,
+          startTime: trip.startTime,
+          endTime: trip.endTime,
           status: trip.status,
           scheduleSnapshot: {
             scheduleId: trip.id,

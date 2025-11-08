@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
 import DayModal from '../../features/driverSchedule/components/DayModal';
-import { DriverSchedule, driverScheduleApi, ScheduleDto } from '../../lib/api/driverSchedule';
+import { DriverSchedule, driverScheduleApi } from '../../lib/api/driverSchedule';
+import { academicCalendarApi, AcademicSemesterDto } from '../../lib/api/academicCalendar';
 import { authApi } from '../../lib/auth/auth.api';
 
 export default function DriverScheduleScreen() {
@@ -21,19 +22,19 @@ export default function DriverScheduleScreen() {
   const [, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [schedules, setSchedules] = useState<ScheduleDto[]>([]);
-  const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
+  const [semesters, setSemesters] = useState<AcademicSemesterDto[]>([]);
+  const [selectedSemesterCode, setSelectedSemesterCode] = useState<string>('');
 
-  const loadSchedules = useCallback(async () => {
+  const loadSemesters = useCallback(async () => {
     try {
-      const loadedSchedules = await driverScheduleApi.getActiveSchedules();
-      setSchedules(loadedSchedules);
+      const loadedSemesters = await academicCalendarApi.getActiveSemesters();
+      setSemesters(loadedSemesters);
     } catch {
       // Handle error silently
     }
   }, []);
 
-  const loadSchedule = useCallback(async (scheduleId: string, startDate: string, endDate: string) => {
+  const loadSchedule = useCallback(async (startDate: string, endDate: string) => {
     try {
       setLoading(true);
       const userInfo = await authApi.getUserInfo();
@@ -44,8 +45,7 @@ export default function DriverScheduleScreen() {
       const scheduleData = await driverScheduleApi.getDriverSchedule(
         driverId,
         startDate,
-        endDate,
-        schedules
+        endDate
       );
 
       setSchedule(scheduleData);
@@ -54,13 +54,13 @@ export default function DriverScheduleScreen() {
     } finally {
       setLoading(false);
     }
-  }, [schedules]);
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadSchedules();
+    await loadSemesters();
     setRefreshing(false);
-  }, [loadSchedules]);
+  }, [loadSemesters]);
 
   const handleDateSelect = (day: DateData) => {
     const dateString = day.dateString;
@@ -68,11 +68,11 @@ export default function DriverScheduleScreen() {
     setModalVisible(true);
   };
 
-  const handleSchedulePress = async (schedule: ScheduleDto) => {
-    setSelectedScheduleId(schedule.id);
-    const startDate = schedule.effectiveFrom.split('T')[0];
-    const endDate = schedule.effectiveTo ? schedule.effectiveTo.split('T')[0] : '2025-12-31';
-    await loadSchedule(schedule.id, startDate, endDate);
+  const handleSemesterPress = async (semester: AcademicSemesterDto) => {
+    setSelectedSemesterCode(semester.code);
+    const startDate = semester.startDate.split('T')[0];
+    const endDate = semester.endDate.split('T')[0];
+    await loadSchedule(startDate, endDate);
   };
 
   const createMarkedDates = () => {
@@ -92,16 +92,18 @@ export default function DriverScheduleScreen() {
   };
 
   React.useEffect(() => {
-    loadSchedules();
-  }, [loadSchedules]);
+    loadSemesters();
+  }, [loadSemesters]);
 
   React.useEffect(() => {
-    if (schedules.length > 0) {
-      const firstSchedule = schedules[0];
-      setSelectedScheduleId(firstSchedule.id);
-      loadSchedule(firstSchedule.id, firstSchedule.effectiveFrom.split('T')[0], firstSchedule.effectiveTo ? firstSchedule.effectiveTo.split('T')[0] : '2025-12-31');
+    if (semesters.length > 0) {
+      const firstSemester = semesters[0];
+      setSelectedSemesterCode(firstSemester.code);
+      const startDate = firstSemester.startDate.split('T')[0];
+      const endDate = firstSemester.endDate.split('T')[0];
+      loadSchedule(startDate, endDate);
     }
-  }, [schedules, loadSchedule]);
+  }, [semesters, loadSchedule]);
 
   return (
     <View style={styles.container}>
@@ -129,20 +131,20 @@ export default function DriverScheduleScreen() {
       >
         <View style={styles.chipsContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {schedules.map((schedule) => (
+            {semesters.map((semester) => (
               <TouchableOpacity
-                key={schedule.id}
+                key={semester.code}
                 style={[
                   styles.chip,
-                  selectedScheduleId === schedule.id ? styles.chipActive : null
+                  selectedSemesterCode === semester.code ? styles.chipActive : null
                 ]}
-                onPress={() => handleSchedulePress(schedule)}
+                onPress={() => handleSemesterPress(semester)}
               >
                 <Text style={[
                   styles.chipText,
-                  selectedScheduleId === schedule.id ? styles.chipTextActive : null
+                  selectedSemesterCode === semester.code ? styles.chipTextActive : null
                 ]}>
-                  {schedule.name.length > 15 ? schedule.name.substring(0, 15) + '...' : schedule.name}
+                  {semester.name.length > 20 ? semester.name.substring(0, 20) + '...' : semester.name}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -204,7 +206,7 @@ export default function DriverScheduleScreen() {
               })}
             </Text>
             <Text style={styles.tripCount}>
-              {schedule.byDate[selectedDate].length} trip(s) scheduled
+              {schedule.byDate[selectedDate].length} trip(s)
             </Text>
           </View>
         )}
