@@ -204,7 +204,7 @@ export default function DriverScheduleScreen() {
               })}
             </Text>
             <Text style={styles.tripCount}>
-              {schedule.byDate[selectedDate].length} trip(s) scheduled
+              {schedule.byDate[selectedDate].length} trip(s)
             </Text>
           </View>
         )}
