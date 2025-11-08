@@ -109,7 +109,7 @@ export const driverScheduleApi = {
     driverId: string,
     startDate: string,
     endDate: string,
-    schedules: ScheduleDto[]
+    schedules?: ScheduleDto[]
   ): Promise<DriverSchedule> {
     try {
       const trips = await driverTripApi.getDriverScheduleByRange(driverId, startDate, endDate);
