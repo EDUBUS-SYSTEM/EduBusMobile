@@ -1,4 +1,4 @@
-import { apiService } from "@/lib/api"; // axios instance đã có interceptor
+import { apiService } from "@/lib/api"; // axios instance with interceptor
 import {
     Entypo,
     FontAwesome5,
@@ -20,7 +20,7 @@ export default function ProfileStudent() {
   useEffect(() => {
     const loadStudent = async () => {
       try {
-        //Thay doi id student phu hop vs parent account de test
+        // Change student id to match parent account for testing
         const studentData = await apiService.get<Student>(
           `/Student/e9a91a9f-cc74-4c31-9e7b-87505c22b10b`
         );

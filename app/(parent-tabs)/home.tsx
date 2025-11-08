@@ -79,7 +79,9 @@ export default function ParentHomeScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={{
+          <TouchableOpacity 
+            onPress={() => router.push('/(parent-tabs)/trips/today')}
+            style={{
             backgroundColor: '#E0F7FA',
             borderRadius: 15,
             padding: 20,
@@ -91,7 +93,7 @@ export default function ParentHomeScreen() {
             shadowRadius: 4,
             elevation: 3
           }}>
-            <Ionicons name="location" size={32} color="#01CBCA" />
+            <Ionicons name="calendar" size={32} color="#01CBCA" />
             <Text style={{
               fontFamily: 'RobotoSlab-Medium',
               fontSize: 14,
@@ -99,7 +101,7 @@ export default function ParentHomeScreen() {
               marginTop: 8,
               textAlign: 'center'
             }}>
-              Track Location
+              Trips Today
             </Text>
           </TouchableOpacity>
 

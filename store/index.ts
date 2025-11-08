@@ -1,9 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit';
 import paymentReducer from './slices/paymentSlice';
+import driverTodayReducer from './slices/driverTodaySlice';
 
 export const store = configureStore({
   reducer: {
     payment: paymentReducer,
+    driverToday: driverTodayReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

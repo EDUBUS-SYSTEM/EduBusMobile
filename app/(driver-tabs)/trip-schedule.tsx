@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
 import DayModal from '../../features/driverSchedule/components/DayModal';
-import { DriverSchedule, driverScheduleApi, ScheduleDto } from '../../lib/api/driverSchedule';
+import { DriverSchedule, driverScheduleApi, ScheduleDto } from '../../lib/trip-mock-data/driverSchedule';
 import { authApi } from '../../lib/auth/auth.api';
 
 export default function DriverScheduleScreen() {

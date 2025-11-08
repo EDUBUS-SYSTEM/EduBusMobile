@@ -1,41 +1,5 @@
 import { apiService } from '../api';
-
-export interface DriverTripDto {
-  id: string;
-  routeId: string;
-  routeName: string;
-  serviceDate: string;
-  plannedStartAt: string;
-  plannedEndAt: string;
-  startTime?: string;
-  endTime?: string;
-  status: 'Scheduled' | 'InProgress' | 'Completed' | 'Cancelled' | 'Delayed';
-  scheduleName: string;
-  totalStops: number;
-  completedStops: number;
-  stops: DriverTripStopDto[];
-  isOverride: boolean;
-  overrideReason: string;
-  overrideCreatedBy?: string;
-  overrideCreatedAt?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface DriverTripStopDto {
-  sequenceOrder: number;
-  pickupPointId: string;
-  pickupPointName: string;
-  plannedAt: string;
-  arrivedAt?: string;
-  departedAt?: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  totalStudents: number;
-  presentStudents: number;
-  absentStudents: number;
-}
+import type { DriverTripDto } from './driverTrip.types';
 
 export const driverTripApi = {
   async getDriverScheduleByRange(

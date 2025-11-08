@@ -72,7 +72,7 @@ export default function LoginSuccessSplash() {
         if (userInfo.role === 'Driver') {
           router.replace('/(driver-tabs)/dashboard' as any);
         } else if (userInfo.role === 'Parent') {
-          setStatusText('Đang kiểm tra thanh toán...');
+          setStatusText('Checking payment status...');
           try {
             const paymentStatus = await paymentApi.checkUnpaidFees();   
             // Store in AsyncStorage for usePaymentStatus hook to read later

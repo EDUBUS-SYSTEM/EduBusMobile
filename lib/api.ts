@@ -3,10 +3,10 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import { config } from './config';
 
-// Lấy baseURL từ config.ts
+// Get baseURL from config.ts
 const RAW_API_BASE_URL = config.API_URL;
 
-// Chuẩn hóa URL theo nền tảng: Android emulator không truy cập được localhost của host
+// Normalize URL by platform: Android emulator cannot access host's localhost
 function normalizeBaseUrl(url: string): string {
   try {
     const parsed = new URL(url);
