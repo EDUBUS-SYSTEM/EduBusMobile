@@ -1,17 +1,20 @@
-import { parentTripMockApi } from '@/lib/trip-mock-data/parentTrip.mockApi';
 import type { ParentTripDto } from '@/lib/trip-mock-data/parentTrip.types';
+import { getParentTripDetail } from '@/lib/trip/trip.api';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
 import type { Guid } from '@/lib/types';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { Camera, MapView, PointAnnotation, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
+import { useAppSelector, useAppDispatch } from '@/store/hooks';
+import { updateTrip } from '@/store/slices/parentTodaySlice';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -86,15 +89,29 @@ const getMockBusLocation = (): [number, number] => {
   return [108.2022, 16.0544];
 };
 
+type VehicleInfo = {
+  id?: Guid;
+  maskedPlate: string;
+  capacity: number;
+  status?: string;
+};
+
+type ParentTripWithVehicle = ParentTripDto & {
+  vehicle?: VehicleInfo;
+};
+
 export default function ParentTripTrackingScreen() {
   const { tripId } = useLocalSearchParams<Params>();
-  const [trip, setTrip] = useState<ParentTripDto | null>(null);
+  const dispatch = useAppDispatch();
+  const tripsFromStore = useAppSelector((state) => state.parentToday.trips);
+  const [trip, setTrip] = useState<ParentTripWithVehicle | null>(null);
   const [loading, setLoading] = useState(true);
   const [busLocation, setBusLocation] = useState<[number, number] | null>(null);
   const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
+  const [showDriverModal, setShowDriverModal] = useState(false);
   const mapRef = useRef<MapViewRef>(null);
 
-  // Load trip data
+  // Load trip data - check Redux store first, then fetch from API if not found
   useEffect(() => {
     if (!tripId) {
       Alert.alert('Error', 'Trip ID is missing', [
@@ -105,7 +122,18 @@ export default function ParentTripTrackingScreen() {
 
     (async () => {
       try {
-        const tripData = await parentTripMockApi.getById(tripId);
+        // First, check if trip exists in Redux store
+        let tripData: ParentTripDto | null | undefined = tripsFromStore.find(t => t.id === tripId);
+        
+        // If not in store, fetch from API
+        if (!tripData) {
+          tripData = await getParentTripDetail(tripId);
+          // Cache trip detail in Redux store
+          if (tripData) {
+            dispatch(updateTrip(tripData));
+          }
+        }
+        
         if (tripData) {
           setTrip(tripData);
           // Set initial bus location
@@ -117,15 +145,19 @@ export default function ParentTripTrackingScreen() {
             { text: 'OK', onPress: () => router.replace('/(parent-tabs)/trips/today') },
           ]);
         }
-      } catch (error) {
-        Alert.alert('Error', 'Failed to load trip', [
+      } catch (error: any) {
+        console.error('Error loading trip:', error);
+        const errorMessage = error.message === 'UNAUTHORIZED' 
+          ? 'Session expired. Please login again.'
+          : error.message || 'Failed to load trip';
+        Alert.alert('Error', errorMessage, [
           { text: 'OK', onPress: () => router.replace('/(parent-tabs)/trips/today') },
         ]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [tripId]);
+  }, [tripId, tripsFromStore, dispatch]);
 
   // Initialize TripHub connection for real-time location updates
   useEffect(() => {
@@ -150,10 +182,20 @@ export default function ParentTripTrackingScreen() {
 
         // Subscribe to location updates
         tripHubService.onLocationUpdate<LocationUpdate>((location) => {
-          if (location.tripId === tripId) {
+          if (location.tripId === tripId && trip) {
             const newLocation: [number, number] = [location.longitude, location.latitude];
             setBusLocation(newLocation);
             setCameraCenter(newLocation);
+            
+            // Update Redux store to sync with list screen
+            // Note: We only update location-related data here, not the full trip object
+            // The trip object structure doesn't include location, so we just update the trip
+            // to trigger a re-render in list screen if needed
+            dispatch(updateTrip({
+              ...trip,
+              // Location updates don't change trip data structure,
+              // but updating Redux ensures list screen stays in sync
+            }));
           }
         });
 
@@ -176,7 +218,7 @@ export default function ParentTripTrackingScreen() {
         });
       }
     };
-  }, [tripId, trip]);
+  }, [tripId, trip, dispatch]);
 
 
   const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || '';
@@ -234,8 +276,9 @@ export default function ParentTripTrackingScreen() {
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}>
         
-        {/* Child Info Card */}
-        <View style={styles.childCard}>
+        {/* Trip Info */}
+        <View style={styles.tripInfoCard}>
+          {/* Child Info */}
           <View style={styles.childInfoRow}>
             {trip.childAvatar ? (
               <Image
@@ -254,18 +297,10 @@ export default function ParentTripTrackingScreen() {
                 <Text style={styles.childClass}>{trip.childClassName}</Text>
               )}
             </View>
-            <View
-              style={[
-                styles.statusBadge,
-                { backgroundColor: getStatusColor(trip.status) },
-              ]}>
-              <Text style={styles.statusText}>{getStatusText(trip.status)}</Text>
-            </View>
           </View>
-        </View>
-
-        {/* Trip Info */}
-        <View style={styles.tripInfoCard}>
+          
+          <View style={styles.tripInfoDivider} />
+          
           <View style={styles.tripInfoRow}>
             <Ionicons name="time-outline" size={20} color="#6B7280" />
             <Text style={styles.tripTime}>
@@ -275,24 +310,6 @@ export default function ParentTripTrackingScreen() {
           <View style={styles.tripInfoRow}>
             <Ionicons name="calendar-outline" size={20} color="#6B7280" />
             <Text style={styles.tripSchedule}>{trip.scheduleName}</Text>
-          </View>
-        </View>
-
-        {/* Progress Bar */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressLabel}>Trip Progress</Text>
-            <Text style={styles.progressText}>
-              {trip.completedStops} / {trip.totalStops} stops
-            </Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${(trip.completedStops / trip.totalStops) * 100}%` },
-              ]}
-            />
           </View>
         </View>
 
@@ -380,116 +397,101 @@ export default function ParentTripTrackingScreen() {
             </View>
           )}
         </View>
-
-        {/* Stops Information */}
-        <View style={styles.stopsContainer}>
-          {/* Pickup Stop */}
-          {trip.pickupStop && (
-            <View style={styles.stopCard}>
-              <View style={styles.stopHeader}>
-                <View style={[styles.stopIcon, { backgroundColor: '#4CAF50' }]}>
-                  <Ionicons name="location" size={20} color="#FFFFFF" />
-                </View>
-                <View style={styles.stopHeaderText}>
-                  <Text style={styles.stopTitle}>Pickup Point</Text>
-                  <Text style={styles.stopName}>{trip.pickupStop.pickupPointName}</Text>
-                </View>
-                <View style={[
-                  styles.stopStatusBadge,
-                  pickupStatus === 'completed' && styles.stopStatusCompleted,
-                  pickupStatus === 'arrived' && styles.stopStatusArrived,
-                ]}>
-                  <Text style={styles.stopStatusText}>
-                    {pickupStatus === 'completed' ? 'Completed' : 
-                     pickupStatus === 'arrived' ? 'Arrived' : 'Pending'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.stopAddress}>{trip.pickupStop.address}</Text>
-              <View style={styles.stopTimes}>
-                <View style={styles.stopTimeRow}>
-                  <Ionicons name="time-outline" size={14} color="#6B7280" />
-                  <Text style={styles.stopTimeLabel}>Planned:</Text>
-                  <Text style={styles.stopTimeValue}>
-                    {formatTime(trip.pickupStop.plannedAt)}
-                  </Text>
-                </View>
-                {trip.pickupStop.arrivedAt && (
-                  <View style={styles.stopTimeRow}>
-                    <Ionicons name="checkmark-circle-outline" size={14} color="#4CAF50" />
-                    <Text style={styles.stopTimeLabel}>Arrived:</Text>
-                    <Text style={styles.stopTimeValue}>
-                      {formatTime(trip.pickupStop.arrivedAt)}
-                    </Text>
-                  </View>
-                )}
-                {trip.pickupStop.departedAt && (
-                  <View style={styles.stopTimeRow}>
-                    <Ionicons name="arrow-forward-circle-outline" size={14} color="#2196F3" />
-                    <Text style={styles.stopTimeLabel}>Departed:</Text>
-                    <Text style={styles.stopTimeValue}>
-                      {formatTime(trip.pickupStop.departedAt)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Dropoff Stop */}
-          {trip.dropoffStop && (
-            <View style={styles.stopCard}>
-              <View style={styles.stopHeader}>
-                <View style={[styles.stopIcon, { backgroundColor: '#2196F3' }]}>
-                  <Ionicons name="location" size={20} color="#FFFFFF" />
-                </View>
-                <View style={styles.stopHeaderText}>
-                  <Text style={styles.stopTitle}>Drop-off Point</Text>
-                  <Text style={styles.stopName}>{trip.dropoffStop.pickupPointName}</Text>
-                </View>
-                <View style={[
-                  styles.stopStatusBadge,
-                  dropoffStatus === 'completed' && styles.stopStatusCompleted,
-                  dropoffStatus === 'arrived' && styles.stopStatusArrived,
-                ]}>
-                  <Text style={styles.stopStatusText}>
-                    {dropoffStatus === 'completed' ? 'Completed' : 
-                     dropoffStatus === 'arrived' ? 'Arrived' : 'Pending'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.stopAddress}>{trip.dropoffStop.address}</Text>
-              <View style={styles.stopTimes}>
-                <View style={styles.stopTimeRow}>
-                  <Ionicons name="time-outline" size={14} color="#6B7280" />
-                  <Text style={styles.stopTimeLabel}>Planned:</Text>
-                  <Text style={styles.stopTimeValue}>
-                    {formatTime(trip.dropoffStop.plannedAt)}
-                  </Text>
-                </View>
-                {trip.dropoffStop.arrivedAt && (
-                  <View style={styles.stopTimeRow}>
-                    <Ionicons name="checkmark-circle-outline" size={14} color="#4CAF50" />
-                    <Text style={styles.stopTimeLabel}>Arrived:</Text>
-                    <Text style={styles.stopTimeValue}>
-                      {formatTime(trip.dropoffStop.arrivedAt)}
-                    </Text>
-                  </View>
-                )}
-                {trip.dropoffStop.departedAt && (
-                  <View style={styles.stopTimeRow}>
-                    <Ionicons name="arrow-forward-circle-outline" size={14} color="#2196F3" />
-                    <Text style={styles.stopTimeLabel}>Departed:</Text>
-                    <Text style={styles.stopTimeValue}>
-                      {formatTime(trip.dropoffStop.departedAt)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
-        </View>
       </ScrollView>
+
+      {/* Floating Driver Info Button */}
+      {trip.driver && (
+        <TouchableOpacity
+          style={styles.floatingButton}
+          onPress={() => setShowDriverModal(true)}
+          activeOpacity={0.8}>
+          <MaterialCommunityIcons name="account-tie" size={32} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+
+      {/* Driver Info Modal */}
+      <Modal
+        visible={showDriverModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDriverModal(false)}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowDriverModal(false)}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Driver</Text>
+              <TouchableOpacity
+                onPress={() => setShowDriverModal(false)}
+                style={styles.modalCloseButton}>
+                <Ionicons name="close" size={24} color="#000000" />
+              </TouchableOpacity>
+            </View>
+            
+            {trip.driver && (
+              <View style={styles.modalBody}>
+                <View style={styles.modalDriverAvatarContainer}>
+                  <View style={[styles.modalDriverAvatar, styles.avatarPlaceholder]}>
+                    <MaterialCommunityIcons name="account-tie" size={80} color="#6B7280" />
+                  </View>
+                </View>
+                
+                <View style={styles.modalDriverInfo}>
+                  <Text style={styles.modalDriverName}>{trip.driver.fullName}</Text>
+                  
+                  {/* Vehicle Info */}
+                  {trip.vehicle && (
+                    <View style={styles.vehicleInfoContainer}>
+                      <View style={styles.vehicleInfoItem}>
+                        <View style={styles.vehicleInfoIcon}>
+                          <Ionicons name="car" size={18} color="#6B7280" />
+                        </View>
+                        <View style={styles.vehicleInfoText}>
+                          <Text style={styles.vehicleInfoLabel}>Vehicle</Text>
+                          <Text style={styles.vehicleInfoValue}>
+                            {trip.vehicle.maskedPlate}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.vehicleInfoDivider} />
+                      <View style={styles.vehicleInfoItem}>
+                        <View style={styles.vehicleInfoIcon}>
+                          <Ionicons name="people" size={18} color="#6B7280" />
+                        </View>
+                        <View style={styles.vehicleInfoText}>
+                          <Text style={styles.vehicleInfoLabel}>Capacity</Text>
+                          <Text style={styles.vehicleInfoValue}>
+                            {trip.vehicle.capacity} seats
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                  
+                  <TouchableOpacity
+                    style={styles.callButton}
+                    onPress={() => {
+                      // Handle call action
+                      Alert.alert('Call', `Do you want to call ${trip.driver?.fullName}?`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Call', onPress: () => {
+                          // Implement call functionality
+                          console.log('Calling:', trip.driver?.phone);
+                        }},
+                      ]);
+                    }}>
+                    <Ionicons name="call" size={20} color="#FFFFFF" />
+                    <Text style={styles.callButtonText}>{trip.driver.phone}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -539,6 +541,29 @@ const styles = StyleSheet.create({
   scrollViewContent: {
     padding: 20,
     paddingBottom: 40,
+  },
+  statusCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  statusCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statusCardLabel: {
+    fontSize: 16,
+    fontFamily: 'RobotoSlab-Bold',
+    color: '#000000',
   },
   childCard: {
     backgroundColor: '#FFF8CF',
@@ -598,6 +623,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
+  tripInfoDivider: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginVertical: 12,
+  },
   tripInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -614,36 +644,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginLeft: 8,
     fontFamily: 'RobotoSlab-Medium',
-  },
-  progressContainer: {
-    marginBottom: 16,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  progressLabel: {
-    fontSize: 16,
-    fontFamily: 'RobotoSlab-Bold',
-    color: '#000000',
-  },
-  progressText: {
-    fontSize: 14,
-    fontFamily: 'RobotoSlab-Medium',
-    color: '#6B7280',
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#FFDD00',
-    borderRadius: 4,
   },
   mapContainer: {
     height: 600,
@@ -796,6 +796,187 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#000000',
     fontFamily: 'RobotoSlab-Bold',
+  },
+  floatingButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#2196F3',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 20,
+    paddingBottom: 40,
+    maxHeight: '70%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'RobotoSlab-Bold',
+    color: '#000000',
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBody: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
+  modalDriverAvatarContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalDriverAvatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  modalDriverInfo: {
+    alignItems: 'center',
+  },
+  modalDriverName: {
+    fontSize: 24,
+    fontFamily: 'RobotoSlab-Bold',
+    color: '#000000',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  vehicleInfoContainer: {
+    width: '100%',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    gap: 12,
+    marginBottom: 16,
+  },
+  vehicleInfoItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  vehicleInfoDivider: {
+    width: 1,
+    backgroundColor: '#E0E0E0',
+  },
+  vehicleInfoIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  vehicleInfoText: {
+    flex: 1,
+  },
+  vehicleInfoLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'RobotoSlab-Medium',
+    marginBottom: 2,
+  },
+  vehicleInfoValue: {
+    fontSize: 16,
+    color: '#000000',
+    fontFamily: 'RobotoSlab-Bold',
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    width: '100%',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+  },
+  modalInfoLabel: {
+    fontSize: 16,
+    fontFamily: 'RobotoSlab-Medium',
+    color: '#6B7280',
+    marginLeft: 8,
+    marginRight: 8,
+  },
+  modalInfoValue: {
+    fontSize: 16,
+    fontFamily: 'RobotoSlab-Bold',
+    color: '#000000',
+    flex: 1,
+  },
+  callButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    marginTop: 8,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  callButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'RobotoSlab-Bold',
+    marginLeft: 8,
   },
 });
 

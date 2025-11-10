@@ -1,11 +1,9 @@
-import { parentTripMockApi } from '@/lib/trip-mock-data/parentTrip.mockApi';
 import type { ParentTripDto } from '@/lib/trip-mock-data/parentTrip.types';
-import { authApi } from '@/lib/auth/auth.api';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -17,12 +15,26 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { fetchParentTripsToday } from '@/store/slices/parentTodaySlice';
 
 const formatTime = (iso: string) => {
   const date = new Date(iso);
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
+  // Use UTC time to match backend (backend stores times in UTC)
+  const hours = date.getUTCHours().toString().padStart(2, '0');
+  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
   return `${hours}:${minutes}`;
+};
+
+const formatTodayLabel = () => {
+  const now = new Date();
+  const formatted = now.toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  return `${formatted}`;
 };
 
 const getStatusColor = (status: string) => {
@@ -60,44 +72,46 @@ const getStatusText = (status: string) => {
 };
 
 export default function TripsTodayScreen() {
-  const [trips, setTrips] = useState<ParentTripDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const dispatch = useAppDispatch();
+  const { trips, status, error } = useAppSelector((state) => state.parentToday);
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  const loadTrips = async () => {
+  const loadTrips = React.useCallback(async () => {
     try {
-      const userInfo = await authApi.getUserInfo();
-      const parentId = userInfo.userId || 'mock-parent-id';
-      const tripsData = await parentTripMockApi.getTodayTrips(parentId);
-      
-      // Sort trips: InProgress trips first, then others
-      const sortedTrips = [...tripsData].sort((a, b) => {
-        if (a.status === 'InProgress' && b.status !== 'InProgress') {
-          return -1; // a comes first
-        }
-        if (a.status !== 'InProgress' && b.status === 'InProgress') {
-          return 1; // b comes first
-        }
-        return 0; // keep original order for others
-      });
-      
-      setTrips(sortedTrips);
+      const today = new Date();
+      const isoDate = today.toISOString().split('T')[0];
+      console.log('Loading trips for date:', isoDate);
+      await dispatch(fetchParentTripsToday({ dateISO: isoDate })).unwrap();
     } catch (error) {
       console.error('Error loading trips:', error);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [dispatch]);
 
   useEffect(() => {
     loadTrips();
-  }, []);
+  }, [loadTrips]);
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     loadTrips();
-  }, []);
+  }, [loadTrips]);
+
+  // Sort trips: InProgress trips first, then others
+  const sortedTrips = React.useMemo(() => {
+    return [...trips].sort((a, b) => {
+      if (a.status === 'InProgress' && b.status !== 'InProgress') {
+        return -1; // a comes first
+      }
+      if (a.status !== 'InProgress' && b.status === 'InProgress') {
+        return 1; // b comes first
+      }
+      return 0; // keep original order for others
+    });
+  }, [trips]);
+
+  const loading = status === 'loading' || status === 'idle';
 
   const handleTripPress = (tripId: string) => {
     router.push(`/(parent-tabs)/trip/${tripId}`);
@@ -130,7 +144,10 @@ export default function TripsTodayScreen() {
           onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Trips Today</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Trips Today</Text>
+          <Text style={styles.headerSubtitle}>{formatTodayLabel()}</Text>
+        </View>
         <View style={{ width: 40 }} />
       </LinearGradient>
 
@@ -141,18 +158,25 @@ export default function TripsTodayScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }>
-        {trips.length === 0 ? (
+        {status === 'failed' && error && (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#F44336" />
+            <Text style={styles.emptyText}>Error: {error}</Text>
+          </View>
+        )}
+        {status !== 'failed' && sortedTrips.length === 0 && (
           <View style={styles.emptyContainer}>
             <Ionicons name="calendar-outline" size={64} color="#9E9E9E" />
             <Text style={styles.emptyText}>No trips today</Text>
           </View>
-        ) : (
-          trips.map((trip) => (
-            <TouchableOpacity
-              key={trip.id}
-              style={styles.tripCard}
-              onPress={() => handleTripPress(trip.id)}
-              activeOpacity={0.7}>
+        )}
+        {sortedTrips.length > 0 && sortedTrips.map((trip) => (
+          <TouchableOpacity
+            key={`${trip.id}-${trip.childId}`}
+            style={styles.tripCard}
+            disabled={trip.status !== 'InProgress'}
+            onPress={trip.status === 'InProgress' ? () => handleTripPress(trip.id) : undefined}
+            activeOpacity={0.7}>
               {/* Child Info */}
               <View style={styles.childInfoRow}>
                 {trip.childAvatar ? (
@@ -203,10 +227,7 @@ export default function TripsTodayScreen() {
                 <View style={styles.stopInfo}>
                   <View style={styles.stopRow}>
                     <Ionicons name="location" size={16} color="#4CAF50" />
-                    <Text style={styles.stopLabel}>Pickup Point:</Text>
-                    <Text style={styles.stopName}>
-                      {trip.pickupStop.pickupPointName}
-                    </Text>
+                    <Text style={styles.stopLabel}>Pickup Point</Text>
                   </View>
                   <Text style={styles.stopAddress}>
                     {trip.pickupStop.address}
@@ -221,13 +242,10 @@ export default function TripsTodayScreen() {
                 <View style={styles.stopInfo}>
                   <View style={styles.stopRow}>
                     <Ionicons name="location" size={16} color="#2196F3" />
-                    <Text style={styles.stopLabel}>Drop-off Point:</Text>
-                    <Text style={styles.stopName}>
-                      {trip.dropoffStop.pickupPointName}
-                    </Text>
+                    <Text style={styles.stopLabel}>Drop-off Point</Text>
                   </View>
                   <Text style={styles.stopAddress}>
-                    {trip.dropoffStop.address}
+                    FPT Primary School Da Nang
                   </Text>
                   <Text style={styles.stopTime}>
                     Expected: {formatTime(trip.dropoffStop.plannedAt)}
@@ -237,9 +255,6 @@ export default function TripsTodayScreen() {
 
               {/* Progress Info */}
               <View style={styles.progressRow}>
-                <Text style={styles.progressText}>
-                  {trip.completedStops}/{trip.totalStops} stops
-                </Text>
                 {trip.status === 'InProgress' && (
                   <TouchableOpacity
                     style={styles.trackButton}
@@ -249,9 +264,8 @@ export default function TripsTodayScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-            </TouchableOpacity>
-          ))
-        )}
+          </TouchableOpacity>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -294,6 +308,16 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'RobotoSlab-Bold',
     color: '#000000',
+  },
+  headerCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSubtitle: {
+    marginTop: 4,
+    fontSize: 16,
+    color: '#111827',
+    fontFamily: 'RobotoSlab-Bold',
   },
   scrollView: {
     flex: 1,
@@ -427,7 +451,7 @@ const styles = StyleSheet.create({
   },
   progressRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     marginTop: 8,
     paddingTop: 12,

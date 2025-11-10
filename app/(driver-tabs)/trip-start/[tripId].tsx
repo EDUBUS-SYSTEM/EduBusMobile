@@ -1,27 +1,47 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { startTrip } from '@/lib/trip/trip.api';
 
 type Params = { tripId?: string };
 
 export default function TripStartScreen() {
   const { tripId } = useLocalSearchParams<Params>();
+  const [loading, setLoading] = useState(false);
 
-  const onStart = () => {
-    Alert.alert('Reminder', 'Trip started. Drive safely!', [
-      { 
-        text: 'OK', 
-        onPress: () => {
-          if (tripId) {
+  const onStart = async () => {
+    console.log('Starting trip:', tripId);
+    if (!tripId) {
+      Alert.alert('Error', 'Trip ID is missing');
+      return;
+    }
+
+    setLoading(true);
+    try {     
+      const result = await startTrip(tripId);
+      Alert.alert('Success', result.message || 'Trip started successfully. Drive safely!', [
+        { 
+          text: 'OK', 
+          onPress: () => {
             router.replace(`/(driver-tabs)/trip/${tripId}` as any);
-          } else {
-            router.back();
           }
-        }
-      },
-    ]);
+        },
+      ]);
+    } catch (error: any) {
+      console.error('Error starting trip:', error);
+      
+      if (error.message === 'UNAUTHORIZED') {
+        Alert.alert('Error', 'You are not authorized. Please login again.', [
+          { text: 'OK', onPress: () => router.replace('/(auth)/login' as any) }
+        ]);
+      } else {
+        Alert.alert('Error', error.message || 'Failed to start trip. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -63,8 +83,16 @@ export default function TripStartScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.primaryButton} onPress={onStart}>
-          <Text style={styles.primaryButtonText}>Start Trip</Text>
+        <TouchableOpacity 
+          style={[styles.primaryButton, loading && styles.primaryButtonDisabled]} 
+          onPress={onStart}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#000000" />
+          ) : (
+            <Text style={styles.primaryButtonText}>Start Trip</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -145,6 +173,9 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontFamily: 'RobotoSlab-Bold',
     fontSize: 16,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
   },
 });
 

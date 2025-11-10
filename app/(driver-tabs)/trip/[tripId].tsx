@@ -1,4 +1,4 @@
-import { driverTripMockApi } from '@/lib/trip-mock-data/driverTrip.mockApi';
+import { getTripDetail } from '@/lib/trip/trip.api';
 import { DriverTripDto, DriverTripStopDto } from '@/lib/trip-mock-data/driverTrip.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
 import type { Guid } from '@/lib/types';
@@ -8,7 +8,7 @@ import { Camera, MapView, PointAnnotation, type MapViewRef } from '@vietmap/viet
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type Params = { tripId?: Guid };
 
@@ -30,6 +30,7 @@ export default function TripDetailScreen() {
   const [trip, setTrip] = React.useState<DriverTripDto | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [clickedCoordinate, setClickedCoordinate] = useState<[number, number] | null>(null);
+  const [showStopsModal, setShowStopsModal] = useState(false);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load trip data
@@ -43,16 +44,14 @@ export default function TripDetailScreen() {
 
     (async () => {
       try {
-        const tripData = await driverTripMockApi.getById(tripId);
-        if (tripData) {
-          setTrip(tripData);
-        } else {
-          Alert.alert('Error', 'Trip not found', [
-            { text: 'OK', onPress: () => router.back() },
-          ]);
-        }
-      } catch (error) {
-        Alert.alert('Error', 'Failed to load trip', [
+        const tripData = await getTripDetail(tripId);
+        setTrip(tripData);
+      } catch (error: any) {
+        console.error('Error loading trip:', error);
+        const errorMessage = error.message === 'UNAUTHORIZED' 
+          ? 'You are not authorized to view this trip'
+          : error.message || 'Failed to load trip';
+        Alert.alert('Error', errorMessage, [
           { text: 'OK', onPress: () => router.back() },
         ]);
       } finally {
@@ -366,6 +365,83 @@ export default function TripDetailScreen() {
           )}
         </View>
       </View>
+
+      {/* Floating Pickup Points Button */}
+      <TouchableOpacity 
+        style={styles.floatingPickupButton}
+        onPress={() => setShowStopsModal(true)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.floatingButtonIconContainer}>
+          <Ionicons name="list" size={24} color="#FFFFFF" />
+        </View>
+        <View style={styles.floatingButtonBadge}>
+          <Text style={styles.floatingButtonBadgeText}>{trip.totalStops}</Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* Stops List Modal */}
+      <Modal
+        visible={showStopsModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowStopsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Pickup Points</Text>
+              <TouchableOpacity
+                onPress={() => setShowStopsModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#374151" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={{ paddingBottom: 32 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {trip.stops.map((stop) => {
+                const status = getStopStatus(stop);
+                return (
+                  <TouchableOpacity key={stop.sequenceOrder} style={styles.stopItem} activeOpacity={0.9}>
+                    <View style={styles.stopItemLeft}>
+                      <View style={[styles.stopNumberBadge, { backgroundColor: getStopStatusColor(status) }]}>
+                        <Text style={styles.stopNumberText}>{stop.sequenceOrder}</Text>
+                      </View>
+                      <View style={styles.stopItemInfo}>
+                        <Text style={styles.stopName}>{stop.pickupPointName}</Text>
+                        <View style={styles.stopChipsRow}>
+                          <View style={styles.stopChip}>
+                            <Ionicons name="time-outline" size={14} color="#6B7280" />
+                            <Text style={styles.stopChipText}>{formatTime(stop.plannedAt)}</Text>
+                          </View>
+                          {Array.isArray((stop as any).students) && (stop as any).students.length > 0 && (
+                            <View style={styles.stopChip}>
+                              <Ionicons name="people-outline" size={14} color="#6B7280" />
+                              <Text style={styles.stopChipText} numberOfLines={1}>
+                                {(stop as any).students.map((s: any) => s.studentName).join(', ')}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                    <View style={[styles.stopStatusBadge, { borderColor: getStopStatusColor(status) }]}>
+                      <Text style={[styles.stopStatusBadgeText, { color: getStopStatusColor(status) }]}>
+                        {status === 'completed' ? 'Done' : status === 'arrived' ? 'Arrived' : 'Pending'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -379,6 +455,15 @@ const getStatusColor = (status: string): string => {
     Cancelled: '#FFEBEE',
   };
   return colors[status] || '#F3F4F6';
+};
+
+const getStopStatusColor = (status: 'pending' | 'arrived' | 'completed'): string => {
+  const colors = {
+    pending: '#9CA3AF',
+    arrived: '#3B82F6',
+    completed: '#10B981',
+  };
+  return colors[status];
 };
 
 const styles = StyleSheet.create({
@@ -424,6 +509,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 20,
+    position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -450,11 +536,12 @@ const styles = StyleSheet.create({
     color: '#4B5563',
   },
   statusBadge: {
-    alignSelf: 'flex-start',
+    position: 'absolute',
+    top: 12,
+    right: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
-    marginTop: 8,
   },
   statusText: {
     fontFamily: 'RobotoSlab-Bold',
@@ -514,6 +601,171 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
+  },
+  floatingPickupButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#22C55E',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  floatingButtonIconContainer: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  floatingButtonBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  floatingButtonBadgeText: {
+    fontFamily: 'RobotoSlab-Bold',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    width: 48,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E5E7EB',
+    marginTop: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontFamily: 'RobotoSlab-Bold',
+    fontSize: 20,
+    color: '#111827',
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  stopItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  stopItemLeft: {
+    flexDirection: 'row',
+    flex: 1,
+  },
+  stopNumberBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  stopNumberText: {
+    fontFamily: 'RobotoSlab-Bold',
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  stopItemInfo: {
+    flex: 1,
+  },
+  stopName: {
+    fontFamily: 'RobotoSlab-Bold',
+    fontSize: 16,
+    color: '#111827',
+    marginBottom: 4,
+  },
+  stopChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  stopChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#F3F4F6',
+    maxWidth: '100%',
+  },
+  stopChipText: {
+    fontFamily: 'RobotoSlab-Regular',
+    fontSize: 12,
+    color: '#4B5563',
+    marginLeft: 6,
+    maxWidth: 200,
+  },
+  stopStatusBadge: {
+    alignSelf: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  stopStatusBadgeText: {
+    fontFamily: 'RobotoSlab-Medium',
+    fontSize: 12,
+    textTransform: 'capitalize',
   },
 });
 

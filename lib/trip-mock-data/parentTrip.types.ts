@@ -36,6 +36,20 @@ export interface ParentTripDto {
   // Total number of stops
   totalStops: number;
   completedStops: number;
+  // Driver information
+  driver?: {
+    id: Guid;
+    fullName: string;
+    phone: string;
+    isPrimary: boolean;
+  };
+  // Vehicle information
+  vehicle?: {
+    id: Guid;
+    maskedPlate: string;
+    capacity: number;
+    status: string;
+  };
   createdAt?: string;
   updatedAt?: string;
 }

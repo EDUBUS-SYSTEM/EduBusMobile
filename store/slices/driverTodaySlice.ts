@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import { driverTripMockApi } from '@/lib/trip-mock-data/driverTrip.mockApi';
+import { getTripsByDate } from '@/lib/trip/trip.api';
 import { DriverTripDto } from '@/lib/trip-mock-data/driverTrip.types';
 
 interface DriverTodayState {
@@ -15,8 +15,10 @@ const initialState: DriverTodayState = {
 
 export const fetchDriverTripsToday = createAsyncThunk(
   'driverToday/fetch',
-  async ({ driverId, dateISO }: { driverId: string; dateISO: string }) => {
-    const trips = await driverTripMockApi.getToday(driverId, dateISO);
+  async ({ dateISO }: { dateISO: string }) => {
+    // driverId is not needed as API uses token to identify driver
+    const trips = await getTripsByDate(dateISO);
+    console.log('Trips: ', trips);
     return trips;
   }
 );

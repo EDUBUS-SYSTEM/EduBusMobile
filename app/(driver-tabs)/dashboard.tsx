@@ -33,17 +33,30 @@ const statusBg: Record<string, string> = {
 export default function DriverDashboardScreen() {
   const dispatch = useAppDispatch();
   const { trips, status } = useAppSelector((s) => s.driverToday);
+  const todayDisplay = React.useMemo(() => {
+    const now = new Date();
+    try {
+      return now.toLocaleDateString('en-US', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+    } catch {
+      return now.toDateString();
+    }
+  }, []);
 
   React.useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const userInfo = await authApi.getUserInfo();
-        const driverId = userInfo.userId || 'mock-driver';
         const today = new Date();
+        //today.setDate(today.getDate() + 1);
         const isoDate = today.toISOString().split('T')[0];
+        console.log('Today: ', isoDate);
         if (mounted) {
-          dispatch(fetchDriverTripsToday({ driverId, dateISO: isoDate }));
+          dispatch(fetchDriverTripsToday({ dateISO: isoDate }));
         }
       } catch {
         // ignore
@@ -84,6 +97,18 @@ export default function DriverDashboardScreen() {
           }}>
             Welcome Driver!
           </Text>
+          <Text
+            style={{
+              color: '#1F2937',
+              fontFamily: 'RobotoSlab-Medium',
+              fontSize: 14,
+              marginTop: 4,
+              textTransform: 'capitalize',
+              textAlign: 'center',
+            }}
+          >
+            {todayDisplay}
+          </Text>
         </View>
       </LinearGradient>
 
@@ -111,64 +136,102 @@ export default function DriverDashboardScreen() {
           </View>
         )}
 
-        {trips.map((trip) => (
-          <View key={trip.id} style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 16,
-            marginBottom: 14,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.06,
-            shadowRadius: 6,
-            elevation: 2,
-            overflow: 'hidden'
-          }}>
-            <View style={{ height: 6, backgroundColor: '#FFDD00' }} />
-            <View style={{ padding: 16 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="time" size={16} color="#6B7280" />
-                  <Text style={{ marginLeft: 6, fontFamily: 'RobotoSlab-Medium', color: '#374151' }}>
-                    {formatTime(trip.plannedStartAt)} → {formatTime(trip.plannedEndAt)}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
-                  <Ionicons name="location" size={16} color="#6B7280" />
-                  <Text style={{ marginLeft: 6, fontFamily: 'RobotoSlab-Regular', color: '#4B5563' }}>{trip.scheduleName}</Text>
-                </View>
-              </View>
-              <View style={{ backgroundColor: statusBg[trip.status] || '#F3F4F6', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
-                <Text style={{
-                  fontFamily: 'RobotoSlab-Bold',
-                  fontSize: 12,
-                  color: statusColor[trip.status] || '#6B7280'
-                }}>{trip.status}</Text>
-              </View>
-            </View>
+        {trips.map((trip) => {
+          const handleTripPress = () => {
+            if (trip.status === 'InProgress') {
+              router.push(`/(driver-tabs)/trip/${trip.id}` as any);
+            }
+          };
 
-            <View style={{ flexDirection: 'row', marginTop: 12 }}>
-              <View style={{ backgroundColor: '#F9FAFB', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8 }}>
-                <Text style={{ fontFamily: 'RobotoSlab-Medium', color: '#6B7280', fontSize: 12 }}>Stops: {trip.totalStops}</Text>
-              </View>
-              <View style={{ backgroundColor: '#F9FAFB', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-                <Text style={{ fontFamily: 'RobotoSlab-Medium', color: '#6B7280', fontSize: 12 }}>Completed: {trip.completedStops}/{trip.totalStops}</Text>
-              </View>
-            </View>
-
-              {trip.status === 'Scheduled' && (
-                <View style={{ marginTop: 14, alignItems: 'flex-end' }}>
-                  <TouchableOpacity
-                    onPress={() => router.push(`/(driver-tabs)/trip-start/${trip.id}` as any)}
-                    style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#FFDD00' }}
-                  >
-                    <Text style={{ color: '#000000', fontFamily: 'RobotoSlab-Bold' }}>Start</Text>
-                  </TouchableOpacity>
+          const TripCardContent = () => (
+            <>
+              <View style={{ height: 6, backgroundColor: '#FFDD00' }} />
+              <View style={{ padding: 16 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="time" size={16} color="#6B7280" />
+                      <Text style={{ marginLeft: 6, fontFamily: 'RobotoSlab-Medium', color: '#374151' }}>
+                        {formatTime(trip.plannedStartAt)} - {formatTime(trip.plannedEndAt)}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
+                      <Ionicons name="location" size={16} color="#6B7280" />
+                      <Text style={{ marginLeft: 6, fontFamily: 'RobotoSlab-Regular', color: '#4B5563' }}>{trip.scheduleName}</Text>
+                    </View>
+                  </View>
+                  <View style={{ backgroundColor: statusBg[trip.status] || '#F3F4F6', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
+                    <Text style={{
+                      fontFamily: 'RobotoSlab-Bold',
+                      fontSize: 12,
+                      color: statusColor[trip.status] || '#6B7280'
+                    }}>{trip.status}</Text>
+                  </View>
                 </View>
-              )}
+
+                <View style={{ flexDirection: 'row', marginTop: 12 }}>
+                  <View style={{ backgroundColor: '#F9FAFB', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8 }}>
+                    <Text style={{ fontFamily: 'RobotoSlab-Medium', color: '#6B7280', fontSize: 12 }}>Stops: {trip.totalStops}</Text>
+                  </View>
+                  <View style={{ backgroundColor: '#F9FAFB', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+                    <Text style={{ fontFamily: 'RobotoSlab-Medium', color: '#6B7280', fontSize: 12 }}>Completed: {trip.completedStops}/{trip.totalStops}</Text>
+                  </View>
+                </View>
+
+                {trip.status === 'Scheduled' && (
+                  <View style={{ marginTop: 14, alignItems: 'flex-end' }}>
+                    <TouchableOpacity
+                      onPress={() => router.push(`/(driver-tabs)/trip-start/${trip.id}` as any)}
+                      style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#FFDD00' }}
+                    >
+                      <Text style={{ color: '#000000', fontFamily: 'RobotoSlab-Bold' }}>Start</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </>
+          );
+
+          if (trip.status === 'InProgress') {
+            return (
+              <TouchableOpacity
+                key={trip.id}
+                onPress={handleTripPress}
+                activeOpacity={0.7}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  marginBottom: 14,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.06,
+                  shadowRadius: 6,
+                  elevation: 2,
+                  overflow: 'hidden'
+                }}>
+                <TripCardContent />
+              </TouchableOpacity>
+            );
+          }
+
+          return (
+            <View
+              key={trip.id}
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 16,
+                marginBottom: 14,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.06,
+                shadowRadius: 6,
+                elevation: 2,
+                overflow: 'hidden'
+              }}>
+              <TripCardContent />
             </View>
-          </View>
-        ))}
+          );
+        })}
       
 
         {/* Vehicle Status */}
