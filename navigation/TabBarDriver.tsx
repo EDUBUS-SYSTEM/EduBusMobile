@@ -88,6 +88,20 @@ export default function TabBarDriver() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="trip-start/[tripId]"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="trip/[tripId]"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      
     </Tabs>
+    
   );
 }

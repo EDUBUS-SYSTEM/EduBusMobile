@@ -264,11 +264,11 @@ export default function ParentAccountScreen() {
                 return;
               }
               if (item.id === 7) {
-                router.push("/student-list" as any); // 👈 chuyển sang màn hình Student List
+                router.push("/student-list" as any); // 👈 Navigate to Student List screen
                 return;
               }
               if (item.id === 8) {
-                // 👈 để logout sang id = 8 thay vì 7
+                // 👈 Changed logout to id = 8 instead of 7
                 try {
                   await authApi.logout();
                 } finally {

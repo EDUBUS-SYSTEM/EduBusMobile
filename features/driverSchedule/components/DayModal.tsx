@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { DriverTrip } from '../../../lib/api/driverSchedule';
+import { DriverTrip } from '../../../lib/trip-mock-data/driverSchedule';
 
 interface DayModalProps {
   visible: boolean;

@@ -106,6 +106,18 @@ export default function TabBarParent() {
           href: null, // Hide from tab bar
         }}
       />
+      <Tabs.Screen
+        name="trips/today"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="trip/[tripId]"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
     </Tabs>
   );
 }
