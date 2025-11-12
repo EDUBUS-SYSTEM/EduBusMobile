@@ -23,15 +23,15 @@ const { height: screenHeight } = Dimensions.get('window');
 const getStatusBgColor = (status: string) => {
   switch (status) {
     case 'Scheduled':
-      return '#E8F5E8';
+      return '#D3E5FF';
     case 'InProgress':
-      return '#E3F2FD';
+      return '#FEF3C7';
     case 'Completed':
-      return '#F3E5F5';
+      return '#E8F5E8';
     case 'Delayed':
-      return '#FFF3E0';
-    case 'Cancelled':
       return '#FFEBEE';
+    case 'Cancelled':
+      return '#FFB8C2';
     default:
       return '#F5F5F5';
   }
@@ -40,15 +40,15 @@ const getStatusBgColor = (status: string) => {
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'Scheduled':
-      return '#4CAF50';
+      return '#0D6EFD';
     case 'InProgress':
-      return '#2196F3';
+      return '#F59E0B';
     case 'Completed':
-      return '#9C27B0';
+      return '#4CAF50';
     case 'Delayed':
-      return '#FF9800';
-    case 'Cancelled':
       return '#F44336';
+    case 'Cancelled':
+      return '#FF0000';
     default:
       return '#757575';
   }
@@ -59,12 +59,28 @@ export default function DayModal({ visible, onClose, date, trips }: DayModalProp
     const date = new Date(dateString);
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
   };
-
-  const formatTime = (timeString: string) => {
+ 
+  const formatPlannedTime = (timeString: string) => {
     const date = new Date(timeString);
     const hours = date.getUTCHours().toString().padStart(2, '0');
     const minutes = date.getUTCMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
+  };
+
+  const formatActualTime = (timeString: string | undefined | null): string => {
+    if (!timeString) {
+      return 'Not Yet';
+    }
+    
+    const date = new Date(timeString);
+    let hours = date.getUTCHours() + 7;
+    const minutes = date.getUTCMinutes();
+    
+    if (hours >= 24) {
+      hours = hours - 24;
+    }
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
 
   const isTripDisabled = (trip: DriverTrip) => {
@@ -113,7 +129,7 @@ export default function DayModal({ visible, onClose, date, trips }: DayModalProp
                       <View style={styles.tripHeader}>
                         <View style={styles.timeContainer}>
                           <Text style={styles.tripTime}>
-                            {formatTime(trip.plannedStartAt)} – {formatTime(trip.plannedEndAt)}
+                            {formatPlannedTime(trip.plannedStartAt)} – {formatPlannedTime(trip.plannedEndAt)}
                           </Text>
                           <Text style={styles.tripCode}>Route: {trip.scheduleSnapshot.name}</Text>
                         </View>
@@ -132,12 +148,12 @@ export default function DayModal({ visible, onClose, date, trips }: DayModalProp
 
                       <View style={styles.detailsRow}>
                         <Text style={styles.detailText}>
-                          Start: {formatTime(trip.plannedStartAt)}
+                          Started Time: {formatActualTime(trip.startTime)}
                         </Text>
                       </View>
                       <View style={styles.detailsRow}>
                         <Text style={styles.detailText}>
-                          End: {formatTime(trip.plannedEndAt)}
+                          Ended Time: {formatActualTime(trip.endTime)}
                         </Text>
                       </View>
                       {trip.isOverride && (
