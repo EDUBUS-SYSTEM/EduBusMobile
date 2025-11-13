@@ -12,9 +12,6 @@ function normalizeBaseUrl(url: string): string {
     const parsed = new URL(url);
     const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
 
-    if (Platform.OS === 'web' && !isLocalhost) {
-      parsed.hostname = 'localhost';
-    }
     if (Platform.OS === 'android' && isLocalhost) {
       parsed.hostname = '10.0.2.2';
     }
