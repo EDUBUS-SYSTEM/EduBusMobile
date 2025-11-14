@@ -1,6 +1,6 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { getTripsByDate } from '@/lib/trip/trip.api';
-import { DriverTripDto } from '@/lib/trip-mock-data/driverTrip.types';
+import { DriverTripDto } from '@/lib/trip/driverTrip.types';
 
 interface DriverTodayState {
   trips: DriverTripDto[];

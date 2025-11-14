@@ -1,5 +1,5 @@
+import type { ParentTripDto } from '../trip/parentTrip.types';
 import { mockParentTrips } from './parentTrip.mock';
-import type { ParentTripDto } from './parentTrip.types';
 
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 

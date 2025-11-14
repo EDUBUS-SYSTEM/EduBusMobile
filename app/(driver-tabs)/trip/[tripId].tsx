@@ -1,5 +1,5 @@
 import { getTripDetail } from '@/lib/trip/trip.api';
-import { DriverTripDto, DriverTripStopDto } from '@/lib/trip-mock-data/driverTrip.types';
+import { DriverTripDto, DriverTripStopDto } from '@/lib/trip/driverTrip.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
 import type { Guid } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';

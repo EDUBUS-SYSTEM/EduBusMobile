@@ -7,13 +7,8 @@ import { router } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchDriverTripsToday } from '@/store/slices/driverTodaySlice';
 import { authApi } from '@/lib/auth/auth.api';
+import { getTodayISOString, toHourMinute } from '@/utils/date.utils';
 
-const formatTime = (iso: string) => {
-  const date = new Date(iso);
-  const hours = date.getUTCHours().toString().padStart(2, '0');
-  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
-};
 
 const statusColor: Record<string, string> = {
   Scheduled: '#4CAF50',
@@ -51,15 +46,11 @@ export default function DriverDashboardScreen() {
     let mounted = true;
     (async () => {
       try {
-        const today = new Date();
-        //today.setDate(today.getDate() + 1);
-        const isoDate = today.toISOString().split('T')[0];
-        console.log('Today: ', isoDate);
+        const isoDate = getTodayISOString();
         if (mounted) {
           dispatch(fetchDriverTripsToday({ dateISO: isoDate }));
         }
       } catch {
-        // ignore
       }
     })();
 
@@ -152,7 +143,7 @@ export default function DriverDashboardScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Ionicons name="time" size={16} color="#6B7280" />
                       <Text style={{ marginLeft: 6, fontFamily: 'RobotoSlab-Medium', color: '#374151' }}>
-                        {formatTime(trip.plannedStartAt)} - {formatTime(trip.plannedEndAt)}
+                        {toHourMinute(trip.plannedStartAt)} - {toHourMinute(trip.plannedEndAt)}
                       </Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>

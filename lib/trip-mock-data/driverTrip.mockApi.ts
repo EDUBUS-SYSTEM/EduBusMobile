@@ -1,5 +1,5 @@
+import { DriverTripDto } from '../trip/driverTrip.types';
 import { mockDriverTrips } from './driverTrip.mock';
-import { DriverTripDto } from './driverTrip.types';
 
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
