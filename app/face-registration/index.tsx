@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
   Alert,
   Dimensions,
-  StyleSheet,
   Image as RNImage,
   ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { CameraView, useCameraPermissions } from 'expo-camera';
 
 type FaceAngle = 'front' | 'left' | 'right' | 'up' | 'down';
 
@@ -806,7 +806,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 100,
     right: 20,
     width: 56,
     height: 56,
@@ -825,7 +825,7 @@ const styles = StyleSheet.create({
   },
   galleryButton: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 160,
     right: 20,
     width: 56,
     height: 56,
