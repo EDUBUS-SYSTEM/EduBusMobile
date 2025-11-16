@@ -4,74 +4,16 @@ import { childrenApi } from '../parent/children.api';
 import { Guid } from '../types';
 import { DriverTripDto, DriverTripStatus } from './driverTrip.types';
 import type { ParentTripDto } from './parentTrip.types';
-
-/**
- * SimpleTripDto response from backend
- */
-interface SimpleTripDto {
-  id: Guid;
-  name: string;
-  plannedStartAt: string;
-  plannedEndAt: string;
-  plateVehicle: string;
-  status: string;
-  totalStops: number;
-  completedStops: number;
-}
-
-interface GetTripsByDateResponse {
-  date: string;
-  trips: SimpleTripDto[];
-}
-
-/**
- * TripDto response from backend (from /trip/{tripId}/detail-for-driver)
- */
-interface TripDto {
-  id: Guid;
-  routeId: Guid;
-  serviceDate: string;
-  plannedStartAt: string;
-  plannedEndAt: string;
-  startTime?: string;
-  endTime?: string;
-  status: string;
-  vehicleId: Guid;
-  driverVehicleId?: Guid;
-  vehicle?: {
-    id: Guid;
-    maskedPlate: string;
-    capacity: number;
-    status: string;
-  };
-  driver?: {
-    id: Guid;
-    fullName: string;
-    phone: string;
-    isPrimary: boolean;
-    snapshottedAtUtc: string;
-  };
-  scheduleSnapshot: {
-    scheduleId: Guid;
-    name: string;
-    startTime: string;
-    endTime: string;
-    rRule: string;
-  };
-  stops: TripStopDto[];
-  createdAt: string;
-  updatedAt?: string;
-}
-
-interface TripStopDto {
-  id: Guid;
-  name: string;
-  plannedArrival: string;
-  actualArrival?: string;
-  plannedDeparture: string;
-  actualDeparture?: string;
-  sequence: number;
-}
+import type {
+  SimpleTripDto,
+  GetTripsByDateResponse,
+  TripDto,
+  TripStopDto,
+  TripLocationDto,
+  ParentTripStopDto,
+  ParentAttendanceDto,
+  ParentTripDtoResponse,
+} from './trip.response.types';
 
 /**
  * Trip API Service
@@ -102,7 +44,7 @@ export const getTripsByDate = async (dateISO?: string | null): Promise<DriverTri
       scheduleName: trip.name,
       totalStops: trip.totalStops, 
       completedStops: trip.completedStops,
-      stops: [], // Not available in SimpleTripDto
+      stops: [], 
       isOverride: false, // Not available in SimpleTripDto
       overrideReason: '', // Not available in SimpleTripDto
       overrideCreatedBy: undefined,
@@ -161,10 +103,10 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
         plannedAt: stop.plannedArrival,
         arrivedAt: stop.actualArrival,
         departedAt: stop.actualDeparture,
-        address: stop.name, // Use name as address since backend uses Address as Name
-        latitude: 0, // Not available in TripStopDto - may need backend update
-        longitude: 0, // Not available in TripStopDto - may need backend update
-        totalStudents: 0, // Not available - may need backend update
+        address: stop.name, 
+        latitude: stop.location.latitude || 0, 
+        longitude: stop.location.longitude || 0, 
+        totalStudents: stop.attendance.length || 0, 
         presentStudents: 0, // Not available - may need backend update
         absentStudents: 0, // Not available - may need backend update
       })),
@@ -175,7 +117,7 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
       createdAt: response.createdAt,
       updatedAt: response.updatedAt,
     };
-    
+
     return driverTrip;
   } catch (error: any) {
     console.error('Error fetching trip detail:', error);
@@ -228,71 +170,6 @@ export const startTrip = async (tripId: string): Promise<{ tripId: string; messa
 /**
  * Parent Trip API Functions
  */
-
-/**
- * ParentTripStopDto from backend (with attendance info)
- */
-interface ParentTripStopDto {
-  id: Guid;
-  name: string;
-  plannedArrival: string;
-  actualArrival?: string;
-  plannedDeparture: string;
-  actualDeparture?: string;
-  sequence: number;
-  location: TripLocationDto;
-  attendance?: ParentAttendanceDto[];
-}
-interface TripLocationDto {
-  latitude: number;
-  longitude: number;
-  address: string;
-}
-interface ParentAttendanceDto {
-  studentId: Guid;
-  studentName: string;
-  boardedAt?: string;
-  state: string;
-}
-
-/**
- * TripDto response from backend for parent endpoints
- */
-interface ParentTripDtoResponse {
-  id: Guid;
-  routeId: Guid;
-  serviceDate: string;
-  plannedStartAt: string;
-  plannedEndAt: string;
-  startTime?: string;
-  endTime?: string;
-  status: string;
-  vehicleId: Guid;
-  driverVehicleId?: Guid;
-  vehicle?: {
-    id: Guid;
-    maskedPlate: string;
-    capacity: number;
-    status: string;
-  };
-  driver?: {
-    id: Guid;
-    fullName: string;
-    phone: string;
-    isPrimary: boolean;
-    snapshottedAtUtc: string;
-  };
-  scheduleSnapshot: {
-    scheduleId: Guid;
-    name: string;
-    startTime: string;
-    endTime: string;
-    rRule: string;
-  };
-  stops: ParentTripStopDto[];
-  createdAt: string;
-  updatedAt?: string;
-}
 
 /**
  * Get trips by date for current parent
@@ -533,3 +410,35 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
   }
 };
 
+/**
+ * Notify parents that driver has arrived at a stop
+ * @param tripId - Trip ID
+ * @param stopId - Stop/Pickup Point ID
+ * @returns Response with notification details
+ */
+export const confirmArrival = async (
+  tripId: string,
+  stopId: string
+): Promise<{ tripId: string; stopId: string; message: string; notifiedAt: string }> => {
+  try {
+    const response = await apiService.post<{
+      tripId: string;
+      stopId: string;
+      message: string;
+      notifiedAt: string;
+    }>(`/trip/${tripId}/stops/${stopId}/confirm-arrival`);
+    return response;
+  } catch (error: any) {
+    console.error('Error notifying arrival at stop:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+
+    if (error.response?.status === 400) {
+      throw new Error(error.response?.data?.message || 'Cannot notify arrival');
+    }
+
+    throw new Error(error.response?.data?.message || 'Failed to notify arrival. Please try again.');
+  }
+};

@@ -212,7 +212,7 @@ export default function ParentTripTrackingScreen() {
         });
       }
     };
-  }, [tripId, trip, dispatch]);
+  }, [tripId,trip, dispatch]);
 
   useEffect(() => {
     console.log('🚌 Bus location:', busLocation);
