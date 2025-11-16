@@ -5,7 +5,6 @@ import type { Guid } from '@/lib/types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
-import { Camera, MapView, PointAnnotation, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -22,7 +21,20 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Platform,
 } from 'react-native';
+import type { MapViewRef } from '@vietmap/vietmap-gl-react-native';
+
+type VietMapModule = typeof import('@vietmap/vietmap-gl-react-native');
+
+const isWeb = Platform.OS === 'web';
+const vietMapModule: VietMapModule | null = isWeb
+  ? null
+  : (require('@vietmap/vietmap-gl-react-native') as VietMapModule);
+
+const MapView = vietMapModule?.MapView;
+const Camera = vietMapModule?.Camera;
+const PointAnnotation = vietMapModule?.PointAnnotation;
 
 type Params = { tripId?: Guid };
 
@@ -315,7 +327,7 @@ export default function ParentTripTrackingScreen() {
 
         {/* Map View */}
         <View style={styles.mapContainer}>
-          {mapStyle ? (
+          {mapStyle && MapView && Camera && PointAnnotation ? (
             <MapView
               ref={mapRef}
               style={styles.map}
@@ -391,8 +403,9 @@ export default function ParentTripTrackingScreen() {
             <View style={styles.mapError}>
               <Ionicons name="map-outline" size={48} color="#9E9E9E" />
               <Text style={styles.mapErrorText}>
-                Map not available{'\n'}
-                Please configure VietMap API key
+                {isWeb
+                  ? 'Trip map is not supported on web yet. Please use the mobile app to view live tracking.'
+                  : 'Map not available\nPlease configure VietMap API key'}
               </Text>
             </View>
           )}

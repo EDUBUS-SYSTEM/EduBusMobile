@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { store } from '@/store';
 import { Provider } from 'react-redux';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { signalRService } from '@/lib/signalr/signalr.service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -23,6 +24,11 @@ export default function RootLayout() {
 
   // Initialize SignalR connection when app loads
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      console.info('ℹ️ SignalR initialization skipped on web clients.');
+      return;
+    }
+
     console.log('📍 App Layout mounted, initializing SignalR...');
     
     const initSignalRWithRetry = async () => {
@@ -107,6 +113,20 @@ export default function RootLayout() {
           <Stack.Screen name="(driver-leave)" options={{ headerShown: false }} />
           <Stack.Screen name="account-profile" options={{ headerShown: false }} />
           <Stack.Screen name="service-registration" options={{ headerShown: false }} />
+          <Stack.Screen 
+            name="face-registration" 
+            options={{ 
+              headerShown: false,
+              title: 'EduBus Face Registration'
+            }} 
+          />
+          <Stack.Screen 
+            name="face-registration-success" 
+            options={{ 
+              headerShown: false,
+              title: 'Registration Success'
+            }} 
+          />
           <Stack.Screen name="+not-found" />
           <Stack.Screen name="index" redirect />
         </Stack>

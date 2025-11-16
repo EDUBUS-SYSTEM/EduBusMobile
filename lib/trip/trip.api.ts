@@ -90,26 +90,43 @@ export const getTripsByDate = async (dateISO?: string | null): Promise<DriverTri
     
     // Map SimpleTripDto to DriverTripDto
     // Note: SimpleTripDto doesn't have all fields, so we use defaults for missing fields
-    const trips: DriverTripDto[] = response.trips.map((trip, index) => ({
-      id: trip.id || `temp-${index}`, // ID, will be replaced when fetching full details
-      routeId: '', // Not available in SimpleTripDto
-      serviceDate: response.date,
-      plannedStartAt: trip.plannedStartAt,
-      plannedEndAt: trip.plannedEndAt,
-      startTime: undefined,
-      endTime: undefined,
-      status: trip.status as DriverTripDto['status'],
-      scheduleName: trip.name,
-      totalStops: trip.totalStops, 
-      completedStops: trip.completedStops,
-      stops: [], // Not available in SimpleTripDto
-      isOverride: false, // Not available in SimpleTripDto
-      overrideReason: '', // Not available in SimpleTripDto
-      overrideCreatedBy: undefined,
-      overrideCreatedAt: undefined,
-      createdAt: undefined,
-      updatedAt: undefined,
-    }));
+    const trips: DriverTripDto[] = response.trips.map((trip, index) => {
+      const rawId =
+        (trip as any).id ??
+        (trip as any).tripId ??
+        (trip as any).tripID ??
+        (trip as any).TripId ??
+        (trip as any).TripID ??
+        (trip as any).driverTripId;
+
+      const normalizedId =
+        (typeof rawId === 'string' && rawId.trim().length > 0)
+          ? rawId
+          : rawId != null
+          ? String(rawId)
+          : null;
+
+      return {
+        id: normalizedId ?? `temp-${index}`, // ID, will be replaced when fetching full details if missing
+        routeId: '', // Not available in SimpleTripDto
+        serviceDate: response.date,
+        plannedStartAt: trip.plannedStartAt,
+        plannedEndAt: trip.plannedEndAt,
+        startTime: undefined,
+        endTime: undefined,
+        status: trip.status as DriverTripDto['status'],
+        scheduleName: (trip as any).scheduleName ?? trip.name,
+        totalStops: trip.totalStops,
+        completedStops: trip.completedStops,
+        stops: [], // Not available in SimpleTripDto
+        isOverride: false, // Not available in SimpleTripDto
+        overrideReason: '', // Not available in SimpleTripDto
+        overrideCreatedBy: undefined,
+        overrideCreatedAt: undefined,
+        createdAt: undefined,
+        updatedAt: undefined,
+      };
+    });
     return trips;
   } catch (error: any) {
     console.error('Error fetching trips by date:', error);

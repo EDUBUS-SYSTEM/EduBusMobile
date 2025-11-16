@@ -4,11 +4,31 @@ import { tripHubService } from '@/lib/signalr/tripHub.service';
 import type { Guid } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Camera, MapView, PointAnnotation, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import type { MapViewRef } from '@vietmap/vietmap-gl-react-native';
+
+type VietMapModule = typeof import('@vietmap/vietmap-gl-react-native');
+
+const isWeb = Platform.OS === 'web';
+const vietMapModule: VietMapModule | null = isWeb
+  ? null
+  : (require('@vietmap/vietmap-gl-react-native') as VietMapModule);
+
+const MapView = vietMapModule?.MapView;
+const Camera = vietMapModule?.Camera;
+const PointAnnotation = vietMapModule?.PointAnnotation;
 
 type Params = { tripId?: Guid };
 
@@ -63,6 +83,10 @@ export default function TripDetailScreen() {
   // Initialize TripHub connection
   React.useEffect(() => {
     if (!tripId) return;
+    if (isWeb) {
+      console.info('ℹ️ TripHub live updates are disabled on web.');
+      return;
+    }
 
     const initializeTripHub = async () => {
       try {
@@ -328,7 +352,7 @@ export default function TripDetailScreen() {
 
         {/* Map View */}
         <View style={styles.mapContainer}>
-          {mapStyle ? (
+          {mapStyle && MapView && Camera && PointAnnotation ? (
             <MapView
               ref={mapRef}
               style={styles.map}
@@ -358,8 +382,9 @@ export default function TripDetailScreen() {
           ) : (
             <View style={styles.mapError}>
               <Text style={styles.mapErrorText}>
-                ⚠️ VietMap API key not configured.{'\n'}
-                Please set EXPO_PUBLIC_VIETMAP_API_KEY in your .env file.
+                {isWeb
+                  ? 'Trip map is not supported on web yet. Please use the mobile app to manage live locations.'
+                  : '⚠️ VietMap API key not configured.\nPlease set EXPO_PUBLIC_VIETMAP_API_KEY in your .env file.'}
               </Text>
             </View>
           )}
@@ -466,6 +491,64 @@ const getStopStatusColor = (status: 'pending' | 'arrived' | 'completed'): string
   return colors[status];
 };
 
+const createShadowStyle = (nativeShadow: Record<string, any>, webShadow: string) =>
+  Platform.OS === 'web' ? { boxShadow: webShadow } : nativeShadow;
+
+const tripInfoShadow = createShadowStyle(
+  {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  '0px 8px 20px rgba(0, 0, 0, 0.06)'
+);
+
+const mapShadow = createShadowStyle(
+  {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  '0px 12px 32px rgba(0, 0, 0, 0.12)'
+);
+
+const floatingButtonShadow = createShadowStyle(
+  {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  '0px 18px 36px rgba(34, 197, 94, 0.4)'
+);
+
+const modalShadow = createShadowStyle(
+  {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  '0px -16px 32px rgba(0, 0, 0, 0.15)'
+);
+
+const stopItemShadow = createShadowStyle(
+  {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  '0px 10px 24px rgba(0, 0, 0, 0.08)'
+);
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   loadingContainer: {
@@ -510,11 +593,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
     position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    ...tripInfoShadow,
     borderLeftWidth: 4,
     borderLeftColor: '#FFDD00',
   },
@@ -556,11 +635,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginTop: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    ...mapShadow,
   },
   map: {
     flex: 1,
@@ -612,11 +687,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#22C55E',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    ...floatingButtonShadow,
   },
   floatingButtonIconContainer: {
     width: '100%',
@@ -653,11 +724,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    ...modalShadow,
   },
   modalHandle: {
     alignSelf: 'center',
@@ -701,11 +768,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    ...stopItemShadow,
   },
   stopItemLeft: {
     flexDirection: 'row',

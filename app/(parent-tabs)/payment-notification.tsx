@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -136,6 +137,76 @@ export default function PaymentNotificationScreen() {
   );
 }
 
+const createShadowStyle = (nativeShadow: Record<string, any>, webShadow: string) =>
+  Platform.OS === 'web' ? { boxShadow: webShadow } : nativeShadow;
+
+const createTextShadowStyle = (nativeShadow: Record<string, any>, webShadow: string) =>
+  Platform.OS === 'web' ? { textShadow: webShadow } : nativeShadow;
+
+const closeButtonShadow = createShadowStyle(
+  {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  '0px 4px 12px rgba(0, 0, 0, 0.08)'
+);
+
+const iconCircleShadow = createShadowStyle(
+  {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  '0px 12px 24px rgba(0, 0, 0, 0.12)'
+);
+
+const infoCardShadow = createShadowStyle(
+  {
+    shadowColor: '#01CBCA',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  '0px 12px 24px rgba(1, 203, 202, 0.25)'
+);
+
+const iconWrapperShadow = createShadowStyle(
+  {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  '0px 8px 18px rgba(0, 0, 0, 0.1)'
+);
+
+const paymentButtonShadow = createShadowStyle(
+  {
+    shadowColor: '#01CBCA',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  '0px 16px 32px rgba(1, 203, 202, 0.35)'
+);
+
+const titleTextShadow = createTextShadowStyle(
+  {
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  '0px 2px 4px rgba(0, 0, 0, 0.1)'
+);
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -155,11 +226,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...closeButtonShadow,
   },
   scrollContent: {
     flexGrow: 1,
@@ -183,11 +250,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    ...iconCircleShadow,
   },
   title: {
     fontFamily: 'RobotoSlab-Bold',
@@ -195,9 +258,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     textAlign: 'center',
     marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.1)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    ...titleTextShadow,
   },
   subtitle: {
     fontFamily: 'RobotoSlab-Regular',
@@ -217,11 +278,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderLeftWidth: 5,
     borderLeftColor: '#01CBCA',
-    shadowColor: '#01CBCA',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    ...infoCardShadow,
   },
   infoRow: {
     flexDirection: 'row',
@@ -235,11 +292,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...iconWrapperShadow,
   },
   infoTextContainer: {
     flex: 1,
@@ -282,11 +335,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     overflow: 'hidden',
     marginBottom: 16,
-    shadowColor: '#01CBCA',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    ...paymentButtonShadow,
   },
   buttonGradient: {
     flexDirection: 'row',
