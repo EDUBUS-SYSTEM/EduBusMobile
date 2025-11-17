@@ -1,5 +1,5 @@
 import { apiService } from '../api';
-import type { DriverTripDto } from './driverTrip.types';
+import type { DriverTripDto } from '../trip/driverTrip.types';
 
 export const driverTripApi = {
   async getDriverScheduleByRange(

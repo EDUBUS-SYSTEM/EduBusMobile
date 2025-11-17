@@ -1,5 +1,4 @@
-import type { ParentTripDto } from './parentTrip.types';
-
+import type { ParentTripDto } from '../trip/parentTrip.types';
 const baseDate = new Date().toISOString().split('T')[0];
 
 const makeIso = (date: string, time: string) => `${date}T${time}:00.000Z`;

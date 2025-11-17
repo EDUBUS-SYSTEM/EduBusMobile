@@ -1,4 +1,4 @@
-import { DriverTripDto } from './driverTrip.types';
+import { DriverTripDto } from '../trip/driverTrip.types';
 
 const baseDate = new Date().toISOString().split('T')[0];
 

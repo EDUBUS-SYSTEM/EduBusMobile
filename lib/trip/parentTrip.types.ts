@@ -21,6 +21,8 @@ export interface ParentTripDto {
     sequenceOrder: number;
     pickupPointName: string;
     address: string;
+    latitude?: number;  
+    longitude?: number;
     plannedAt: string;
     arrivedAt?: string;
     departedAt?: string;
@@ -29,6 +31,8 @@ export interface ParentTripDto {
     sequenceOrder: number;
     pickupPointName: string;
     address: string;
+    latitude?: number;  
+    longitude?: number;
     plannedAt: string;
     arrivedAt?: string;
     departedAt?: string;

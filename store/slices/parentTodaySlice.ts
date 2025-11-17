@@ -1,6 +1,6 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { getParentTripsByDate, getParentTripDetail } from '@/lib/trip/trip.api';
-import { ParentTripDto } from '@/lib/trip-mock-data/parentTrip.types';
+import { ParentTripDto } from '@/lib/trip/parentTrip.types';
 
 interface ParentTodayState {
   trips: ParentTripDto[];

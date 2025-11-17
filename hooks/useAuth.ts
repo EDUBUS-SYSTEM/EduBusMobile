@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { authApi } from '@/lib/auth/auth.api';
 import { isRoleAllowed, getRoleErrorMessage } from '@/lib/auth/auth.utils';
-import { signalRService } from '@/lib/signalr/signalr.service';
+import { signalRService } from '@/lib/signalr/notificationHub.service';
 
 interface UserInfo {
   role: "Admin" | "Driver" | "Parent" | null;

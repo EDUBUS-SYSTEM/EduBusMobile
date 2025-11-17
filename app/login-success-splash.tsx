@@ -1,13 +1,17 @@
 import { authApi } from '@/lib/auth/auth.api';
 import { paymentApi } from '@/lib/payment/payment.api';
-import { signalRService } from '@/lib/signalr/signalr.service';
+import { signalRService } from '@/lib/signalr/notificationHub.service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Animated, Text, View } from 'react-native';
+import { useAppDispatch } from '@/store/hooks';
+import { setSignalRConnecting, setSignalRConnected, setSignalRError } from '@/store/slices/signalRSlice';
 
 export default function LoginSuccessSplash() {
+  const dispatch = useAppDispatch();
+  const navigation = useNavigation();
   const [fadeAnim] = useState(new Animated.Value(0));
   const [scaleAnim] = useState(new Animated.Value(0.8));
   const [statusText, setStatusText] = useState('Loading your dashboard...');
@@ -32,41 +36,33 @@ export default function LoginSuccessSplash() {
     const initializeAndNavigate = async () => {
       try {
         console.log('🎯 Starting initializeAndNavigate...');
+        
         const userInfo = await authApi.getUserInfo();
         console.log('👤 User info:', userInfo);
         
-        const token = await AsyncStorage.getItem('accessToken'); // Fix: use 'accessToken' not 'token'
+        const token = await AsyncStorage.getItem('accessToken');
         console.log('🔑 Token exists:', !!token);
 
-        // Initialize SignalR for Parent and Driver roles if not already connected
         if (token && (userInfo.role === 'Parent' || userInfo.role === 'Driver')) {
-          console.log('✅ Conditions met for SignalR init. Role:', userInfo.role);
+          console.log('✅ Conditions met for SignalR. Role:', userInfo.role);
           
-          try {
-            const isAlreadyConnected = signalRService.isConnected();
-            console.log('🔌 SignalR already connected?', isAlreadyConnected);
-            
-            if (!isAlreadyConnected) {
-              setStatusText('Connecting to real-time updates...');
-              console.log('🔌 [LOGIN-SPLASH] Initializing SignalR for', userInfo.role);
-              
-              await signalRService.initialize(token);
-              console.log('✅ [LOGIN-SPLASH] SignalR initialized successfully');
-            } else {
-              console.log('✅ [LOGIN-SPLASH] SignalR already connected, skipping');
-            }
-            setStatusText('Almost ready...');
-          } catch (signalRError) {
-            console.error('⚠️ [LOGIN-SPLASH] SignalR initialization failed:', signalRError);
-            // Continue anyway - SignalR is not critical for app function
-            setStatusText('Loading your dashboard...');
+          const isAlreadyConnected = signalRService.isConnected();
+          console.log('🔌 SignalR already connected?', isAlreadyConnected);
+          
+          if (isAlreadyConnected) {
+            dispatch(setSignalRConnected());
+            console.log('✅ [LOGIN-SPLASH] SignalR already connected, state synced');
+          } else {
+            console.log('⏳ [LOGIN-SPLASH] SignalR not connected yet, waiting for _layout.tsx to initialize');
           }
+          
+          setStatusText('Almost ready...');
         } else {
-          console.log('⏭️ Skipping SignalR init. Token:', !!token, 'Role:', userInfo?.role);
+          console.log('⏭️ Skipping SignalR check. Token:', !!token, 'Role:', userInfo?.role);
         }
 
         // Small delay to show "Almost ready" text
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Route based on role
         if (userInfo.role === 'Driver') {
@@ -94,22 +90,42 @@ export default function LoginSuccessSplash() {
           
         } else {
           // If somehow we get here with Admin role, logout and go to login
-          console.error('Admin role detected in splash screen - this should not happen');
+          console.error('❌ Admin role detected in splash screen - this should not happen');
           await authApi.logout();
           router.replace('/login' as any);
         }
       } catch (error) {
-        console.error('Error getting user info:', error);
+        console.error('❌ Error getting user info:', error);
         // Fallback to login screen
         router.replace('/login' as any);
       }
     };
 
-    // Start initialization after 1 second (let animation play)
-    const timer = setTimeout(initializeAndNavigate, 1000);
+    //  Wait for navigation to be ready before initializing
+    // This is more reliable than using a fixed delay
+    let navigationReady = false;
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
+      navigationReady = true;
+    });
 
-    return () => clearTimeout(timer);
-  }, []);
+    // Start initialization after 1000ms (let animation play + ensure navigation ready)
+    // beforeRemove event typically triggers within 100-200ms
+    const timer = setTimeout(() => {
+      if (navigationReady) {
+        console.log('✅ Navigation ready, starting initialization...');
+        initializeAndNavigate();
+      } else {
+        // Fallback: wait a bit more if navigation not ready
+        console.warn('⚠️ Navigation not ready yet, waiting...');
+        setTimeout(initializeAndNavigate, 500);
+      }
+    }, 1000);
+
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [navigation]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>

@@ -1,34 +1,15 @@
-import { getTripDetail } from '@/lib/trip/trip.api';
-import { DriverTripDto, DriverTripStopDto } from '@/lib/trip-mock-data/driverTrip.types';
+import { confirmArrival, getTripDetail } from '@/lib/trip/trip.api';
+import { DriverTripDto, DriverTripStopDto } from '@/lib/trip/driverTrip.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
 import type { Guid } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import {
-  Alert,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import type { MapViewRef } from '@vietmap/vietmap-gl-react-native';
-
-type VietMapModule = typeof import('@vietmap/vietmap-gl-react-native');
-
-const isWeb = Platform.OS === 'web';
-const vietMapModule: VietMapModule | null = isWeb
-  ? null
-  : (require('@vietmap/vietmap-gl-react-native') as VietMapModule);
-
-const MapView = vietMapModule?.MapView;
-const Camera = vietMapModule?.Camera;
-const PointAnnotation = vietMapModule?.PointAnnotation;
+import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { getRoute } from '@/lib/vietmap/vietmap.service';
 
 type Params = { tripId?: Guid };
 
@@ -51,6 +32,7 @@ export default function TripDetailScreen() {
   const [loading, setLoading] = React.useState(true);
   const [clickedCoordinate, setClickedCoordinate] = useState<[number, number] | null>(null);
   const [showStopsModal, setShowStopsModal] = useState(false);
+  const [routeSegments, setRouteSegments] = useState<[number, number][][]>([]);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load trip data
@@ -68,7 +50,7 @@ export default function TripDetailScreen() {
         setTrip(tripData);
       } catch (error: any) {
         console.error('Error loading trip:', error);
-        const errorMessage = error.message === 'UNAUTHORIZED' 
+        const errorMessage = error.message === 'UNAUTHORIZED'
           ? 'You are not authorized to view this trip'
           : error.message || 'Failed to load trip';
         Alert.alert('Error', errorMessage, [
@@ -83,10 +65,6 @@ export default function TripDetailScreen() {
   // Initialize TripHub connection
   React.useEffect(() => {
     if (!tripId) return;
-    if (isWeb) {
-      console.info('ℹ️ TripHub live updates are disabled on web.');
-      return;
-    }
 
     const initializeTripHub = async () => {
       try {
@@ -173,7 +151,7 @@ export default function TripDetailScreen() {
     // Cleanup function
     return () => {
       isMounted = false;
-      
+
       // Clear location interval
       if (locationIntervalRef.current) {
         clearInterval(locationIntervalRef.current);
@@ -182,24 +160,99 @@ export default function TripDetailScreen() {
     };
   }, [tripId, clickedCoordinate]);
 
-  const handleArrive = (stop: DriverTripStopDto) => {
-    if (!trip) return;
+  // Calculate routes between all stops in sequence
+  React.useEffect(() => {
+    const calculateRoutes = async () => {
+      if (!trip) {
+        setRouteSegments([]);
+        return;
+      }
 
-    const now = new Date().toISOString();
-    const updatedStops = trip.stops.map((s) =>
-      s.sequenceOrder === stop.sequenceOrder
-        ? { ...s, arrivedAt: now }
-        : s
-    );
+      try {
+        const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || '';
+        if (!apiKey) {
+          console.warn('VietMap API key not configured');
+          setRouteSegments([]);
+          return;
+        }
 
-    const updatedTrip: DriverTripDto = {
-      ...trip,
-      stops: updatedStops,
-      status: trip.status === 'Scheduled' ? 'InProgress' : trip.status,
-      startTime: trip.status === 'Scheduled' ? now : trip.startTime,
+        // Sort stops by sequence order
+        const sortedStops = [...trip.stops].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+        const segments: [number, number][][] = [];
+
+        // Calculate route from vehicle to first pending stop (if vehicle location exists)
+        if (clickedCoordinate) {
+          const firstPendingStop = sortedStops.find((stop) => !stop.departedAt);
+          if (firstPendingStop) {
+            const [longitude, latitude] = clickedCoordinate;
+            const routeData = await getRoute(
+              { lat: latitude, lng: longitude },
+              { lat: firstPendingStop.latitude, lng: firstPendingStop.longitude },
+              apiKey
+            );
+            if (routeData && routeData.coordinates.length > 0) {
+              segments.push(routeData.coordinates);
+              console.log('✅ Route from vehicle to stop', firstPendingStop.sequenceOrder);
+            }
+          }
+        }
+
+        // Calculate routes between consecutive stops
+        for (let i = 0; i < sortedStops.length - 1; i++) {
+          const currentStop = sortedStops[i];
+          const nextStop = sortedStops[i + 1];
+
+          const routeData = await getRoute(
+            { lat: currentStop.latitude, lng: currentStop.longitude },
+            { lat: nextStop.latitude, lng: nextStop.longitude },
+            apiKey
+          );
+
+          if (routeData && routeData.coordinates.length > 0) {
+            segments.push(routeData.coordinates);
+            console.log(`✅ Route from stop ${currentStop.sequenceOrder} to stop ${nextStop.sequenceOrder}`);
+          }
+        }
+
+        setRouteSegments(segments);
+        console.log('✅ Total route segments:', segments.length);
+      } catch (error) {
+        console.error('❌ Error calculating routes:', error);
+        setRouteSegments([]);
+      }
     };
 
-    setTrip(updatedTrip);
+    calculateRoutes();
+  }, [trip, clickedCoordinate]);
+
+  const handleArrive = async (stop: DriverTripStopDto) => {
+    if (!trip) return;
+
+    try {
+      // Call API to notify parents
+      await confirmArrival(trip.id, stop.pickupPointId);
+
+      // Update local state
+      const now = new Date().toISOString();
+      const updatedStops = trip.stops.map((s) =>
+        s.sequenceOrder === stop.sequenceOrder
+          ? { ...s, arrivedAt: now }
+          : s
+      );
+
+      const updatedTrip: DriverTripDto = {
+        ...trip,
+        stops: updatedStops,
+        status: trip.status === 'Scheduled' ? 'InProgress' : trip.status,
+        startTime: trip.status === 'Scheduled' ? now : trip.startTime,
+      };
+
+      setTrip(updatedTrip);
+      console.log('Parents notified about arrival at:', stop.pickupPointName);
+    } catch (error: any) {
+      console.error('Error notifying arrival:', error);
+      Alert.alert('Error', error.message || 'Failed to notify parents');
+    }
   };
 
   const handleDepart = (stop: DriverTripStopDto) => {
@@ -239,17 +292,60 @@ export default function TripDetailScreen() {
   const mapRef = useRef<MapViewRef>(null);
 
   const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || '';
-  const mapStyle = apiKey 
+  const mapStyle = apiKey
     ? `https://maps.vietmap.vn/maps/styles/tm/style.json?apikey=${apiKey}`
     : undefined;
+
+  // Calculate map bounds to fit all stops
+  const getMapBounds = React.useCallback(() => {
+    if (!trip || !trip.stops || trip.stops.length === 0) {
+      return {
+        centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Đà Nẵng
+        zoomLevel: 12,
+      };
+    }
+
+    const coordinates = trip.stops.map((stop) => [stop.longitude, stop.latitude] as [number, number]);
+    
+    // Calculate bounds
+    const lngs = coordinates.map((c) => c[0]);
+    const lats = coordinates.map((c) => c[1]);
+    
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    
+    // Calculate center
+    const centerLng = (minLng + maxLng) / 2;
+    const centerLat = (minLat + maxLat) / 2;
+    
+    // Calculate zoom level (simple approximation)
+    const lngDiff = maxLng - minLng;
+    const latDiff = maxLat - minLat;
+    const maxDiff = Math.max(lngDiff, latDiff);
+    
+    // Increased zoom levels for closer view
+    let zoomLevel = 14;
+    if (maxDiff > 0.1) zoomLevel = 12;
+    else if (maxDiff > 0.05) zoomLevel = 13;
+    else if (maxDiff > 0.02) zoomLevel = 14;
+    else if (maxDiff > 0.01) zoomLevel = 15;
+    else zoomLevel = 16;
+    
+    return {
+      centerCoordinate: [centerLng, centerLat] as [number, number],
+      zoomLevel,
+    };
+  }, [trip]);
 
   const handleMapPress = (feature: GeoJSON.Feature) => {
     try {
       console.log('Map pressed, feature:', JSON.stringify(feature, null, 2));
-      
+
       let longitude: number | null = null;
       let latitude: number | null = null;
-      
+
       // Method 1: Try to get coordinates from geometry (most common case)
       if (feature.geometry) {
         if (feature.geometry.type === 'Point' && feature.geometry.coordinates) {
@@ -260,7 +356,7 @@ export default function TripDetailScreen() {
           }
         }
       }
-      
+
       // Method 2: Try to get coordinates from properties
       if ((!longitude || !latitude) && feature.properties) {
         const props = feature.properties as any;
@@ -275,7 +371,7 @@ export default function TripDetailScreen() {
           latitude = props.lat;
         }
       }
-      
+
       // If we got coordinates, set them
       if (longitude !== null && latitude !== null && !isNaN(longitude) && !isNaN(latitude)) {
         setClickedCoordinate([longitude, latitude]);
@@ -352,7 +448,7 @@ export default function TripDetailScreen() {
 
         {/* Map View */}
         <View style={styles.mapContainer}>
-          {mapStyle && MapView && Camera && PointAnnotation ? (
+          {mapStyle ? (
             <MapView
               ref={mapRef}
               style={styles.map}
@@ -362,11 +458,53 @@ export default function TripDetailScreen() {
             >
               <Camera
                 defaultSettings={{
-                  centerCoordinate: [108.2022, 16.0544], // Đà Nẵng coordinates [longitude, latitude]
+                  centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Đà Nẵng
                   zoomLevel: 12,
-                  animationDuration: 0, // No animation on initialization
+                  animationDuration: 0,
                 }}
+                centerCoordinate={getMapBounds().centerCoordinate}
+                zoomLevel={getMapBounds().zoomLevel}
+                animationDuration={trip ? 500 : 0}
               />
+              {/* Routes between all stops in sequence - placed before markers to avoid covering them */}
+              {routeSegments.map((segment, index) => (
+                <ShapeSource
+                  key={`route-segment-${index}`}
+                  id={`route-source-${index}`}
+                  shape={{
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                      type: 'LineString',
+                      coordinates: segment,
+                    },
+                  }}>
+                  <LineLayer
+                    id={`route-layer-${index}`}
+                    style={{
+                      lineColor: '#3B82F6',
+                      lineWidth: 6,
+                      lineCap: 'round',
+                      lineJoin: 'round',
+                    }}
+                  />
+                </ShapeSource>
+              ))}
+              {/* Display all stop markers */}
+              {trip.stops.map((stop) => {
+                return (
+                  <PointAnnotation
+                    key={`stop-${stop.sequenceOrder}`}
+                    id={`stop-${stop.sequenceOrder}`}
+                    coordinate={[stop.longitude, stop.latitude]}
+                    anchor={{ x: 0.5, y: 1 }}
+                  >
+                    <View style={styles.stopMarkerContainer}>
+                      <Ionicons name="location" size={40} color="#C41E3A" />
+                    </View>
+                  </PointAnnotation>
+                );
+              })}
               {clickedCoordinate && (
                 <PointAnnotation
                   id="clicked-pin"
@@ -374,7 +512,7 @@ export default function TripDetailScreen() {
                   anchor={{ x: 0.5, y: 1 }}
                 >
                   <View style={styles.pinContainer}>
-                    <Ionicons name="location" size={32} color="#FFDD00" />
+                    <Ionicons name="bus" size={28} color="#000000" />
                   </View>
                 </PointAnnotation>
               )}
@@ -382,9 +520,8 @@ export default function TripDetailScreen() {
           ) : (
             <View style={styles.mapError}>
               <Text style={styles.mapErrorText}>
-                {isWeb
-                  ? 'Trip map is not supported on web yet. Please use the mobile app to manage live locations.'
-                  : '⚠️ VietMap API key not configured.\nPlease set EXPO_PUBLIC_VIETMAP_API_KEY in your .env file.'}
+                ⚠️ VietMap API key not configured.{'\n'}
+                Please set EXPO_PUBLIC_VIETMAP_API_KEY in your .env file.
               </Text>
             </View>
           )}
@@ -392,7 +529,7 @@ export default function TripDetailScreen() {
       </View>
 
       {/* Floating Pickup Points Button */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.floatingPickupButton}
         onPress={() => setShowStopsModal(true)}
         activeOpacity={0.8}
@@ -431,8 +568,9 @@ export default function TripDetailScreen() {
             >
               {trip.stops.map((stop) => {
                 const status = getStopStatus(stop);
+                const isArrived = status === 'arrived' || status === 'completed';
                 return (
-                  <TouchableOpacity key={stop.sequenceOrder} style={styles.stopItem} activeOpacity={0.9}>
+                  <View key={stop.sequenceOrder} style={styles.stopItem}>
                     <View style={styles.stopItemLeft}>
                       <View style={[styles.stopNumberBadge, { backgroundColor: getStopStatusColor(status) }]}>
                         <Text style={styles.stopNumberText}>{stop.sequenceOrder}</Text>
@@ -455,12 +593,17 @@ export default function TripDetailScreen() {
                         </View>
                       </View>
                     </View>
-                    <View style={[styles.stopStatusBadge, { borderColor: getStopStatusColor(status) }]}>
-                      <Text style={[styles.stopStatusBadgeText, { color: getStopStatusColor(status) }]}>
-                        {status === 'completed' ? 'Done' : status === 'arrived' ? 'Arrived' : 'Pending'}
-                      </Text>
+                    <View style={styles.stopItemRight}>
+                      <TouchableOpacity
+                        style={[styles.notifyButton, isArrived && styles.notifyButtonDisabled]}
+                        //disabled={isArrived}
+                        activeOpacity={0.7}
+                        onPress={() => handleArrive(stop)}
+                      >
+                        <Ionicons name="notifications" size={18} color={isArrived ? '#D1D5DB' : '#000000'} />
+                      </TouchableOpacity>
                     </View>
-                  </TouchableOpacity>
+                  </View>
                 );
               })}
             </ScrollView>
@@ -490,64 +633,6 @@ const getStopStatusColor = (status: 'pending' | 'arrived' | 'completed'): string
   };
   return colors[status];
 };
-
-const createShadowStyle = (nativeShadow: Record<string, any>, webShadow: string) =>
-  Platform.OS === 'web' ? { boxShadow: webShadow } : nativeShadow;
-
-const tripInfoShadow = createShadowStyle(
-  {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  '0px 8px 20px rgba(0, 0, 0, 0.06)'
-);
-
-const mapShadow = createShadowStyle(
-  {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  '0px 12px 32px rgba(0, 0, 0, 0.12)'
-);
-
-const floatingButtonShadow = createShadowStyle(
-  {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  '0px 18px 36px rgba(34, 197, 94, 0.4)'
-);
-
-const modalShadow = createShadowStyle(
-  {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  '0px -16px 32px rgba(0, 0, 0, 0.15)'
-);
-
-const stopItemShadow = createShadowStyle(
-  {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  '0px 10px 24px rgba(0, 0, 0, 0.08)'
-);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
@@ -593,7 +678,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
     position: 'relative',
-    ...tripInfoShadow,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
     borderLeftWidth: 4,
     borderLeftColor: '#FFDD00',
   },
@@ -635,7 +724,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginTop: 8,
-    ...mapShadow,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   map: {
     flex: 1,
@@ -675,7 +768,48 @@ const styles = StyleSheet.create({
   pinContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFDD00',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  stopMarkerContainer: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  stopMarkerBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  stopMarkerNumber: {
+    fontFamily: 'RobotoSlab-Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  stopMarkerPin: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    marginTop: -2,
   },
   floatingPickupButton: {
     position: 'absolute',
@@ -687,7 +821,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#22C55E',
     justifyContent: 'center',
     alignItems: 'center',
-    ...floatingButtonShadow,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   floatingButtonIconContainer: {
     width: '100%',
@@ -724,7 +862,11 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '80%',
-    ...modalShadow,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
   },
   modalHandle: {
     alignSelf: 'center',
@@ -768,11 +910,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#F3F4F6',
-    ...stopItemShadow,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   stopItemLeft: {
     flexDirection: 'row',
     flex: 1,
+  },
+  stopItemRight: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 8,
   },
   stopNumberBadge: {
     width: 40,
@@ -819,7 +970,6 @@ const styles = StyleSheet.create({
     maxWidth: 200,
   },
   stopStatusBadge: {
-    alignSelf: 'center',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -829,6 +979,31 @@ const styles = StyleSheet.create({
     fontFamily: 'RobotoSlab-Medium',
     fontSize: 12,
     textTransform: 'capitalize',
+  },
+  notifyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#FFDD00',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  notifyButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  notifyButtonText: {
+    fontFamily: 'RobotoSlab-Medium',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  notifyButtonTextDisabled: {
+    color: '#D1D5DB',
   },
 });
 

@@ -6,7 +6,7 @@ import {
   getStatusColor,
   getStatusText
 } from "@/lib/payment/payment.type";
-import { signalRService } from '@/lib/signalr/signalr.service';
+import { signalRService } from '@/lib/signalr/notificationHub.service';
 import { updateTransactionDetail } from '@/store/slices/paymentSlice';
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
