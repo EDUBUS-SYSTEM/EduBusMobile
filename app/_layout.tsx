@@ -17,7 +17,7 @@ import { useNotificationAlert } from '@/hooks/useNotificationAlert';
 import { setSignalRConnecting, setSignalRConnected, setSignalRError } from '@/store/slices/signalRSlice';
 
 // Component to subscribe to arrival notifications
-// ✅ Sửa: Gọi hook không điều kiện, hook tự xử lý logic bên trong
+// ✅ Fixed: call the hook unconditionally; it manages its own logic
 function ArrivalNotificationsSubscriber() {
   useNotificationAlert();
   return null;

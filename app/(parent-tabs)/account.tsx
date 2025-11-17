@@ -263,6 +263,14 @@ export default function ParentAccountScreen() {
                 router.push("/account-profile" as any);
                 return;
               }
+              if (item.id === 2) {
+                router.push("/school-information" as any);
+                return;
+              }
+              if (item.id === 3) {
+                router.push("/application-comments" as any);
+                return;
+              }
               if (item.id === 7) {
                 router.push("/student-list" as any); // 👈 Navigate to Student List screen
                 return;

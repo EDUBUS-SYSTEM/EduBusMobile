@@ -46,6 +46,9 @@ export const API_CONFIG = {
         HISTORY: '/payment/history',
         UNPAID_FEES: '/payment/unpaid-fees'
       },
+      SCHOOL: {
+        INFO: '/School',
+      },
     },
     TIMEOUT: 10000,
     RETRY_ATTEMPTS: 3,

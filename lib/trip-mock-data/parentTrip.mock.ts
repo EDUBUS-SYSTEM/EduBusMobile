@@ -12,15 +12,15 @@ const getFutureTime = (minutesFromNow: number): string => {
   return `${hours}:${mins}`;
 };
 
-// Mock children data với địa điểm đón/trả rõ ràng
-// CHỈ CÓ 2 HỌC SINH → 2 × 2 = 4 CHUYẾN (mỗi học sinh: 1 chuyến đi + 1 chuyến về)
+// Mock children data with clear pickup/drop-off locations
+// ONLY 2 STUDENTS -> 2 x 2 = 4 TRIPS (each student: 1 outbound + 1 inbound)
 const mockChildren = [
   {
     id: 'child-001',
-    name: 'Tran Minh Hieu',
+    name: 'Evan Miles',
     avatar: 'https://cdn.vietnam.vn/wp-content/uploads/2024/08/HIEUTHUHAI-khien-ca-Hieu-thu-nhat-cung-noi-tieng.jpg',
     className: '1B',
-    // Địa điểm đón/trả của học sinh này
+    // Pickup/drop-off locations for this student
     homePickupPoint: {
       name: 'Dragon Bridge',
       address: '2 Thang 9 Street, Hai Chau, Da Nang',
@@ -32,13 +32,13 @@ const mockChildren = [
   },
   {
     id: 'child-002',
-    name: 'Tran Quang Huy',
+    name: 'Lily Evans',
     avatar: 'https://www.elle.vn/wp-content/uploads/2024/01/21/567142/HIEUTHUHAI-3-scaled.jpg',
     className: '2A',
-    // Địa điểm đón/trả của học sinh này
+    // Pickup/drop-off locations for this student
     homePickupPoint: {
-      name: 'Ngu Hanh Son',
-      address: 'Ngu Hanh Son District, Da Nang',
+      name: 'Marble Mountains',
+      address: 'Marble Mountains District, Da Nang',
     },
     schoolDropoffPoint: {
       name: 'FPT University',
@@ -48,10 +48,10 @@ const mockChildren = [
 ];
 
 // Calculate start and end times for trips
-// Chuyến đi (Morning - đưa đến trường): 7:00 - 8:00
+// Outbound trip (Morning - drop off at school): 7:00 - 8:00
 const morningTripStartTime = '07:00';
 const morningTripEndTime = '08:00';
-// Chuyến về (Afternoon - đón từ trường): 17:00 - 18:00
+// Inbound trip (Afternoon - pick up from school): 17:00 - 18:00
 const afternoonTripStartTime = '17:00';
 const afternoonTripEndTime = '18:00';
 
@@ -60,8 +60,8 @@ const getHour = (timeStr: string) => timeStr.split(':')[0];
 
 export const mockParentTrips: ParentTripDto[] = [
   // ============================================
-  // CHUYẾN ĐI (MORNING) - Đưa học sinh đến trường
-  // Đón ở nhà → Trả ở trường
+  // OUTBOUND (MORNING) - Students go to school
+  // Pickup at home → Drop at school
   // ============================================
   {
     id: '550e8400-e29b-41d4-a716-446655440001',
@@ -69,22 +69,22 @@ export const mockParentTrips: ParentTripDto[] = [
     serviceDate: `${baseDate}T00:00:00.000Z`,
     plannedStartAt: makeIso(baseDate, morningTripStartTime),
     plannedEndAt: makeIso(baseDate, morningTripEndTime),
-    status: 'InProgress', // CHUYẾN ĐANG DIỄN RA - CÓ THỂ TRACKING
-    scheduleName: 'Morning Shift - Đưa đến trường',
+    status: 'InProgress', // Trip is in progress - can track
+    scheduleName: 'Morning Shift - Drop off at school',
     childId: mockChildren[0].id,
     childName: mockChildren[0].name,
     childAvatar: mockChildren[0].avatar,
     childClassName: mockChildren[0].className,
-    // CHUYẾN ĐI: Đón ở nhà (Dragon Bridge) - ĐÃ ĐẾN VÀ ĐÃ RỜI
+    // OUTBOUND: Pickup at home (Dragon Bridge) - already visited
     pickupStop: {
       sequenceOrder: 1,
       pickupPointName: mockChildren[0].homePickupPoint.name,
       address: mockChildren[0].homePickupPoint.address,
       plannedAt: makeIso(baseDate, '07:05'),
-      arrivedAt: makeIso(baseDate, '07:08'), // Đã đến điểm đón
-      departedAt: makeIso(baseDate, '07:10'), // Đã rời điểm đón
+      arrivedAt: makeIso(baseDate, '07:08'), // Arrived at pickup
+      departedAt: makeIso(baseDate, '07:10'), // Departed from pickup
     },
-    // CHUYẾN ĐI: Trả ở trường (FPT University) - ĐANG TRÊN ĐƯỜNG ĐẾN
+    // OUTBOUND: Drop at school (FPT University) - still en route
     dropoffStop: {
       sequenceOrder: 4,
       pickupPointName: mockChildren[0].schoolDropoffPoint.name,
@@ -92,7 +92,7 @@ export const mockParentTrips: ParentTripDto[] = [
       plannedAt: makeIso(baseDate, '07:55'),
     },
     totalStops: 4,
-    completedStops: 1, // Đã hoàn thành 1 điểm dừng (pickup)
+    completedStops: 1, // Finished 1 stop (pickup)
     createdAt: `${baseDate}T00:00:00.000Z`,
     updatedAt: `${baseDate}T00:00:00.000Z`,
   },
@@ -103,19 +103,19 @@ export const mockParentTrips: ParentTripDto[] = [
     plannedStartAt: makeIso(baseDate, morningTripStartTime),
     plannedEndAt: makeIso(baseDate, morningTripEndTime),
     status: 'Scheduled',
-    scheduleName: 'Morning Shift - Đưa đến trường',
+    scheduleName: 'Morning Shift - Drop off at school',
     childId: mockChildren[1].id,
     childName: mockChildren[1].name,
     childAvatar: mockChildren[1].avatar,
     childClassName: mockChildren[1].className,
-    // CHUYẾN ĐI: Đón ở nhà (Ngu Hanh Son)
+    // OUTBOUND: Pickup at home (Marble Mountains)
     pickupStop: {
       sequenceOrder: 1,
       pickupPointName: mockChildren[1].homePickupPoint.name,
       address: mockChildren[1].homePickupPoint.address,
       plannedAt: makeIso(baseDate, '07:10'),
     },
-    // CHUYẾN ĐI: Trả ở trường (FPT University)
+    // OUTBOUND: Drop at school (FPT University)
     dropoffStop: {
       sequenceOrder: 3,
       pickupPointName: mockChildren[1].schoolDropoffPoint.name,
@@ -128,8 +128,8 @@ export const mockParentTrips: ParentTripDto[] = [
     updatedAt: `${baseDate}T00:00:00.000Z`,
   },
   // ============================================
-  // CHUYẾN VỀ (AFTERNOON) - Đón học sinh từ trường
-  // Đón ở trường → Trả ở nhà (NGƯỢC LẠI chuyến đi)
+  // RETURN (AFTERNOON) - Students leave school
+  // Pickup at school → Drop at home (reverse direction)
   // ============================================
   {
     id: '550e8400-e29b-41d4-a716-446655440004',
@@ -138,19 +138,19 @@ export const mockParentTrips: ParentTripDto[] = [
     plannedStartAt: makeIso(baseDate, afternoonTripStartTime),
     plannedEndAt: makeIso(baseDate, afternoonTripEndTime),
     status: 'Scheduled',
-    scheduleName: 'Afternoon Shift - Đón từ trường',
+    scheduleName: 'Afternoon Shift - Pick up from school',
     childId: mockChildren[0].id,
     childName: mockChildren[0].name,
     childAvatar: mockChildren[0].avatar,
     childClassName: mockChildren[0].className,
-    // CHUYẾN VỀ: Đón ở trường (FPT University) - NGƯỢC LẠI chuyến đi
+    // RETURN: Pickup at school (FPT University) - reverse route
     pickupStop: {
       sequenceOrder: 1,
       pickupPointName: mockChildren[0].schoolDropoffPoint.name,
       address: mockChildren[0].schoolDropoffPoint.address,
       plannedAt: makeIso(baseDate, '17:05'),
     },
-    // CHUYẾN VỀ: Trả ở nhà (Dragon Bridge) - NGƯỢC LẠI chuyến đi
+    // RETURN: Drop at home (Dragon Bridge) - reverse route
     dropoffStop: {
       sequenceOrder: 4,
       pickupPointName: mockChildren[0].homePickupPoint.name,
@@ -169,19 +169,19 @@ export const mockParentTrips: ParentTripDto[] = [
     plannedStartAt: makeIso(baseDate, afternoonTripStartTime),
     plannedEndAt: makeIso(baseDate, afternoonTripEndTime),
     status: 'Scheduled',
-    scheduleName: 'Afternoon Shift - Đón từ trường',
+    scheduleName: 'Afternoon Shift - Pick up from school',
     childId: mockChildren[1].id,
     childName: mockChildren[1].name,
     childAvatar: mockChildren[1].avatar,
     childClassName: mockChildren[1].className,
-    // CHUYẾN VỀ: Đón ở trường (FPT University) - NGƯỢC LẠI chuyến đi
+    // RETURN: Pickup at school (FPT University) - reverse route
     pickupStop: {
       sequenceOrder: 1,
       pickupPointName: mockChildren[1].schoolDropoffPoint.name,
       address: mockChildren[1].schoolDropoffPoint.address,
       plannedAt: makeIso(baseDate, '17:10'),
     },
-    // CHUYẾN VỀ: Trả ở nhà (Ngu Hanh Son) - NGƯỢC LẠI chuyến đi
+    // RETURN: Drop at home (Marble Mountains) - reverse route
     dropoffStop: {
       sequenceOrder: 3,
       pickupPointName: mockChildren[1].homePickupPoint.name,
