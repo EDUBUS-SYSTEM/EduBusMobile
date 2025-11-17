@@ -4,19 +4,23 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  Alert,
   Image,
   SafeAreaView,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  ScrollView,
 } from "react-native";
+import TermsModal from "@/components/FaceRegistration/TermsModal";
 
 export default function ChildrenListScreen() {
   const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [selectedChildForFace, setSelectedChildForFace] = useState<any>(null);
 
   // Use API hook to fetch children data
   const { children: apiChildren, loading, error } = useChildrenList();
@@ -83,6 +87,23 @@ export default function ChildrenListScreen() {
         JSON.stringify(currentChild)
       )}`
     );
+  };
+
+  const handleFaceRegister = (child: any) => {
+    setSelectedChildForFace(child);
+    setShowTermsModal(true);
+  };
+
+  const handleAgreeTerms = () => {
+    setShowTermsModal(false);
+    // Navigate to face registration screen
+    router.push({
+      pathname: "/face-registration",
+      params: {
+        childId: selectedChildForFace.studentId,
+        childName: selectedChildForFace.name,
+      },
+    } as any);
   };
 
   const currentChild = childrenData[currentIndex];
@@ -250,25 +271,63 @@ export default function ChildrenListScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Main content card */}
-        <TouchableOpacity
-          onPress={handleCardPress}
-          style={styles.mainCard}
-          activeOpacity={0.8}
-        >
-          <Image source={currentChild.avatar} style={styles.childImage} />
-          <Text style={styles.childName}>{currentChild.name}</Text>
+        <View style={styles.mainCard}>
+          <TouchableOpacity
+            onPress={handleCardPress}
+            activeOpacity={0.8}
+            style={{ alignItems: "center", width: "80%" }}
+          >
+            <Image source={currentChild.avatar} style={styles.childImage} />
+            <Text style={styles.childName}>{currentChild.name}</Text>
+          </TouchableOpacity>
 
-          {/* Navigation arrows */}
-          <View style={styles.navRow}>
-            <TouchableOpacity onPress={handlePrev} style={styles.navBtn}>
-              <Ionicons name="chevron-back" size={22} color="#000000" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleNext} style={styles.navBtn}>
-              <Ionicons name="chevron-forward" size={22} color="#000000" />
+          {/* Navigation and Face Register buttons */}
+          <View style={{ width: "50%", gap: 12 }}>
+            {/* Navigation arrows */}
+            <View style={styles.navRow}>
+              <TouchableOpacity onPress={handlePrev} style={styles.navBtn}>
+                <Ionicons name="chevron-back" size={20} color="#000000" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleNext} style={styles.navBtn}>
+                <Ionicons name="chevron-forward" size={20} color="#000000" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Face Register button */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: "#01CBCA",
+                borderRadius: 12,
+                paddingVertical: 12,
+                alignItems: "center",
+                justifyContent: "center",
+                flexDirection: "row",
+              }}
+              onPress={() => handleFaceRegister(currentChild)}
+            >
+              <Ionicons name="camera" size={18} color="#FFFFFF" />
+              <Text
+                style={{
+                  fontFamily: "RobotoSlab-Medium",
+                  fontSize: 14,
+                  color: "#FFFFFF",
+                  marginLeft: 8,
+                }}
+              >
+                Face Register
+              </Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </ScrollView>
+
+      {/* Terms Modal */}
+      <TermsModal
+        visible={showTermsModal}
+        childName={selectedChildForFace?.name || ""}
+        onAgree={handleAgreeTerms}
+        onCancel={() => setShowTermsModal(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -276,13 +335,13 @@ export default function ChildrenListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF", // White background
+    backgroundColor: "#FFFFFF",
   },
   scrollView: {
     flex: 1,
   },
   scrollViewContent: {
-    paddingBottom: 50, // Add padding at bottom for better scrolling
+    paddingBottom: 50,
   },
   logo: {
     width: 200,
@@ -290,13 +349,13 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
     zIndex: 1,
   },
-
   mainCard: {
-    backgroundColor: "#FFF8CF", // Light beige from color list
-    borderRadius: 25,
-    marginHorizontal: 90, // Tăng margin để card hẹp hơn
-    marginTop: 30,
-    padding: 80, // Tăng padding để card dài hơn
+    backgroundColor: "#FFF8CF",
+    borderRadius: 20,
+    marginHorizontal: 19,
+    marginTop: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     alignItems: "center",
     shadowColor: "#000000",
     shadowOpacity: 0.1,
@@ -305,29 +364,30 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   childImage: {
-    width: 250,
-    height: 320,
-    borderRadius: 15,
+    width: 240,
+    height: 240,
+    borderRadius: 12,
     resizeMode: "cover",
-    marginBottom: 10,
+    marginBottom: 12,
   },
   childName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "600",
-    color: "#000000", // Black from color list
-    marginBottom: 25,
-    letterSpacing: 1,
+    color: "#000000",
+    marginBottom: 12,
+    letterSpacing: 0.5,
   },
   navRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    width: "120%", // Giảm width để 2 nút gần nhau hơn
+    justifyContent: "center",
+    gap: 80,
+    width: "100%",
   },
   navBtn: {
-    backgroundColor: "#FCCF08", // Yellow from color list
-    borderRadius: 25, // Giảm borderRadius để nút hẹp hơn
-    width: 45, // Giảm width để nút hẹp hơn
-    height: 45, // Giảm height để nút hẹp hơn
+    backgroundColor: "#FCCF08",
+    borderRadius: 20,
+    width: 50,
+    height: 50,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000000",

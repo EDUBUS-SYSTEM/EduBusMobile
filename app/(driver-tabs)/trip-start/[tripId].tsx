@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { startTrip } from '@/lib/trip/trip.api';
 
 type Params = { tripId?: string };
@@ -12,11 +12,19 @@ export default function TripStartScreen() {
   const [loading, setLoading] = useState(false);
 
   const onStart = async () => {
-    console.log('Starting trip:', tripId);
     if (!tripId) {
       Alert.alert('Error', 'Trip ID is missing');
       return;
     }
+    if (typeof tripId === 'string' && tripId.startsWith('temp-')) {
+      Alert.alert(
+        'Trip Not Synced',
+        'This trip is still loading from the server. Please refresh your dashboard and try again.'
+      );
+      return;
+    }
+
+    console.log('Starting trip:', tripId);
 
     setLoading(true);
     try {     
@@ -99,6 +107,20 @@ export default function TripStartScreen() {
   );
 }
 
+const createShadowStyle = (nativeShadow: Record<string, any>, webShadow: string) =>
+  Platform.OS === 'web' ? { boxShadow: webShadow } : nativeShadow;
+
+const cardShadow = createShadowStyle(
+  {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  '0px 8px 20px rgba(0, 0, 0, 0.06)'
+);
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   header: {
@@ -130,11 +152,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    ...cardShadow,
     marginBottom: 16,
     borderLeftWidth: 4,
     borderLeftColor: '#FFDD00',

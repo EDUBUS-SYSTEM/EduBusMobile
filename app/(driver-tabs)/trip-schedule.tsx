@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -184,6 +185,13 @@ export default function DriverScheduleScreen() {
             hideArrows={false}
             disableMonthChange={false}
             firstDay={1}
+            renderArrow={(direction) => (
+              <Ionicons
+                name={direction === 'left' ? 'chevron-back' : 'chevron-forward'}
+                size={22}
+                color="#F9A826"
+              />
+            )}
             hideDayNames={false}
             showWeekNumbers={false}
             onPressArrowLeft={(subtractMonth) => subtractMonth()}
@@ -219,6 +227,20 @@ export default function DriverScheduleScreen() {
     </View>
   );
 }
+
+const createShadowStyle = (nativeShadow: Record<string, any>, webShadow: string) =>
+  Platform.OS === 'web' ? { boxShadow: webShadow } : nativeShadow;
+
+const calendarShadow = createShadowStyle(
+  {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  '0px 8px 20px rgba(0, 0, 0, 0.08)'
+);
 
 const styles = StyleSheet.create({
   container: {
@@ -285,11 +307,7 @@ const styles = StyleSheet.create({
     margin: 20,
     borderRadius: 15,
     backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...calendarShadow,
   },
   calendar: {
     borderRadius: 15,
