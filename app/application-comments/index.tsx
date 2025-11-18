@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -11,7 +11,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { useChildrenList } from "@/hooks/useChildren";
 import { authApi } from "@/lib/auth/auth.api";
 import { studentAbsenceRequestApi } from "@/lib/parent/studentAbsenceRequest.api";
@@ -20,16 +21,24 @@ import {
   getStatusStyle,
   formatRangeLabel,
   formatSubmittedAt,
-} from "./application-comments.utils";
+} from "./utils";
 
-export default function ApplicationCommentsHistoryScreen() {
+export default function AbsenceReportScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const {
     children,
     loading: childrenLoading,
     error: childrenError,
     refetch: refetchChildren,
   } = useChildrenList();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: 'Absence Report',
+      headerShown: true,
+    });
+  }, [navigation]);
   const [parentId, setParentId] = useState<string | null>(null);
   const [requests, setRequests] = useState<StudentAbsenceRequestResponse[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
@@ -110,6 +119,15 @@ export default function ApplicationCommentsHistoryScreen() {
     }
   }, [parentId, loadRequests]);
 
+  // Refresh data when screen comes into focus (e.g., when returning from create screen)
+  useFocusEffect(
+    useCallback(() => {
+      if (parentId) {
+        void loadRequests();
+      }
+    }, [parentId, loadRequests])
+  );
+
   const sortedRequests = useMemo(
     () =>
       [...requests].sort(
@@ -150,7 +168,7 @@ export default function ApplicationCommentsHistoryScreen() {
               marginTop: 12,
             }}
           >
-            Loading requests...
+            Loading reports...
           </Text>
         </View>
       );
@@ -178,7 +196,7 @@ export default function ApplicationCommentsHistoryScreen() {
               color: "#B91C1C",
             }}
           >
-            Unable to load requests
+            Unable to load reports
           </Text>
           <Text
             style={{
@@ -222,7 +240,7 @@ export default function ApplicationCommentsHistoryScreen() {
             responsiveCardStyle,
           ]}
         >
-          <Ionicons name="chatbubble-ellipses-outline" size={32} color="#94A3B8" />
+          <Ionicons name="document-text-outline" size={32} color="#94A3B8" />
           <Text
             style={{
               fontFamily: "RobotoSlab-Bold",
@@ -231,7 +249,7 @@ export default function ApplicationCommentsHistoryScreen() {
               marginTop: 12,
             }}
           >
-            No requests yet
+            No reports yet
           </Text>
           <Text
             style={{
@@ -242,7 +260,7 @@ export default function ApplicationCommentsHistoryScreen() {
               marginTop: 4,
             }}
           >
-            Submit an absence request to see its status here.
+            Submit an absence report to see its status here.
           </Text>
         </View>
       );
@@ -406,25 +424,54 @@ export default function ApplicationCommentsHistoryScreen() {
         }
       >
         <View style={[{ gap: 12, marginBottom: 16 }, responsiveCardStyle]}>
-          <View style={{ gap: 4 }}>
-            <Text
-              style={{
-                fontFamily: "RobotoSlab-Bold",
-                fontSize: 18,
-                color: "#001E2B",
-              }}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <View style={{ gap: 4, flex: 1 }}>
+              <Text
+                style={{
+                  fontFamily: "RobotoSlab-Bold",
+                  fontSize: 18,
+                  color: "#001E2B",
+                }}
+              >
+                Absence Report
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "RobotoSlab-Regular",
+                  fontSize: 12,
+                  color: "#6B7C93",
+                }}
+              >
+                Check the processing status of each absence report.
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push("/application-comments/create")}
+              style={[
+                {
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: "#01CBCA",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 3,
+                },
+                pointerStyle,
+              ]}
             >
-              Request history
-            </Text>
-            <Text
-              style={{
-                fontFamily: "RobotoSlab-Regular",
-                fontSize: 12,
-                color: "#6B7C93",
-              }}
-            >
-              Kiểm tra trạng thái xử lý của từng yêu cầu vắng mặt.
-            </Text>
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
 
           {childrenError ? (
@@ -465,4 +512,3 @@ export default function ApplicationCommentsHistoryScreen() {
     </SafeAreaView>
   );
 }
-

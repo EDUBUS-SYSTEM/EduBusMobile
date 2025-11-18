@@ -3,12 +3,12 @@ import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
 import { useChildrenList } from "@/hooks/useChildren";
 import { authApi } from "@/lib/auth/auth.api";
 import { studentAbsenceRequestApi } from "@/lib/parent/studentAbsenceRequest.api";
 import type { StudentAbsenceRequestResponse } from "@/lib/parent/studentAbsenceRequest.type";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,18 +22,26 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getStatusStyle, formatDateLabel } from "./application-comments.utils";
+import { getStatusStyle, formatDateLabel } from "./utils";
 
 const MIN_REASON_LENGTH = 5;
 
-export default function ApplicationCommentsScreen() {
+export default function CreateAbsenceReportScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const {
     children,
     loading: childrenLoading,
     error: childrenError,
     refetch: refetchChildren,
   } = useChildrenList();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: 'Absence Report',
+      headerShown: true,
+    });
+  }, [navigation]);
   const [parentId, setParentId] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
     null,
@@ -43,7 +51,6 @@ export default function ApplicationCommentsScreen() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [reason, setReason] = useState("");
-  const [notes, setNotes] = useState("");
   const [requests, setRequests] = useState<StudentAbsenceRequestResponse[]>(
     [],
   );
@@ -76,6 +83,16 @@ export default function ApplicationCommentsScreen() {
     [isWeb],
   );
   const pointerStyle = isWeb ? ({ cursor: "pointer" } as ViewStyle) : undefined;
+
+  const calculateDays = useMemo(() => {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays;
+  }, [startDate, endDate]);
 
   const changeStartByDays = useCallback(
     (days: number) => {
@@ -196,7 +213,7 @@ export default function ApplicationCommentsScreen() {
         console.error("Failed to load parent info", error);
         Alert.alert(
           "Unable to load account",
-          "Không thể tải thông tin phụ huynh. Vui lòng thử lại.",
+          "Unable to load parent information. Please try again.",
         );
       }
     };
@@ -235,19 +252,6 @@ export default function ApplicationCommentsScreen() {
       ),
     [requests],
   );
-
-  const latestHistoryStatusStyle = useMemo(() => {
-    const latest = sortedRequests[0];
-    if (!latest) {
-      return {
-        label: "No requests",
-        color: "#475569",
-        background: "#E2E8F0",
-      };
-    }
-
-    return getStatusStyle(latest.status);
-  }, [sortedRequests]);
 
   const validateForm = () => {
     if (!selectedStudentId) {
@@ -307,21 +311,21 @@ export default function ApplicationCommentsScreen() {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         reason: reason.trim(),
-        notes: notes.trim() ? notes.trim() : undefined,
+        notes: undefined,
       });
 
-      Alert.alert("Request submitted", "We will review it as soon as possible.");
+      Alert.alert("Report submitted", "We will review it as soon as possible.");
       setReason("");
-      setNotes("");
       setStartDate(new Date());
       setEndDate(new Date());
       await loadRequests();
+      router.back();
     } catch (error: any) {
-      console.error("Failed to submit absence request", error);
+      console.error("Failed to submit absence report", error);
       const message =
         error.response?.data?.message ||
         error.message ||
-        "Unable to submit the request. Please try again.";
+        "Unable to submit the report. Please try again.";
       Alert.alert("Submission failed", message);
     } finally {
       setSubmitting(false);
@@ -521,7 +525,7 @@ export default function ApplicationCommentsScreen() {
               marginBottom: 8,
             }}
           >
-            Transportation absence request
+            Absence Report
           </Text>
           <Text
             style={{
@@ -531,7 +535,7 @@ export default function ApplicationCommentsScreen() {
               lineHeight: 18,
             }}
           >
-            Send an official bus absence request. The school will respond after
+            Send an official bus absence report. The school will respond after
             reviewing the student schedule.
           </Text>
         </View>
@@ -554,98 +558,44 @@ export default function ApplicationCommentsScreen() {
         >
           <View
             style={{
-              flexDirection: isWeb ? "row" : "column",
-              alignItems: isWeb ? "center" : "flex-start",
-              justifyContent: "space-between",
-              gap: 12,
+              flexDirection: "row",
+              alignItems: "center",
               marginBottom: 12,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: "#E0F7FA",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: 12,
-                }}
-              >
-                <Ionicons name="document-text-outline" size={24} color="#01CBCA" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    fontFamily: "RobotoSlab-Bold",
-                    fontSize: 16,
-                    color: "#042D3E",
-                  }}
-                >
-                  Create a new request
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: "RobotoSlab-Regular",
-                    fontSize: 12,
-                    color: "#6B7C93",
-                  }}
-                >
-                  Choose the student, absence window, and reason
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={() => router.push("/application-comments-history")}
-              style={[
-                {
-                  flexDirection: "row",
-                  alignItems: "center",
-                  alignSelf: isWeb ? "auto" : "stretch",
-                  justifyContent: "space-between",
-                  gap: 10,
-                  backgroundColor: "#F8FAFC",
-                  borderRadius: 999,
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                },
-                pointerStyle,
-              ]}
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: "#E0F7FA",
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: 12,
+              }}
             >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Ionicons name="time-outline" size={16} color="#0F172A" />
-                <Text
-                  style={{
-                    fontFamily: "RobotoSlab-Bold",
-                    fontSize: 12,
-                    color: "#0F172A",
-                  }}
-                >
-                  View history
-                </Text>
-              </View>
-              <View
+              <Ionicons name="document-text-outline" size={24} color="#01CBCA" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
                 style={{
-                  borderRadius: 999,
-                  backgroundColor: latestHistoryStatusStyle.background,
-                  paddingVertical: 4,
-                  paddingHorizontal: 10,
+                  fontFamily: "RobotoSlab-Bold",
+                  fontSize: 16,
+                  color: "#042D3E",
                 }}
               >
-                <Text
-                  style={{
-                    fontFamily: "RobotoSlab-Bold",
-                    fontSize: 11,
-                    color: latestHistoryStatusStyle.color,
-                  }}
-                >
-                  {latestHistoryStatusStyle.label}
-                </Text>
-              </View>
-            </TouchableOpacity>
+                Create a new report
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "RobotoSlab-Regular",
+                  fontSize: 12,
+                  color: "#6B7C93",
+                }}
+              >
+                Choose the student, absence window, and reason
+              </Text>
+            </View>
           </View>
 
           {renderStudentSelector()}
@@ -919,6 +869,33 @@ export default function ApplicationCommentsScreen() {
             </View>
           </View>
 
+          <View style={{ marginTop: 12 }}>
+            <View
+              style={{
+                backgroundColor: "#F0FDFA",
+                borderRadius: 14,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: "#99F6E4",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name="calendar" size={16} color="#047857" />
+              <Text
+                style={{
+                  fontFamily: "RobotoSlab-Bold",
+                  fontSize: 13,
+                  color: "#047857",
+                  marginLeft: 8,
+                }}
+              >
+                {calculateDays} {calculateDays === 1 ? "day" : "days"}
+              </Text>
+            </View>
+          </View>
+
           <View style={{ marginTop: 18 }}>
             <Text
               style={{
@@ -961,70 +938,6 @@ export default function ApplicationCommentsScreen() {
             </Text>
           </View>
 
-          <View style={{ marginTop: 18 }}>
-            <Text
-              style={{
-                fontFamily: "RobotoSlab-Bold",
-                fontSize: 13,
-                color: "#607587",
-                marginBottom: 6,
-              }}
-            >
-              Additional notes (optional)
-            </Text>
-            <TextInput
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Extra information for teachers or fleet operations..."
-              placeholderTextColor="#94A3B8"
-              multiline
-              style={{
-                minHeight: 70,
-                borderWidth: 1,
-                borderColor: "#E2E8F0",
-                borderRadius: 18,
-                padding: 14,
-                textAlignVertical: "top",
-                fontFamily: "RobotoSlab-Regular",
-                fontSize: 14,
-                color: "#122434",
-              }}
-            />
-          </View>
-
-          <View
-            style={{
-              marginTop: 16,
-              borderRadius: 18,
-              backgroundColor: "#F0FDFA",
-              padding: 14,
-              borderWidth: 1,
-              borderColor: "#99F6E4",
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: "RobotoSlab-Bold",
-                fontSize: 13,
-                color: "#047857",
-                marginBottom: 4,
-              }}
-            >
-              Reminder
-            </Text>
-            <Text
-              style={{
-                fontFamily: "RobotoSlab-Regular",
-                fontSize: 12,
-                color: "#0F766E",
-                lineHeight: 18,
-              }}
-            >
-              Only submit when the student has bus rides during the selected
-              period. The system will check for schedule conflicts automatically.
-            </Text>
-          </View>
-
           <TouchableOpacity
             onPress={handleSubmit}
             disabled={submitting || !selectedStudentId}
@@ -1047,7 +960,7 @@ export default function ApplicationCommentsScreen() {
                 color: "#FFFFFF",
               }}
             >
-              {submitting ? "Submitting..." : "Submit request"}
+              {submitting ? "Submitting..." : "Submit report"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1056,3 +969,4 @@ export default function ApplicationCommentsScreen() {
     </SafeAreaView>
   );
 }
+

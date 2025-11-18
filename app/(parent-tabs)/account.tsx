@@ -20,9 +20,9 @@ export default function ParentAccountScreen() {
     },
     {
       id: 3,
-      title: "Application comments",
-      icon: "chatbubble-outline",
-      description: "Application comments",
+      title: "Absence Report",
+      icon: "document-text-outline",
+      description: "Absence Report",
     },
     {
       id: 4,
