@@ -43,4 +43,16 @@ export interface StudentAbsenceRequestListResponse {
   pagination: PaginationInfo;
 }
 
+export type StudentAbsenceRequestSortOption = "Newest" | "Oldest";
+
+export interface StudentAbsenceRequestQueryParams
+  extends Record<string, unknown> {
+  startDate?: string;
+  endDate?: string;
+  status?: AbsenceRequestStatus;
+  sort?: StudentAbsenceRequestSortOption;
+  page?: number;
+  perPage?: number;
+}
+
 
