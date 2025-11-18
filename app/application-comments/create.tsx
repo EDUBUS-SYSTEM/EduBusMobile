@@ -24,7 +24,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getStatusStyle, formatDateLabel } from "./utils";
 
-const MIN_REASON_LENGTH = 5;
+const MIN_REASON_LENGTH = 30;
 
 export default function CreateAbsenceReportScreen() {
   const router = useRouter();
@@ -281,10 +281,19 @@ export default function CreateAbsenceReportScreen() {
       return false;
     }
 
-    if (reason.trim().length < MIN_REASON_LENGTH) {
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      Alert.alert(
+        "Reason is required",
+        "Please enter a reason.",
+      );
+      return false;
+    }
+
+    if (trimmedReason.length < MIN_REASON_LENGTH) {
       Alert.alert(
         "Reason is too short",
-        `Please enter at least ${MIN_REASON_LENGTH} characters.`,
+        `Please enter at least ${MIN_REASON_LENGTH} characters. You have entered ${trimmedReason.length} characters.`,
       );
       return false;
     }
@@ -929,12 +938,12 @@ export default function CreateAbsenceReportScreen() {
               style={{
                 fontFamily: "RobotoSlab-Regular",
                 fontSize: 12,
-                color: "#94A3B8",
+                color: reason.length < MIN_REASON_LENGTH ? "#EF4444" : "#94A3B8",
                 textAlign: "right",
                 marginTop: 4,
               }}
             >
-              {reason.length} characters
+              {reason.length} / {MIN_REASON_LENGTH} characters
             </Text>
           </View>
 

@@ -424,54 +424,25 @@ export default function AbsenceReportScreen() {
         }
       >
         <View style={[{ gap: 12, marginBottom: 16 }, responsiveCardStyle]}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <View style={{ gap: 4, flex: 1 }}>
-              <Text
-                style={{
-                  fontFamily: "RobotoSlab-Bold",
-                  fontSize: 18,
-                  color: "#001E2B",
-                }}
-              >
-                Absence Report
-              </Text>
-              <Text
-                style={{
-                  fontFamily: "RobotoSlab-Regular",
-                  fontSize: 12,
-                  color: "#6B7C93",
-                }}
-              >
-                Check the processing status of each absence report.
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => router.push("/application-comments/create")}
-              style={[
-                {
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: "#01CBCA",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 4,
-                  elevation: 3,
-                },
-                pointerStyle,
-              ]}
+          <View style={{ gap: 4 }}>
+            <Text
+              style={{
+                fontFamily: "RobotoSlab-Bold",
+                fontSize: 18,
+                color: "#001E2B",
+              }}
             >
-              <Ionicons name="add" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+              Absence Report
+            </Text>
+            <Text
+              style={{
+                fontFamily: "RobotoSlab-Regular",
+                fontSize: 12,
+                color: "#6B7C93",
+              }}
+            >
+              Check the processing status of each absence report.
+            </Text>
           </View>
 
           {childrenError ? (
@@ -509,6 +480,30 @@ export default function AbsenceReportScreen() {
 
         {renderContent()}
       </ScrollView>
+      <TouchableOpacity
+        onPress={() => router.push("/application-comments/create")}
+        style={[
+          {
+            position: "absolute",
+            bottom: 20,
+            right: 20,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: "#01CBCA",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 8,
+            elevation: 5,
+          },
+          pointerStyle,
+        ]}
+      >
+        <Ionicons name="add" size={28} color="#FFFFFF" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
