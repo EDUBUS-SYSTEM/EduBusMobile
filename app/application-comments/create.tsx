@@ -7,7 +7,6 @@ import { useRouter, useNavigation } from "expo-router";
 import { useChildrenList } from "@/hooks/useChildren";
 import { authApi } from "@/lib/auth/auth.api";
 import { studentAbsenceRequestApi } from "@/lib/parent/studentAbsenceRequest.api";
-import type { StudentAbsenceRequestResponse } from "@/lib/parent/studentAbsenceRequest.type";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -22,7 +21,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getStatusStyle, formatDateLabel } from "./utils";
+import { formatDateLabel } from "./utils";
 
 const MIN_REASON_LENGTH = 30;
 
@@ -51,9 +50,6 @@ export default function CreateAbsenceReportScreen() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [reason, setReason] = useState("");
-  const [requests, setRequests] = useState<StudentAbsenceRequestResponse[]>(
-    [],
-  );
   const [submitting, setSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isIOS = Platform.OS === "ios";
@@ -227,32 +223,6 @@ export default function CreateAbsenceReportScreen() {
     }
   }, [children, selectedStudentId]);
 
-  const loadRequests = useCallback(async () => {
-    if (!parentId) return;
-
-    try {
-      const data = await studentAbsenceRequestApi.getByParent(parentId);
-      setRequests(data);
-    } catch (error: any) {
-      console.error("Failed to load absence requests", error);
-    }
-  }, [parentId]);
-
-  useEffect(() => {
-    if (parentId) {
-      void loadRequests();
-    }
-  }, [parentId, loadRequests]);
-
-  const sortedRequests = useMemo(
-    () =>
-      [...requests].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      ),
-    [requests],
-  );
-
   const validateForm = () => {
     if (!selectedStudentId) {
       Alert.alert("No student selected", "Please choose a student first.");
@@ -327,7 +297,6 @@ export default function CreateAbsenceReportScreen() {
       setReason("");
       setStartDate(new Date());
       setEndDate(new Date());
-      await loadRequests();
       router.back();
     } catch (error: any) {
       console.error("Failed to submit absence report", error);
@@ -344,10 +313,7 @@ export default function CreateAbsenceReportScreen() {
   const handleRefresh = async () => {
     try {
       setIsRefreshing(true);
-      await Promise.all([
-        refetchChildren ? refetchChildren() : Promise.resolve(),
-        loadRequests(),
-      ]);
+      await (refetchChildren ? refetchChildren() : Promise.resolve());
     } finally {
       setIsRefreshing(false);
     }
@@ -943,7 +909,7 @@ export default function CreateAbsenceReportScreen() {
                 marginTop: 4,
               }}
             >
-              {reason.length} / {MIN_REASON_LENGTH} characters
+              Min {MIN_REASON_LENGTH} characters
             </Text>
           </View>
 
