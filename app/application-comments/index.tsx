@@ -99,8 +99,8 @@ export default function AbsenceReportScreen() {
     setRequestsLoading(true);
     setRequestsError(null);
     try {
-      const data = await studentAbsenceRequestApi.getByParent(parentId);
-      setRequests(data);
+      const response = await studentAbsenceRequestApi.getByParent();
+      setRequests(response.data ?? []);
     } catch (error: any) {
       console.error("Failed to load absence requests", error);
       const message =

@@ -4,7 +4,11 @@ export type RawAbsenceRequestStatus = AbsenceRequestStatus | 0 | 1 | 2;
 export interface StudentAbsenceRequestResponse {
   id: string;
   studentId: string;
-  parentId: string;
+  parentId?: string;
+  studentName?: string;
+  parentName?: string;
+  parentEmail?: string;
+  parentPhoneNumber?: string;
   startDate: string;
   endDate: string;
   reason: string;
@@ -23,6 +27,20 @@ export interface CreateStudentAbsenceRequestPayload {
   endDate: string;
   reason: string;
   notes?: string;
+}
+
+export interface PaginationInfo {
+  currentPage: number;
+  perPage: number;
+  totalItems: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+export interface StudentAbsenceRequestListResponse {
+  data: StudentAbsenceRequestResponse[];
+  pagination: PaginationInfo;
 }
 
 
