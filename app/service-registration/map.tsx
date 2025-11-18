@@ -18,8 +18,7 @@ import { WebView } from 'react-native-webview';
 import { pickupPointApi } from '@/lib/parent/pickupPoint.api';
 import { childrenApi } from '@/lib/parent/children.api';
 import { authApi } from '@/lib/auth/auth.api';
-import { apiService } from '@/lib/api';
-import { API_CONFIG } from '@/constants/ApiConfig';
+import { useSchoolInfo } from '@/hooks/useSchoolInfo';
 import type { Child } from '@/lib/parent/children.type';
 
 interface Student {
@@ -60,10 +59,20 @@ interface VietMapGeocodeResult {
   data_new?: unknown;
 }
 
-const SCHOOL_LOCATION = {
+const FALLBACK_SCHOOL_LOCATION = {
   lat: 15.9796,
   lng: 108.2605,
 };
+
+const FALLBACK_SCHOOL_NAME = 'FPT School Da Nang';
+
+const sanitizeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 // Helper function to decode polyline encoded string
 function decodePolyline(encoded: string): { lat: number; lng: number }[] {
@@ -181,6 +190,27 @@ export default function MapScreen() {
   const handleTempLocationSelectedRef = useRef<((coords: { lat: number; lng: number }, address: string) => Promise<void>) | null>(null);
   const handleMarkerClickRef = useRef<((coords: { lat: number; lng: number }, address: string) => void) | null>(null);
   const mapInstanceRef = useRef<any>(null);
+  const { schoolInfo } = useSchoolInfo();
+
+  const schoolLocation = useMemo(() => {
+    if (typeof schoolInfo?.latitude === 'number' && typeof schoolInfo?.longitude === 'number') {
+      return {
+        lat: schoolInfo.latitude,
+        lng: schoolInfo.longitude,
+      };
+    }
+    return FALLBACK_SCHOOL_LOCATION;
+  }, [schoolInfo?.latitude, schoolInfo?.longitude]);
+
+  const schoolName = useMemo(
+    () => schoolInfo?.schoolName?.trim() || FALLBACK_SCHOOL_NAME,
+    [schoolInfo?.schoolName]
+  );
+
+  const schoolAddress = useMemo(
+    () => schoolInfo?.displayAddress?.trim() || schoolInfo?.fullAddress?.trim() || '',
+    [schoolInfo?.displayAddress, schoolInfo?.fullAddress]
+  );
 
   // Load data on mount
   useEffect(() => {
@@ -413,7 +443,7 @@ export default function MapScreen() {
       autocompleteTimeoutRef.current = setTimeout(async () => {
         try {
           setIsSearching(true);
-          const results = await autocomplete(value, SCHOOL_LOCATION);
+          const results = await autocomplete(value, schoolLocation);
           setSearchResults(results);
           setShowSearchResults(results.length > 0);
         } catch (error) {
@@ -428,7 +458,7 @@ export default function MapScreen() {
       setSearchResults([]);
       setShowSearchResults(false);
     }
-  }, []);
+  }, [schoolLocation]);
 
   // Handle search button click
   const handleSearch = useCallback(async () => {
@@ -441,7 +471,7 @@ export default function MapScreen() {
     setShowSearchResults(false);
     
     try {
-      const results = await geocode(searchQuery, SCHOOL_LOCATION);
+      const results = await geocode(searchQuery, schoolLocation);
       if (results.length > 0) {
         setSearchResults(results);
         setShowSearchResults(true);
@@ -454,7 +484,7 @@ export default function MapScreen() {
     } finally {
       setIsSearching(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, schoolLocation]);
 
   // Handle temp location selection (when clicking on map)
   const handleTempLocationSelected = useCallback(async (coords: { lat: number; lng: number }, address: string) => {
@@ -473,7 +503,7 @@ export default function MapScreen() {
     setFare('');
 
     // Get actual route from VietMap Directions API
-    const routeData = await getRoute(coords, SCHOOL_LOCATION, apiKey);
+    const routeData = await getRoute(coords, schoolLocation, apiKey);
     
     if (routeData) {
       const distanceKm = routeData.distance;
@@ -516,12 +546,12 @@ export default function MapScreen() {
     } else {
       // Fallback to Haversine distance if API fails
       const R = 6371;
-      const dLat = ((SCHOOL_LOCATION.lat - coords.lat) * Math.PI) / 180;
-      const dLng = ((SCHOOL_LOCATION.lng - coords.lng) * Math.PI) / 180;
+      const dLat = ((schoolLocation.lat - coords.lat) * Math.PI) / 180;
+      const dLng = ((schoolLocation.lng - coords.lng) * Math.PI) / 180;
       const a =
         Math.sin(dLat / 2) * Math.sin(dLat / 2) +
         Math.cos((coords.lat * Math.PI) / 180) *
-          Math.cos((SCHOOL_LOCATION.lat * Math.PI) / 180) *
+          Math.cos((schoolLocation.lat * Math.PI) / 180) *
           Math.sin(dLng / 2) *
           Math.sin(dLng / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
@@ -543,7 +573,7 @@ export default function MapScreen() {
     }
 
     setIsRouting(false);
-  }, [unitPrice, calculateSemesterFee]);
+  }, [unitPrice, calculateSemesterFee, schoolLocation]);
 
   // Update ref when callback changes
   useEffect(() => {
@@ -773,17 +803,15 @@ export default function MapScreen() {
     if (Platform.OS !== 'web') return;
 
     const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || 'YOUR_API_KEY_HERE';
-    
-    // Load VietMap scripts
+
     const loadScript = (src: string): Promise<void> => {
       return new Promise((resolve, reject) => {
-        // Check if script already loaded
         const existingScript = document.querySelector(`script[src="${src}"]`);
         if (existingScript) {
           resolve();
           return;
         }
-        
+
         const script = document.createElement('script');
         script.src = src;
         script.async = true;
@@ -794,10 +822,9 @@ export default function MapScreen() {
     };
 
     const loadStylesheet = (href: string): void => {
-      // Check if stylesheet already loaded
       const existingLink = document.querySelector(`link[href="${href}"]`);
       if (existingLink) return;
-      
+
       const link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = href;
@@ -806,38 +833,36 @@ export default function MapScreen() {
 
     const initWebMap = async () => {
       try {
-        // Wait a bit for the DOM element to be ready
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         if (!webMapRef.current) {
           console.warn('Web map ref not available');
           return;
         }
 
-        // Get the actual DOM element (React Native Web renders View as div)
         const mapElement = webMapRef.current as any;
-        const domElement = mapElement._internalFiberInstanceHandleDEV?.stateNode || 
-                         mapElement._reactInternalFiber ||
-                         mapElement;
-        
-        // Get the actual HTML element
+        const domElement =
+          mapElement._internalFiberInstanceHandleDEV?.stateNode ||
+          mapElement._reactInternalFiber ||
+          mapElement;
+
         let htmlElement: HTMLElement | null = null;
         if (domElement && domElement.nodeType === 1) {
           htmlElement = domElement;
         } else if (typeof document !== 'undefined') {
-          // Fallback: find by ID or create wrapper
-          htmlElement = document.getElementById('web-map-container') || 
-                       (() => {
-                         const div = document.createElement('div');
-                         div.id = 'web-map-container';
-                         div.style.width = '100%';
-                         div.style.height = '100%';
-                         div.style.minHeight = '400px';
-                         if (mapElement && mapElement.appendChild) {
-                           mapElement.appendChild(div);
-                         }
-                         return div;
-                       })();
+          htmlElement =
+            document.getElementById('web-map-container') ||
+            (() => {
+              const div = document.createElement('div');
+              div.id = 'web-map-container';
+              div.style.width = '100%';
+              div.style.height = '100%';
+              div.style.minHeight = '400px';
+              if (mapElement && mapElement.appendChild) {
+                mapElement.appendChild(div);
+              }
+              return div;
+            })();
         }
 
         if (!htmlElement) {
@@ -845,49 +870,49 @@ export default function MapScreen() {
           return;
         }
 
-        // Load VietMap CSS from unpkg CDN
         loadStylesheet(`https://unpkg.com/@vietmap/vietmap-gl-js@6.0.0/dist/vietmap-gl.css`);
-        
-        // Load VietMap JS from unpkg CDN
         await loadScript(`https://unpkg.com/@vietmap/vietmap-gl-js@6.0.0/dist/vietmap-gl.js`);
-        
-        // Wait for vietmapgl to be available in global scope
-        // When loaded via script tag from unpkg, it should be available as window.vietmapgl
+
         let retries = 0;
         let vietmapgl: any = null;
-        
+
         while (retries < 25) {
-          // Check window.vietmapgl (most common)
           if ((window as any).vietmapgl) {
             vietmapgl = (window as any).vietmapgl;
             break;
           }
-          
-          // Check globalThis.vietmapgl
+
           if ((globalThis as any).vietmapgl) {
             vietmapgl = (globalThis as any).vietmapgl;
             break;
           }
-          
-          await new Promise(resolve => setTimeout(resolve, 200));
+
+          await new Promise((resolve) => setTimeout(resolve, 200));
           retries++;
         }
-        
+
         if (!vietmapgl) {
-          // Log debugging info
           console.error('Script loaded but vietmapgl not found. Checking available globals...');
-          const vietKeys = Object.keys(window).filter(k => k.toLowerCase().includes('viet') || k.toLowerCase().includes('map'));
+          const vietKeys = Object.keys(window).filter(
+            (k) => k.toLowerCase().includes('viet') || k.toLowerCase().includes('map')
+          );
           console.error('VietMap-related globals:', vietKeys);
           console.error('All window properties:', Object.keys(window).slice(0, 20));
-          throw new Error('VietMap library failed to load. The script loaded but vietmapgl is not available in global scope.');
+          throw new Error(
+            'VietMap library failed to load. The script loaded but vietmapgl is not available in global scope.'
+          );
         }
-        
-        console.log('VietMap library loaded successfully:', typeof vietmapgl);
-        const schoolLocation = [108.2605, 15.9796];
-        
-        // Create map container div
+
+        const schoolLngLat: [number, number] = [schoolLocation.lng, schoolLocation.lat];
+        const schoolNameHtml = sanitizeHtml(schoolName);
+        const schoolAddressHtml = schoolAddress ? sanitizeHtml(schoolAddress) : '';
+        const schoolPopupHtml =
+          schoolAddressHtml.length > 0
+            ? `<b>${schoolNameHtml}</b><br />${schoolAddressHtml}`
+            : `<b>${schoolNameHtml}</b>`;
+
         htmlElement.innerHTML = '<div id="web-map" style="width: 100%; height: 100%;"></div>';
-        
+
         const mapContainer = htmlElement.querySelector('#web-map') as HTMLElement;
         if (!mapContainer) {
           throw new Error('Could not create map container');
@@ -896,18 +921,16 @@ export default function MapScreen() {
         const map = new vietmapgl.Map({
           container: mapContainer,
           style: `https://maps.vietmap.vn/maps/styles/tm/style.json?apikey=${apiKey}`,
-          center: schoolLocation,
-          zoom: 14
+          center: schoolLngLat,
+          zoom: 14,
         });
 
-        // Store map instance for route drawing
         (webMapRef.current as any)._mapInstance = map;
 
         let marker: any = null;
         let routeLayer: any = null;
         let routeSource: any = null;
 
-        // Function to clear existing route
         const clearRoute = () => {
           if (routeLayer && map.getLayer(routeLayer)) {
             map.removeLayer(routeLayer);
@@ -919,7 +942,6 @@ export default function MapScreen() {
           routeSource = null;
         };
 
-        // Function to draw route
         const drawRoute = (coordinates: { lat: number; lng: number }[]) => {
           clearRoute();
 
@@ -931,8 +953,8 @@ export default function MapScreen() {
             properties: {},
             geometry: {
               type: 'LineString',
-              coordinates: coordinates.map(coord => [coord.lng, coord.lat])
-            }
+              coordinates: coordinates.map((coord) => [coord.lng, coord.lat]),
+            },
           };
 
           if (map.getSource(sourceId)) {
@@ -940,7 +962,7 @@ export default function MapScreen() {
           } else {
             map.addSource(sourceId, {
               type: 'geojson',
-              data: geoJsonData
+              data: geoJsonData,
             });
           }
 
@@ -951,12 +973,12 @@ export default function MapScreen() {
               source: sourceId,
               layout: {
                 'line-join': 'round',
-                'line-cap': 'round'
+                'line-cap': 'round',
               },
               paint: {
                 'line-color': '#0066CC',
-                'line-width': 4
-              }
+                'line-width': 4,
+              },
             });
           }
 
@@ -965,20 +987,17 @@ export default function MapScreen() {
         };
 
         map.on('load', () => {
-          // Add school marker
-          new vietmapgl.Marker({ color: 'red' })
-            .setLngLat(schoolLocation)
-            .setPopup(new vietmapgl.Popup().setHTML('<b>FPT School Đà Nẵng</b>'))
+          const schoolMarker = new vietmapgl.Marker({ color: 'red' })
+            .setLngLat(schoolLngLat)
+            .setPopup(new vietmapgl.Popup().setHTML(schoolPopupHtml))
             .addTo(map);
+          (map as any)._schoolMarker = schoolMarker;
         });
 
-        // Handle map click
         map.on('click', async (e: any) => {
-          // Check if click is on marker
           if (marker && e.originalEvent) {
             const markerElement = marker.getElement();
             if (markerElement && markerElement.contains(e.originalEvent.target)) {
-              // Click on marker - confirm location
               const coords = marker.getLngLat();
               if (handleMarkerClickRef.current) {
                 handleMarkerClickRef.current(
@@ -989,26 +1008,22 @@ export default function MapScreen() {
               return;
             }
           }
-          
-          // Click on map - select new location
+
           const coords = e.lngLat;
-          
+
           if (marker) marker.remove();
           clearRoute();
-          
-          // Create marker with click handler
+
           marker = new vietmapgl.Marker({ color: '#FDC700' })
             .setLngLat(coords)
-            .setPopup(new vietmapgl.Popup().setHTML('<b>Selected Location</b><br>Click marker to confirm'))
+            .setPopup(
+              new vietmapgl.Popup().setHTML('<b>Selected Location</b><br>Click marker to confirm')
+            )
             .addTo(map);
-          
-          // Store marker in map instance for external access
+
           (map as any)._marker = marker;
-          
-          // Open popup
           marker.togglePopup();
-          
-          // Call React Native handler to get route
+
           if (handleTempLocationSelectedRef.current) {
             handleTempLocationSelectedRef.current(
               { lat: coords.lat, lng: coords.lng },
@@ -1017,23 +1032,17 @@ export default function MapScreen() {
           }
         });
 
-        // Listen for route coordinates from React Native
         const handleRouteData = (coordinates: { lat: number; lng: number }[]) => {
           if (coordinates && coordinates.length > 0) {
             drawRoute(coordinates);
           }
         };
 
-        // Store route handler on map instance
         (map as any)._drawRoute = handleRouteData;
-        
-        // Initialize marker reference in map instance
         (map as any)._marker = null;
-        
-        // Store map instance in ref for later use
+
         mapInstanceRef.current = map;
 
-        // Add get current location button
         const buttonContainer = document.createElement('div');
         buttonContainer.style.cssText = `
           position: absolute;
@@ -1048,7 +1057,8 @@ export default function MapScreen() {
           max-width: 400px;
         `;
         buttonContainer.innerHTML = `
-          <p><strong>School Location:</strong> FPT School Đà Nẵng</p>
+          <p><strong>School Location:</strong> ${schoolNameHtml}</p>
+          ${schoolAddressHtml ? `<p style="font-size: 12px; color: #666; margin-top: -6px;">${schoolAddressHtml}</p>` : ''}
           <p style="font-size: 12px; color: #666;">Click on the map to select your home location</p>
           <button id="get-location-btn" style="
             background: #FDC700;
@@ -1062,10 +1072,9 @@ export default function MapScreen() {
             margin-top: 10px;
           ">📍 Get My Location</button>
         `;
-        
+
         htmlElement.appendChild(buttonContainer);
 
-        // Handle get current location button
         const getLocationBtn = buttonContainer.querySelector('#get-location-btn');
         if (getLocationBtn) {
           getLocationBtn.addEventListener('click', () => {
@@ -1074,17 +1083,16 @@ export default function MapScreen() {
                 (position) => {
                   const coords = [position.coords.longitude, position.coords.latitude];
                   map.flyTo({ center: coords, zoom: 15 });
-                  
+
                   if (marker) marker.remove();
-                  
+
                   marker = new vietmapgl.Marker({ color: '#FDC700' })
                     .setLngLat(coords)
                     .setPopup(new vietmapgl.Popup().setHTML('<b>My Location</b>'))
                     .addTo(map);
-                  
-                  // Store marker in map instance for external access
+
                   (map as any)._marker = marker;
-                  
+
                   if (handleTempLocationSelectedRef.current) {
                     handleTempLocationSelectedRef.current(
                       { lat: position.coords.latitude, lng: position.coords.longitude },
@@ -1099,7 +1107,6 @@ export default function MapScreen() {
             }
           });
         }
-
       } catch (error) {
         console.error('Error initializing web map:', error);
         if (webMapRef.current) {
@@ -1110,7 +1117,9 @@ export default function MapScreen() {
               <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: red; padding: 20px;">
                 <div>
                   <p>⚠️ Failed to load map</p>
-                  <p style="font-size: 12px;">${error instanceof Error ? error.message : 'Unknown error'}</p>
+                  <p style="font-size: 12px;">${
+                    error instanceof Error ? error.message : 'Unknown error'
+                  }</p>
                 </div>
               </div>
             `;
@@ -1119,16 +1128,20 @@ export default function MapScreen() {
       }
     };
 
-    // Only initialize map if it doesn't exist yet
-    if (!mapInstanceRef.current) {
-      initWebMap();
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove?.();
+      mapInstanceRef.current = null;
     }
 
-    // Cleanup
+    initWebMap();
+
     return () => {
-      // Cleanup will be handled by React
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove?.();
+        mapInstanceRef.current = null;
+      }
     };
-  }, []); // Empty dependency array - only run once on mount
+  }, [schoolAddress, schoolName, schoolLocation.lat, schoolLocation.lng]);
 
   // Submit request
   const handleSubmitRequest = async () => {
@@ -1186,7 +1199,18 @@ export default function MapScreen() {
   // Use useMemo to cache HTML and prevent WebView reload
   const mapHTML = useMemo(() => {
     const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || 'YOUR_API_KEY_HERE';
-    
+    const schoolLng = schoolLocation.lng;
+    const schoolLat = schoolLocation.lat;
+    const schoolNameHtml = sanitizeHtml(schoolName);
+    const schoolAddressHtml = schoolAddress ? sanitizeHtml(schoolAddress) : '';
+    const schoolPopupHtml =
+      schoolAddressHtml.length > 0
+        ? `<b>${schoolNameHtml}</b><br />${schoolAddressHtml}`
+        : `<b>${schoolNameHtml}</b>`;
+    const infoPanelAddress = schoolAddressHtml
+      ? `<p style="font-size: 12px; color: #666; margin-top: -6px;">${schoolAddressHtml}</p>`
+      : '';
+
     return `
 <!DOCTYPE html>
 <html>
@@ -1233,13 +1257,14 @@ export default function MapScreen() {
 <body>
   <div id="map"></div>
   <div class="info-panel">
-    <p><strong>School Location:</strong> FPT School Đà Nẵng</p>
+    <p><strong>School Location:</strong> ${schoolNameHtml}</p>
+    ${infoPanelAddress}
     <p style="font-size: 12px; color: #666;">Click on the map to select your home location</p>
     <button class="button" onclick="getCurrentLocation()">📍 Get My Location</button>
     <div id="error" class="error"></div>
   </div>
   <script>
-    const schoolLocation = [108.2605, 15.9796];
+    const schoolLocation = [${schoolLng}, ${schoolLat}];
     let map;
     let marker = null;
     let routeLayer = null;
@@ -1326,7 +1351,7 @@ export default function MapScreen() {
           // Add school marker
           new vietmapgl.Marker({ color: 'red' })
             .setLngLat(schoolLocation)
-            .setPopup(new vietmapgl.Popup().setHTML('<b>FPT School Đà Nẵng</b>'))
+            .setPopup(new vietmapgl.Popup().setHTML('${schoolPopupHtml}'))
             .addTo(map);
         });
         
@@ -1437,7 +1462,7 @@ export default function MapScreen() {
 </body>
 </html>
     `;
-  }, []); // Empty dependency array - HTML doesn't need to change
+  }, [schoolAddress, schoolLocation.lat, schoolLocation.lng, schoolName]);
 
   if (isLoading) {
     return (

@@ -192,16 +192,16 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
         continue;
       }
       
-      // API đã filter sẵn chỉ trả về stops của parent
-      // Pickup = stop đầu tiên, Dropoff = stop cuối cùng
+      // API already filters to only include the parent's stops
+      // Pickup = first stop, Drop-off = last stop
       const firstStop = trip.stops[0];
       const lastStop = trip.stops[trip.stops.length - 1];
       
-      // Lấy child info từ attendance (nếu có)
+      // Fetch child info from attendance (if available)
       let childId: Guid | undefined;
       let childName: string | undefined;
       
-      // Tìm child đầu tiên từ attendance
+      // Find the first child record from attendance
       for (const stop of trip.stops) {
         if (stop.attendance && stop.attendance.length > 0) {
           const firstAttendance = stop.attendance[0];
@@ -211,7 +211,7 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
         }
       }
       
-      // Fallback: nếu không có attendance, lấy từ children API
+      // Fallback: if no attendance data, fetch from the children API
       if (!childId || !childName) {
         try {
           const userInfo = await authApi.getUserInfo();
@@ -227,7 +227,7 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
         }
       }
       
-      // Nếu vẫn không có child info, skip trip này
+      // If child info is still missing, skip this trip
       if (!childId || !childName) {
         continue;
       }
@@ -318,12 +318,12 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
       return null;
     }
     
-    // API đã filter sẵn chỉ trả về stops của parent
-    // Pickup = stop đầu tiên, Dropoff = stop cuối cùng
+    // API already filters to only include the parent's stops
+    // Pickup = first stop, Drop-off = last stop
     const firstStop = response.stops[0];
     const lastStop = response.stops[response.stops.length - 1];
     
-    // Lấy child info từ attendance (nếu có)
+    // Fetch child info from attendance (if available)
     let childId: Guid | undefined;
     let childName: string | undefined;
     

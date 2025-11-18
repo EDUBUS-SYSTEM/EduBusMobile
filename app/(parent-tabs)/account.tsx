@@ -20,9 +20,9 @@ export default function ParentAccountScreen() {
     },
     {
       id: 3,
-      title: "Application comments",
-      icon: "chatbubble-outline",
-      description: "Application comments",
+      title: "Absence Report",
+      icon: "document-text-outline",
+      description: "Absence Report",
     },
     {
       id: 4,
@@ -261,6 +261,14 @@ export default function ParentAccountScreen() {
             onPress={async () => {
               if (item.id === 1) {
                 router.push("/account-profile" as any);
+                return;
+              }
+              if (item.id === 2) {
+                router.push("/school-information" as any);
+                return;
+              }
+              if (item.id === 3) {
+                router.push("/application-comments" as any);
                 return;
               }
               if (item.id === 7) {

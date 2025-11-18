@@ -60,8 +60,6 @@ export default function AccountProfileScreen() {
         const raw = await apiService.get<any>(
           `${API_CONFIG.ENDPOINTS.USER.PROFILE}/${userId}`
         );
-        console.log("Raw API response:", raw);
-        console.log("User ID from JWT:", userId);
 
         const normalized: UserResponse = {
           id: raw.Id || raw.id,
@@ -71,7 +69,6 @@ export default function AccountProfileScreen() {
           phoneNumber: raw.PhoneNumber || raw.phoneNumber,
           dateOfBirth: raw.DateOfBirth || raw.dateOfBirth,
         };
-        console.log("Normalized profile:", normalized);
 
         setProfile(normalized);
         const name = [normalized.firstName, normalized.lastName]
@@ -83,8 +80,10 @@ export default function AccountProfileScreen() {
         // noop
       }
     };
+
     loadProfile();
   }, []);
+
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>

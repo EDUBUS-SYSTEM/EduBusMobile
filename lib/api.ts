@@ -29,7 +29,7 @@ function normalizeBaseUrl(url: string): string {
 
 const API_BASE_URL = normalizeBaseUrl(RAW_API_BASE_URL);
 
-// Tạo axios instance với cấu hình mặc định
+// Create an axios instance with default configuration
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
@@ -42,7 +42,7 @@ if (process.env.NODE_ENV !== 'production') {
   console.log('API_BASE_URL =>', API_BASE_URL);
 }
 
-// Request interceptor để thêm token vào header
+// Request interceptor to attach the auth token
 apiClient.interceptors.request.use(
   async (config) => {
     try {
@@ -57,7 +57,7 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor để xử lý lỗi
+// Response interceptor to handle errors
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -72,7 +72,7 @@ apiClient.interceptors.response.use(
   }
 );
 
-// Các hàm helper cho API calls
+// Helper methods for API calls
 export const apiService = {
   get: async <T>(url: string, params?: Record<string, unknown>): Promise<T> => {
     const response = await apiClient.get(url, { params });

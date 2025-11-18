@@ -4,24 +4,24 @@ const baseDate = new Date().toISOString().split('T')[0];
 
 const makeIso = (date: string, time: string) => `${date}T${time}:00.000Z`;
 
-// Định nghĩa các điểm đón/trả rõ ràng
-// CHUYẾN ĐI (Morning): Đón học sinh ở nhà → Trả ở trường
+// Define clear pickup/drop-off locations
+// MORNING TRIP: Pick students up at home → Drop at school
 const morningStops = [
-  { name: 'Dragon Bridge', addr: '2 Thang 9 Street, Hai Chau, Da Nang', lat: 16.047, lng: 108.206 },
-  { name: 'Ngu Hanh Son', addr: 'Ngu Hanh Son District, Da Nang', lat: 16.050, lng: 108.209 },
-  { name: 'Son Tra Beach', addr: 'Son Tra District, Da Nang', lat: 16.053, lng: 108.212 },
-  { name: 'FPT University', addr: 'FPT University, Da Nang', lat: 16.056, lng: 108.215 }, // Trường - điểm cuối
+  { name: 'Dragon Bridge', addr: '2 September Street, Central District, Da Nang', lat: 16.047, lng: 108.206 },
+  { name: 'Marble Mountains', addr: 'Marble Mountains District, Da Nang', lat: 16.050, lng: 108.209 },
+  { name: 'Coastal Park', addr: 'Coastal District, Da Nang', lat: 16.053, lng: 108.212 },
+  { name: 'FPT University', addr: 'FPT University, Da Nang', lat: 16.056, lng: 108.215 }, // School - final stop
 ];
 
-// CHUYẾN VỀ (Afternoon): Đón học sinh ở trường → Trả ở nhà (NGƯỢC LẠI)
+// AFTERNOON TRIP: Pick students up at school → Drop at home (reverse)
 const afternoonStops = [
-  { name: 'FPT University', addr: 'FPT University, Da Nang', lat: 16.056, lng: 108.215 }, // Trường - điểm đầu
-  { name: 'Son Tra Beach', addr: 'Son Tra District, Da Nang', lat: 16.053, lng: 108.212 },
-  { name: 'Ngu Hanh Son', addr: 'Ngu Hanh Son District, Da Nang', lat: 16.050, lng: 108.209 },
-  { name: 'Dragon Bridge', addr: '2 Thang 9 Street, Hai Chau, Da Nang', lat: 16.047, lng: 108.206 }, // Nhà - điểm cuối
+  { name: 'FPT University', addr: 'FPT University, Da Nang', lat: 16.056, lng: 108.215 }, // School - starting point
+  { name: 'Coastal Park', addr: 'Coastal District, Da Nang', lat: 16.053, lng: 108.212 },
+  { name: 'Marble Mountains', addr: 'Marble Mountains District, Da Nang', lat: 16.050, lng: 108.209 },
+  { name: 'Dragon Bridge', addr: '2 September Street, Central District, Da Nang', lat: 16.047, lng: 108.206 }, // Home - final stop
 ];
 
-// Tạo stops cho chuyến đi (Morning)
+// Build stops for the morning trip
 const createMorningStops = (date: string, startHour: string): DriverTripDto['stops'] => {
   const times = ['05', '20', '35', '55'];
   const stopGuids = [
@@ -44,7 +44,7 @@ const createMorningStops = (date: string, startHour: string): DriverTripDto['sto
   }));
 };
 
-// Tạo stops cho chuyến về (Afternoon) - NGƯỢC LẠI
+// Build stops for the afternoon trip (reverse order)
 const createAfternoonStops = (date: string, startHour: string): DriverTripDto['stops'] => {
   const times = ['05', '20', '35', '55'];
   const stopGuids = [
@@ -61,23 +61,23 @@ const createAfternoonStops = (date: string, startHour: string): DriverTripDto['s
     address: afternoonStops[idx].addr,
     latitude: afternoonStops[idx].lat,
     longitude: afternoonStops[idx].lng,
-    totalStudents: 4 - idx, // Ngược lại: từ 4 xuống 1
+    totalStudents: 4 - idx, // Reverse order: from 4 down to 1
     presentStudents: 0,
     absentStudents: 0,
   }));
 };
 
-// Thời gian chuyến đi (Morning - đưa đến trường)
+// Time window for the morning trip (drop at school)
 const morningTripStartTime = '07:00';
 const morningTripEndTime = '08:00';
-// Thời gian chuyến về (Afternoon - đón từ trường)
+// Time window for the afternoon trip (pick up from school)
 const afternoonTripStartTime = '17:00';
 const afternoonTripEndTime = '18:00';
 
 export const mockDriverTrips: DriverTripDto[] = [
   // ============================================
-  // CHUYẾN ĐI (MORNING) - Đưa học sinh đến trường
-  // Stops: Nhà → Trường (Dragon Bridge → Ngu Hanh Son → Son Tra Beach → FPT University)
+  // MORNING TRIP - Bringing students to school
+  // Stops: Home → School (Dragon Bridge → Marble Mountains → Coastal Park → FPT University)
   // ============================================
   {
     id: '550e8400-e29b-41d4-a716-446655440001',
@@ -86,7 +86,7 @@ export const mockDriverTrips: DriverTripDto[] = [
     plannedStartAt: makeIso(baseDate, morningTripStartTime),
     plannedEndAt: makeIso(baseDate, morningTripEndTime),
     status: 'Scheduled',
-    scheduleName: 'Morning Shift - Đưa đến trường',
+    scheduleName: 'Morning Shift - Drop off at school',
     totalStops: 4,
     completedStops: 0,
     stops: createMorningStops(baseDate, '07'),
@@ -96,9 +96,9 @@ export const mockDriverTrips: DriverTripDto[] = [
     updatedAt: `${baseDate}T00:00:00.000Z`,
   },
   // ============================================
-  // CHUYẾN VỀ (AFTERNOON) - Đón học sinh từ trường
-  // Stops: Trường → Nhà (FPT University → Son Tra Beach → Ngu Hanh Son → Dragon Bridge)
-  // NGƯỢC LẠI so với chuyến đi
+  // AFTERNOON TRIP - Bringing students back home
+  // Stops: School → Home (FPT University → Coastal Park → Marble Mountains → Dragon Bridge)
+  // Reverse order versus the morning trip
   // ============================================
   {
     id: '550e8400-e29b-41d4-a716-446655440002',
@@ -107,7 +107,7 @@ export const mockDriverTrips: DriverTripDto[] = [
     plannedStartAt: makeIso(baseDate, afternoonTripStartTime),
     plannedEndAt: makeIso(baseDate, afternoonTripEndTime),
     status: 'Scheduled',
-    scheduleName: 'Afternoon Shift - Đón từ trường',
+    scheduleName: 'Afternoon Shift - Pick up from school',
     totalStops: 4,
     completedStops: 0,
     stops: createAfternoonStops(baseDate, '17'),

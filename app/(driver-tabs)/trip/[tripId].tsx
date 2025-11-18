@@ -4,7 +4,7 @@ import { tripHubService } from '@/lib/signalr/tripHub.service';
 import type { Guid } from '@/lib/types';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
+import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@/components/vietmap';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useRef, useState } from 'react';
@@ -300,7 +300,7 @@ export default function TripDetailScreen() {
   const getMapBounds = React.useCallback(() => {
     if (!trip || !trip.stops || trip.stops.length === 0) {
       return {
-        centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Đà Nẵng
+        centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Da Nang
         zoomLevel: 12,
       };
     }
@@ -458,7 +458,7 @@ export default function TripDetailScreen() {
             >
               <Camera
                 defaultSettings={{
-                  centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Đà Nẵng
+                  centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Da Nang
                   zoomLevel: 12,
                   animationDuration: 0,
                 }}

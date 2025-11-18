@@ -5,7 +5,7 @@ import type { Guid } from '@/lib/types';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
-import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
+import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@/components/vietmap';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -246,8 +246,8 @@ export default function ParentTripTrackingScreen() {
         const [longitude, latitude] = busLocation;
 
         const routeData = await getRoute(
-          { lat: latitude, lng: longitude }, // Vị trí hiện tại của xe
-          { lat: trip.pickupStop.latitude, lng: trip.pickupStop.longitude }, // Điểm đón
+          { lat: latitude, lng: longitude }, // Current bus location
+          { lat: trip.pickupStop.latitude, lng: trip.pickupStop.longitude }, // Pickup point
           apiKey
         );
 
@@ -305,7 +305,7 @@ export default function ParentTripTrackingScreen() {
     }
 
     if (points.length === 0) {
-      return { center: [108.2022, 16.0544], zoom: 13 }; // Default Đà Nẵng
+      return { center: [108.2022, 16.0544], zoom: 13 }; // Default Da Nang
     }
 
     if (points.length === 1) {
