@@ -227,12 +227,13 @@ export default function ParentTripTrackingScreen() {
     ? `https://maps.vietmap.vn/maps/styles/tm/style.json?apikey=${apiKey}`
     : undefined;
 
-  const pickupCoordinate = trip?.pickupStop?.location
-    ? ([trip.pickupStop.location.longitude, trip.pickupStop.location.latitude] as [number, number])
+  // Stops in ParentTripDto use `latitude` and `longitude` on the stop itself
+  const pickupCoordinate = trip?.pickupStop && typeof trip.pickupStop.latitude === 'number' && typeof trip.pickupStop.longitude === 'number'
+    ? ([trip.pickupStop.longitude, trip.pickupStop.latitude] as [number, number])
     : null;
 
-  const dropoffCoordinate = trip?.dropoffStop?.location
-    ? ([trip.dropoffStop.location.longitude, trip.dropoffStop.location.latitude] as [number, number])
+  const dropoffCoordinate = trip?.dropoffStop && typeof trip.dropoffStop.latitude === 'number' && typeof trip.dropoffStop.longitude === 'number'
+    ? ([trip.dropoffStop.longitude, trip.dropoffStop.latitude] as [number, number])
     : null;
 
   // Center map on most relevant coordinate

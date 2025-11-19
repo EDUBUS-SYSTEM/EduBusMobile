@@ -408,22 +408,24 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
                 pickupStop = {
                   sequenceOrder: stop.sequence,
                   pickupPointName: stop.name,
-                  address: stop.location.address, 
+                    address: stop.location.address,
                   plannedAt: stop.plannedArrival,
                   arrivedAt: stop.actualArrival,
                   departedAt: stop.actualDeparture,
-                  location: stop.location,
+                    latitude: stop.location?.latitude,
+                    longitude: stop.location?.longitude,
                 };
               }
               // Update dropoff to the last stop with child attendance
               dropoffStop = {
                 sequenceOrder: stop.sequence,
                 pickupPointName: stop.name,
-                address: stop.location.address,
-                plannedAt: stop.plannedDeparture,
-                arrivedAt: stop.actualArrival,
-                departedAt: stop.actualDeparture,
-                location: stop.location,
+                  address: stop.location.address,
+                  plannedAt: stop.plannedDeparture,
+                  arrivedAt: stop.actualArrival,
+                  departedAt: stop.actualDeparture,
+                  latitude: stop.location?.latitude,
+                  longitude: stop.location?.longitude,
               };
             }
           }
@@ -441,7 +443,8 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
               plannedAt: firstStop.plannedArrival,
               arrivedAt: firstStop.actualArrival,
               departedAt: firstStop.actualDeparture,
-              location: firstStop.location,
+              latitude: firstStop.location?.latitude,
+              longitude: firstStop.location?.longitude,
             };
             
             dropoffStop = {
@@ -451,7 +454,8 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
               plannedAt: lastStop.plannedDeparture,
               arrivedAt: lastStop.actualArrival,
               departedAt: lastStop.actualDeparture,
-              location: lastStop.location,
+              latitude: lastStop.location?.latitude,
+              longitude: lastStop.location?.longitude,
             };
           }
         }
@@ -550,19 +554,23 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
           pickupStop = {
             sequenceOrder: stop.sequence,
             pickupPointName: stop.name,
-            address: stop.name,
-            plannedAt: stop.plannedArrival,
-            arrivedAt: stop.actualArrival,
-            departedAt: stop.actualDeparture,
+              address: stop.location?.address || stop.name,
+              plannedAt: stop.plannedArrival,
+              arrivedAt: stop.actualArrival,
+              departedAt: stop.actualDeparture,
+              latitude: stop.location?.latitude,
+              longitude: stop.location?.longitude,
           };
         }
         dropoffStop = {
           sequenceOrder: stop.sequence,
           pickupPointName: stop.name,
-          address: stop.name,
-          plannedAt: stop.plannedDeparture,
-          arrivedAt: stop.actualArrival,
-          departedAt: stop.actualDeparture,
+            address: stop.location?.address || stop.name,
+            plannedAt: stop.plannedDeparture,
+            arrivedAt: stop.actualArrival,
+            departedAt: stop.actualDeparture,
+            latitude: stop.location?.latitude,
+            longitude: stop.location?.longitude,
         };
       }
     }
