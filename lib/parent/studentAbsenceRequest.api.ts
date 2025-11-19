@@ -1,6 +1,8 @@
 import { apiService } from "../api";
 import type {
   CreateStudentAbsenceRequestPayload,
+  StudentAbsenceRequestListResponse,
+  StudentAbsenceRequestQueryParams,
   StudentAbsenceRequestResponse,
 } from "./studentAbsenceRequest.type";
 
@@ -8,16 +10,17 @@ const BASE_PATH = "/student-absence-requests";
 
 export const studentAbsenceRequestApi = {
   getByParent: async (
-    parentId: string,
-  ): Promise<StudentAbsenceRequestResponse[]> => {
-    return apiService.get<StudentAbsenceRequestResponse[]>(
-      `${BASE_PATH}/parents/${parentId}`,
+    params?: StudentAbsenceRequestQueryParams,
+  ): Promise<StudentAbsenceRequestListResponse> => {
+    return apiService.get<StudentAbsenceRequestListResponse>(
+      `${BASE_PATH}/parents/me`,
+      params,
     );
   },
   getByStudent: async (
     studentId: string,
-  ): Promise<StudentAbsenceRequestResponse[]> => {
-    return apiService.get<StudentAbsenceRequestResponse[]>(
+  ): Promise<StudentAbsenceRequestListResponse> => {
+    return apiService.get<StudentAbsenceRequestListResponse>(
       `${BASE_PATH}/students/${studentId}`,
     );
   },

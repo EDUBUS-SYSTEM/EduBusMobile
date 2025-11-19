@@ -1,15 +1,15 @@
-import { confirmArrival, getTripDetail } from '@/lib/trip/trip.api';
-import { DriverTripDto, DriverTripStopDto } from '@/lib/trip/driverTrip.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
+import { DriverTripDto, DriverTripStopDto } from '@/lib/trip/driverTrip.types';
+import { confirmArrival, getTripDetail } from '@/lib/trip/trip.api';
 import type { Guid } from '@/lib/types';
+import { getRoute } from '@/lib/vietmap/vietmap.service';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@/components/vietmap';
+import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { getRoute } from '@/lib/vietmap/vietmap.service';
 
 type Params = { tripId?: Guid };
 
@@ -300,7 +300,7 @@ export default function TripDetailScreen() {
   const getMapBounds = React.useCallback(() => {
     if (!trip || !trip.stops || trip.stops.length === 0) {
       return {
-        centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Da Nang
+        centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Đà Nẵng
         zoomLevel: 12,
       };
     }
@@ -458,7 +458,7 @@ export default function TripDetailScreen() {
             >
               <Camera
                 defaultSettings={{
-                  centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Da Nang
+                  centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Đà Nẵng
                   zoomLevel: 12,
                   animationDuration: 0,
                 }}
@@ -1006,4 +1006,3 @@ const styles = StyleSheet.create({
     color: '#D1D5DB',
   },
 });
-

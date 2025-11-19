@@ -1,4 +1,27 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useChildrenList } from "@/hooks/useChildren";
+import { authApi } from "@/lib/auth/auth.api";
+import { studentAbsenceRequestApi } from "@/lib/parent/studentAbsenceRequest.api";
+import type {
+  AbsenceRequestStatus,
+  PaginationInfo,
+  StudentAbsenceRequestQueryParams,
+  StudentAbsenceRequestResponse,
+  StudentAbsenceRequestSortOption,
+} from "@/lib/parent/studentAbsenceRequest.type";
+import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import { useFocusEffect } from "@react-navigation/native";
+import { useNavigation, useRouter } from "expo-router";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -10,18 +33,17 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useNavigation } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
-import { useChildrenList } from "@/hooks/useChildren";
-import { authApi } from "@/lib/auth/auth.api";
-import { studentAbsenceRequestApi } from "@/lib/parent/studentAbsenceRequest.api";
-import type { StudentAbsenceRequestResponse } from "@/lib/parent/studentAbsenceRequest.type";
 import {
-  getStatusStyle,
+  formatDateLabel,
   formatRangeLabel,
   formatSubmittedAt,
+  getStatusStyle,
 } from "./utils";
+
+type FilterStatus = "All" | AbsenceRequestStatus;
+
+const STATUS_FILTERS: FilterStatus[] = ["All", "Pending", "Approved", "Rejected"];
+const PAGE_SIZE = 10;
 
 export default function AbsenceReportScreen() {
   const router = useRouter();
@@ -35,8 +57,14 @@ export default function AbsenceReportScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: 'Absence Report',
+      title: "Absence Report",
       headerShown: true,
+      headerStyle: { backgroundColor: "#FFD700" },
+      headerTintColor: "#013440",
+      headerTitleStyle: {
+        fontFamily: "RobotoSlab-Bold",
+        color: "#013440",
+      },
     });
   }, [navigation]);
   const [parentId, setParentId] = useState<string | null>(null);
@@ -44,10 +72,27 @@ export default function AbsenceReportScreen() {
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [requestsError, setRequestsError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [paginationInfo, setPaginationInfo] = useState<PaginationInfo | null>(
+    null,
+  );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>("All");
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [sortOption, setSortOption] =
+    useState<StudentAbsenceRequestSortOption>("Newest");
+  const [startDateFilter, setStartDateFilter] = useState<Date | null>(null);
+  const [endDateFilter, setEndDateFilter] = useState<Date | null>(null);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const isWeb = Platform.OS === "web";
+  const usesInlinePicker = Platform.OS === "ios";
+  const hasActiveFilters =
+    statusFilter !== "All" || startDateFilter !== null || endDateFilter !== null;
   const scrollContentStyle = useMemo<ViewStyle>(
     () => ({
-      padding: 20,
+      paddingTop: 4,
+      paddingHorizontal: 20,
       paddingBottom: 32,
       ...(isWeb ? { alignItems: "center" } : {}),
     }),
@@ -64,6 +109,23 @@ export default function AbsenceReportScreen() {
     [isWeb],
   );
   const pointerStyle = isWeb ? ({ cursor: "pointer" } as ViewStyle) : undefined;
+  const statusControlContainerStyle = useMemo<ViewStyle>(
+    () =>
+      isWeb
+        ? {
+            width: 200,
+            alignSelf: "flex-start",
+          }
+        : {
+            width: "50%",
+            minWidth: 150,
+            alignSelf: "flex-start",
+          },
+    [isWeb],
+  );
+  const toggleFilters = useCallback(() => {
+    setShowFilters((prev) => !prev);
+  }, []);
 
   useEffect(() => {
     const loadParentId = async () => {
@@ -99,8 +161,20 @@ export default function AbsenceReportScreen() {
     setRequestsLoading(true);
     setRequestsError(null);
     try {
-      const data = await studentAbsenceRequestApi.getByParent(parentId);
-      setRequests(data);
+      const params: StudentAbsenceRequestQueryParams = {
+        page: currentPage,
+        perPage: PAGE_SIZE,
+        sort: sortOption,
+        status: statusFilter === "All" ? undefined : statusFilter,
+        startDate: startDateFilter?.toISOString(),
+        endDate: endDateFilter?.toISOString(),
+      };
+      const response = await studentAbsenceRequestApi.getByParent(params);
+      setRequests(response.data ?? []);
+      setPaginationInfo(response.pagination ?? null);
+      if (response.pagination?.currentPage) {
+        setCurrentPage(response.pagination.currentPage);
+      }
     } catch (error: any) {
       console.error("Failed to load absence requests", error);
       const message =
@@ -111,7 +185,14 @@ export default function AbsenceReportScreen() {
     } finally {
       setRequestsLoading(false);
     }
-  }, [parentId]);
+  }, [
+    parentId,
+    currentPage,
+    sortOption,
+    statusFilter,
+    startDateFilter,
+    endDateFilter,
+  ]);
 
   useEffect(() => {
     if (parentId) {
@@ -128,14 +209,101 @@ export default function AbsenceReportScreen() {
     }, [parentId, loadRequests])
   );
 
-  const sortedRequests = useMemo(
-    () =>
-      [...requests].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      ),
-    [requests],
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, sortOption, startDateFilter, endDateFilter]);
+
+  useEffect(() => {
+    setShowStatusDropdown(false);
+  }, [statusFilter]);
+  useEffect(() => {
+    if (!showFilters) {
+      setShowStatusDropdown(false);
+    }
+  }, [showFilters]);
+
+  const handleStartDateChange = useCallback(
+    (event: DateTimePickerEvent, date?: Date) => {
+      if (event.type === "dismissed") {
+        if (usesInlinePicker) setShowStartPicker(false);
+        return;
+      }
+
+      if (date) {
+        setStartDateFilter(date);
+        if (endDateFilter && date > endDateFilter) {
+          setEndDateFilter(date);
+        }
+      }
+
+      if (usesInlinePicker) setShowStartPicker(false);
+    },
+    [endDateFilter, usesInlinePicker],
   );
+
+  const handleEndDateChange = useCallback(
+    (event: DateTimePickerEvent, date?: Date) => {
+      if (event.type === "dismissed") {
+        if (usesInlinePicker) setShowEndPicker(false);
+        return;
+      }
+
+      if (date) {
+        setEndDateFilter(date);
+        if (startDateFilter && date < startDateFilter) {
+          setStartDateFilter(date);
+        }
+      }
+
+      if (usesInlinePicker) setShowEndPicker(false);
+    },
+    [startDateFilter, usesInlinePicker],
+  );
+
+  const openStartDatePicker = () => {
+    if (usesInlinePicker) {
+      setShowStartPicker(true);
+      return;
+    }
+
+    DateTimePickerAndroid.open({
+      value: startDateFilter ?? new Date(),
+      mode: "date",
+      display: "calendar",
+      maximumDate: endDateFilter ?? undefined,
+      onChange: handleStartDateChange,
+    });
+  };
+
+  const openEndDatePicker = () => {
+    if (usesInlinePicker) {
+      setShowEndPicker(true);
+      return;
+    }
+
+    DateTimePickerAndroid.open({
+      value: endDateFilter ?? startDateFilter ?? new Date(),
+      mode: "date",
+      display: "calendar",
+      minimumDate: startDateFilter ?? undefined,
+      onChange: handleEndDateChange,
+    });
+  };
+
+  const clearDateFilters = () => {
+    setStartDateFilter(null);
+    setEndDateFilter(null);
+  };
+
+  const resetFilters = () => {
+    setStatusFilter("All");
+    setSortOption("Newest");
+    clearDateFilters();
+  };
+
+  const toggleSortOrder = () => {
+    setSortOption((prev) => (prev === "Newest" ? "Oldest" : "Newest"));
+  };
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -147,7 +315,7 @@ export default function AbsenceReportScreen() {
   }, [loadRequests, refetchChildren]);
 
   const renderContent = () => {
-    if (requestsLoading && sortedRequests.length === 0) {
+    if (requestsLoading && requests.length === 0) {
       return (
         <View
           style={[
@@ -222,7 +390,7 @@ export default function AbsenceReportScreen() {
       );
     }
 
-    if (sortedRequests.length === 0 && !requestsLoading) {
+    if (requests.length === 0 && !requestsLoading) {
       return (
         <View
           style={[
@@ -266,9 +434,93 @@ export default function AbsenceReportScreen() {
       );
     }
 
+    const renderPaginationControls = () => {
+      if (!paginationInfo) return null;
+
+      return (
+        <View
+          style={{
+            marginTop: 8,
+            paddingTop: 12,
+            borderTopWidth: 1,
+            borderTopColor: "#E2E8F0",
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <TouchableOpacity
+            disabled={!paginationInfo.hasPreviousPage || requestsLoading}
+            onPress={() =>
+              setCurrentPage((prev) => Math.max(1, prev - 1))
+            }
+            style={{
+              paddingVertical: 8,
+              paddingHorizontal: 14,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: "#CBD5F5",
+              backgroundColor: paginationInfo.hasPreviousPage
+                ? "#FFFFFF"
+                : "#F1F5F9",
+              opacity: paginationInfo.hasPreviousPage ? 1 : 0.6,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: "RobotoSlab-Bold",
+                fontSize: 13,
+                color: "#1E293B",
+              }}
+            >
+              Previous
+            </Text>
+          </TouchableOpacity>
+          <Text
+            style={{
+              fontFamily: "RobotoSlab-Bold",
+              fontSize: 13,
+              color: "#122434",
+            }}
+          >
+            Page {paginationInfo.currentPage} / {paginationInfo.totalPages}
+          </Text>
+          <TouchableOpacity
+            disabled={!paginationInfo.hasNextPage || requestsLoading}
+            onPress={() =>
+              setCurrentPage((prev) =>
+                paginationInfo.hasNextPage ? prev + 1 : prev,
+              )
+            }
+            style={{
+              paddingVertical: 8,
+              paddingHorizontal: 14,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: "#CBD5F5",
+              backgroundColor: paginationInfo.hasNextPage
+                ? "#FFFFFF"
+                : "#F1F5F9",
+              opacity: paginationInfo.hasNextPage ? 1 : 0.6,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: "RobotoSlab-Bold",
+                fontSize: 13,
+                color: "#1E293B",
+              }}
+            >
+              Next
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+    };
+
     return (
       <View style={[{ gap: 14 }, responsiveCardStyle]}>
-        {sortedRequests.map((request) => {
+        {requests.map((request) => {
           const student = studentLookup.get(request.studentId);
           const status = getStatusStyle(request.status);
 
@@ -416,6 +668,35 @@ export default function AbsenceReportScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F6FCFF" }}>
+      <TouchableOpacity
+        onPress={toggleFilters}
+        style={[
+          {
+            width: 48,
+            height: 48,
+            borderRadius: 16,
+            backgroundColor: "#FFD700",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 4,
+            elevation: 2,
+            position: "absolute",
+            top: 8,
+            right: 20,
+            zIndex: 10,
+          },
+          pointerStyle,
+        ]}
+      >
+        <Ionicons
+          name="funnel-outline"
+          size={22}
+            color="#013440"
+        />
+      </TouchableOpacity>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={scrollContentStyle}
@@ -423,28 +704,7 @@ export default function AbsenceReportScreen() {
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
         }
       >
-        <View style={[{ gap: 12, marginBottom: 16 }, responsiveCardStyle]}>
-          <View style={{ gap: 4 }}>
-            <Text
-              style={{
-                fontFamily: "RobotoSlab-Bold",
-                fontSize: 18,
-                color: "#001E2B",
-              }}
-            >
-              Absence Report
-            </Text>
-            <Text
-              style={{
-                fontFamily: "RobotoSlab-Regular",
-                fontSize: 12,
-                color: "#6B7C93",
-              }}
-            >
-              Check the processing status of each absence report.
-            </Text>
-          </View>
-
+        <View style={[{ marginBottom: 2, minHeight: 20 }, responsiveCardStyle]}>
           {childrenError ? (
             <View
               style={{
@@ -454,6 +714,7 @@ export default function AbsenceReportScreen() {
                 borderRadius: 12,
                 padding: 12,
                 gap: 4,
+                marginTop: 8,
               }}
             >
               <Text
@@ -477,6 +738,289 @@ export default function AbsenceReportScreen() {
             </View>
           ) : null}
         </View>
+
+        {showFilters ? (
+          <View
+            style={[
+              {
+                backgroundColor: "#FFFFFF",
+                borderRadius: 20,
+                padding: 16,
+                gap: 14,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 6,
+                elevation: 2,
+                marginBottom: 18,
+              },
+              responsiveCardStyle,
+            ]}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: "RobotoSlab-Bold",
+                  fontSize: 14,
+                  color: "#122434",
+                }}
+              >
+                Filters
+              </Text>
+              {hasActiveFilters ? (
+                <TouchableOpacity onPress={resetFilters} style={pointerStyle}>
+                  <Text
+                    style={{
+                      fontFamily: "RobotoSlab-Bold",
+                      fontSize: 12,
+                      color: "#01CBCA",
+                    }}
+                  >
+                    Reset
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text
+                style={{
+                  fontFamily: "RobotoSlab-Bold",
+                  fontSize: 12,
+                  color: "#607587",
+                }}
+              >
+                Date range
+              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 12,
+                }}
+              >
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    borderWidth: 1,
+                    borderColor: "#D5DFEB",
+                    borderRadius: 14,
+                    padding: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    backgroundColor: "#F8FAFC",
+                  }}
+                  onPress={openStartDatePicker}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Ionicons name="calendar-outline" size={16} color="#607587" />
+                    <Text
+                      style={{
+                        fontFamily: "RobotoSlab-Bold",
+                        fontSize: 12,
+                        color: startDateFilter ? "#122434" : "#94A3B8",
+                      }}
+                    >
+                      {startDateFilter ? formatDateLabel(startDateFilter) : "Start date"}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-down" size={16} color="#94A3B8" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    borderWidth: 1,
+                    borderColor: "#D5DFEB",
+                    borderRadius: 14,
+                    padding: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    backgroundColor: "#F8FAFC",
+                  }}
+                  onPress={openEndDatePicker}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Ionicons name="calendar-outline" size={16} color="#607587" />
+                    <Text
+                      style={{
+                        fontFamily: "RobotoSlab-Bold",
+                        fontSize: 12,
+                        color: endDateFilter ? "#122434" : "#94A3B8",
+                      }}
+                    >
+                      {endDateFilter ? formatDateLabel(endDateFilter) : "End date"}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-down" size={16} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+              {usesInlinePicker && showStartPicker ? (
+                <DateTimePicker
+                  value={startDateFilter ?? new Date()}
+                  mode="date"
+                  display="inline"
+                  maximumDate={endDateFilter ?? undefined}
+                  onChange={handleStartDateChange}
+                  style={{ alignSelf: "stretch" }}
+                />
+              ) : null}
+              {usesInlinePicker && showEndPicker ? (
+                <DateTimePicker
+                  value={endDateFilter ?? startDateFilter ?? new Date()}
+                  mode="date"
+                  display="inline"
+                  minimumDate={startDateFilter ?? undefined}
+                  onChange={handleEndDateChange}
+                  style={{ alignSelf: "stretch" }}
+                />
+              ) : null}
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text
+                style={{
+                  fontFamily: "RobotoSlab-Bold",
+                  fontSize: 12,
+                  color: "#607587",
+                }}
+              >
+                Status
+              </Text>
+              <View
+                style={[
+                  { gap: 6, alignSelf: "flex-start" },
+                  statusControlContainerStyle,
+                ]}
+              >
+                <TouchableOpacity
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#D5DFEB",
+                    borderRadius: 14,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    backgroundColor: "#F8FAFC",
+                    width: "100%",
+                  }}
+                  onPress={() => setShowStatusDropdown((prev) => !prev)}
+                  disabled={requestsLoading}
+                >
+                  <Text
+                    style={{
+                      fontFamily: "RobotoSlab-Bold",
+                      fontSize: 12,
+                      color: "#122434",
+                    }}
+                  >
+                    {statusFilter}
+                  </Text>
+                  <Ionicons
+                    name={showStatusDropdown ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color="#607587"
+                  />
+                </TouchableOpacity>
+                {showStatusDropdown ? (
+                  <View
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "#D5DFEB",
+                      borderRadius: 14,
+                      backgroundColor: "#FFFFFF",
+                      overflow: "hidden",
+                      width: "100%",
+                    }}
+                  >
+                    {STATUS_FILTERS.map((filter, index) => {
+                      const isActive = statusFilter === filter;
+                      const isLast = index === STATUS_FILTERS.length - 1;
+                      return (
+                        <TouchableOpacity
+                          key={filter}
+                          onPress={() => setStatusFilter(filter)}
+                          style={{
+                            paddingVertical: 10,
+                            paddingHorizontal: 14,
+                            backgroundColor: isActive ? "#E8FBFB" : "#FFFFFF",
+                            borderBottomWidth: isLast ? 0 : 1,
+                            borderBottomColor: "#F1F5F9",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontFamily: "RobotoSlab-Bold",
+                              fontSize: 12,
+                              color: isActive ? "#017B79" : "#4B6775",
+                            }}
+                          >
+                            {filter}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: "RobotoSlab-Bold",
+                  fontSize: 12,
+                  color: "#607587",
+                }}
+              >
+                Sort by date
+              </Text>
+              <TouchableOpacity
+                onPress={toggleSortOrder}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: "#01CBCA",
+                  backgroundColor: "#E8FBFB",
+                }}
+              >
+                <Ionicons
+                  name={sortOption === "Newest" ? "arrow-down" : "arrow-up"}
+                  size={14}
+                  color="#01A9A8"
+                />
+                <Text
+                  style={{
+                    fontFamily: "RobotoSlab-Bold",
+                    fontSize: 12,
+                    color: "#017B79",
+                  }}
+                >
+                  {sortOption === "Newest" ? "Newest first" : "Oldest first"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
 
         {renderContent()}
       </ScrollView>
