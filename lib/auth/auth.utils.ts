@@ -1,6 +1,6 @@
 import type { AuthResponse } from './auth.type';
 
-export const ALLOWED_ROLES = ['Driver', 'Parent'] as const;
+export const ALLOWED_ROLES = ['Driver', 'Parent', 'Supervisor'] as const;
 export type AllowedRole = typeof ALLOWED_ROLES[number];
 
 /**

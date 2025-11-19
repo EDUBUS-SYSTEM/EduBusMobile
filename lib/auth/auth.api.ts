@@ -68,7 +68,7 @@ export const authApi = {
     try {
       const [role, fullName, userId] = await AsyncStorage.multiGet(['userRole', 'userFullName', 'userId']);
       return {
-        role: role[1] as "Admin" | "Driver" | "Parent" | null,
+        role: role[1] as "Admin" | "Driver" | "Parent" | "Supervisor" | null,
         fullName: fullName[1] || null,
         userId: userId[1] || null,
       };

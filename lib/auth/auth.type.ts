@@ -4,7 +4,7 @@ export interface User {
     id: string;
     email: string;
     name: string;
-    role: "Admin" | "Driver" | "Parent";
+    role: "Admin" | "Driver" | "Parent" | "Supervisor";
     avatar?: string;
     createdAt: string;
     updatedAt: string;
@@ -19,7 +19,7 @@ export interface AuthResponse {
     accessToken: string;
     refreshToken: string;
     fullName: string;
-    role: "Admin" | "Driver" | "Parent";
+    role: "Admin" | "Driver" | "Parent" | "Supervisor";
     expiresAtUtc: string;
 }
   

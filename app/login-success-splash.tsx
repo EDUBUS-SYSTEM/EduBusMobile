@@ -43,7 +43,7 @@ export default function LoginSuccessSplash() {
         const token = await AsyncStorage.getItem('accessToken');
         console.log('🔑 Token exists:', !!token);
 
-        if (token && (userInfo.role === 'Parent' || userInfo.role === 'Driver')) {
+        if (token && (userInfo.role === 'Parent' || userInfo.role === 'Driver' || userInfo.role === 'Supervisor')) {
           console.log('✅ Conditions met for SignalR. Role:', userInfo.role);
           
           const isAlreadyConnected = signalRService.isConnected();
@@ -87,7 +87,8 @@ export default function LoginSuccessSplash() {
             // On error, go to home
             router.replace('/(parent-tabs)/home' as any);
           }
-          
+        } else if (userInfo.role === 'Supervisor') {
+          router.replace('/(supervisor-tabs)/dashboard' as any);
         } else {
           // If somehow we get here with Admin role, logout and go to login
           console.error('❌ Admin role detected in splash screen - this should not happen');

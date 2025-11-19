@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function DriverRoutesScreen() {
@@ -43,18 +42,157 @@ export default function DriverRoutesScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-      {/* Header */}
-      <LinearGradient
-        colors={['#FFD700', '#FFEB3B']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+      {/* Header Section with Yellow Circles Background */}
+      <View
         style={{
-          paddingTop: 60,
-          paddingBottom: 30,
-          paddingHorizontal: 20,
-          borderBottomLeftRadius: 30,
-          borderBottomRightRadius: 30,
-        }}>
+          paddingTop: 40,
+          paddingBottom: 40,
+          paddingHorizontal: 24,
+          position: "relative",
+          minHeight: 200,
+          backgroundColor: "transparent",
+        }}
+      >
+        {/* Yellow Circles Background */}
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+          }}
+        >
+          {/* Circle 1 - Top Left */}
+          <View
+            style={{
+              position: "absolute",
+              top: -40,
+              left: -100,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FDE370",
+              opacity: 1,
+            }}
+          />
+
+          {/* Circle 2 - Top Right */}
+          <View
+            style={{
+              position: "absolute",
+              top: -30,
+              left: 40,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FDE370",
+              opacity: 1,
+            }}
+          />
+
+          {/* Circle 3 - Bottom Left */}
+          <View
+            style={{
+              position: "absolute",
+              top: -30,
+              left: 180,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FDE370",
+              opacity: 1,
+            }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              top: -40,
+              left: 320,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FDE370",
+              opacity: 1,
+            }}
+          />
+
+          {/* Circle 4 - Bottom Right */}
+          <View
+            style={{
+              position: "absolute",
+              top: -90,
+              right: 180,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FCCF08",
+              opacity: 1,
+            }}
+          />
+          {/* Circle 5 - Bottom Right */}
+          <View
+            style={{
+              position: "absolute",
+              top: -90,
+              right: 40,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FCCF08",
+              opacity: 1,
+            }}
+          />
+          {/* Circle 6 - Bottom Right */}
+          <View
+            style={{
+              position: "absolute",
+              top: -90,
+              right: 320,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FCCF08",
+              opacity: 1,
+            }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              top: -90,
+              right: -100,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FCCF08",
+              opacity: 1,
+            }}
+          />
+        </View>
+
+        {/* Curved White Border */}
+        <View
+          style={{
+            position: "absolute",
+            bottom: -30,
+            left: 0,
+            right: 0,
+            height: 40,
+            backgroundColor: "#FFFFFF",
+            borderTopLeftRadius: 30,
+            borderTopRightRadius: 30,
+          }}
+        />
+      </View>
+
+      {/* Title Section */}
+      <View
+        style={{
+          alignItems: "center",
+          marginTop: -80,
+          marginBottom: 20,
+        }}
+      >
         <Text style={{
           color: '#000000',
           fontFamily: 'RobotoSlab-Bold',
@@ -72,7 +210,7 @@ export default function DriverRoutesScreen() {
         }}>
           Manage your daily routes and stops
         </Text>
-      </LinearGradient>
+      </View>
 
       <View style={{ padding: 20 }}>
         {/* Current Route Status */}
