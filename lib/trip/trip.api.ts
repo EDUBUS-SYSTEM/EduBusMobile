@@ -1,77 +1,14 @@
 import { apiService } from '../api';
 import { authApi } from '../auth/auth.api';
 import { childrenApi } from '../parent/children.api';
-import { DriverTripDto, DriverTripStatus } from '../trip-mock-data/driverTrip.types';
 import { Guid } from '../types';
+import { DriverTripDto, DriverTripStatus } from './driverTrip.types';
 import type { ParentTripDto } from './parentTrip.types';
-
-/**
- * SimpleTripDto response from backend
- */
-interface SimpleTripDto {
-  id: Guid;
-  name: string;
-  plannedStartAt: string;
-  plannedEndAt: string;
-  plateVehicle: string;
-  status: string;
-  totalStops: number;
-  completedStops: number;
-}
-
-interface GetTripsByDateResponse {
-  date: string;
-  trips: SimpleTripDto[];
-}
-
-/**
- * TripDto response from backend (from /trip/{tripId}/detail-for-driver)
- */
-interface TripDto {
-  id: Guid;
-  routeId: Guid;
-  serviceDate: string;
-  plannedStartAt: string;
-  plannedEndAt: string;
-  startTime?: string;
-  endTime?: string;
-  status: string;
-  vehicleId: Guid;
-  driverVehicleId?: Guid;
-  vehicle?: {
-    id: Guid;
-    maskedPlate: string;
-    capacity: number;
-    status: string;
-  };
-  driver?: {
-    id: Guid;
-    fullName: string;
-    phone: string;
-    isPrimary: boolean;
-    snapshottedAtUtc: string;
-  };
-  scheduleSnapshot: {
-    scheduleId: Guid;
-    name: string;
-    startTime: string;
-    endTime: string;
-    rRule: string;
-  };
-  stops: TripStopDto[];
-  createdAt: string;
-  updatedAt?: string;
-}
-
-interface TripStopDto {
-  id: Guid;
-  name: string;
-  plannedArrival: string;
-  actualArrival?: string;
-  plannedDeparture: string;
-  actualDeparture?: string;
-  sequence: number;
-}
+import type {
+  GetTripsByDateResponse,
+  ParentTripDtoResponse,
+  TripDto
+} from './trip.response.types';
 
 /**
  * Trip API Service
@@ -102,7 +39,7 @@ export const getTripsByDate = async (dateISO?: string | null): Promise<DriverTri
       scheduleName: trip.name,
       totalStops: trip.totalStops, 
       completedStops: trip.completedStops,
-      stops: [], // Not available in SimpleTripDto
+      stops: [], 
       isOverride: false, // Not available in SimpleTripDto
       overrideReason: '', // Not available in SimpleTripDto
       overrideCreatedBy: undefined,
@@ -161,10 +98,10 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
         plannedAt: stop.plannedArrival,
         arrivedAt: stop.actualArrival,
         departedAt: stop.actualDeparture,
-        address: stop.name, // Use name as address since backend uses Address as Name
-        latitude: 0, // Not available in TripStopDto - may need backend update
-        longitude: 0, // Not available in TripStopDto - may need backend update
-        totalStudents: 0, // Not available - may need backend update
+        address: stop.name, 
+        latitude: stop.location.latitude || 0, 
+        longitude: stop.location.longitude || 0, 
+        totalStudents: stop.attendance.length || 0, 
         presentStudents: 0, // Not available - may need backend update
         absentStudents: 0, // Not available - may need backend update
       })),
@@ -175,7 +112,7 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
       createdAt: response.createdAt,
       updatedAt: response.updatedAt,
     };
-    
+
     return driverTrip;
   } catch (error: any) {
     console.error('Error fetching trip detail:', error);
@@ -230,71 +167,6 @@ export const startTrip = async (tripId: string): Promise<{ tripId: string; messa
  */
 
 /**
- * ParentTripStopDto from backend (with attendance info)
- */
-interface ParentTripStopDto {
-  id: Guid;
-  name: string;
-  plannedArrival: string;
-  actualArrival?: string;
-  plannedDeparture: string;
-  actualDeparture?: string;
-  sequence: number;
-  location: TripLocationDto;
-  attendance?: ParentAttendanceDto[];
-}
-interface TripLocationDto {
-  latitude: number;
-  longitude: number;
-  address: string;
-}
-interface ParentAttendanceDto {
-  studentId: Guid;
-  studentName: string;
-  boardedAt?: string;
-  state: string;
-}
-
-/**
- * TripDto response from backend for parent endpoints
- */
-interface ParentTripDtoResponse {
-  id: Guid;
-  routeId: Guid;
-  serviceDate: string;
-  plannedStartAt: string;
-  plannedEndAt: string;
-  startTime?: string;
-  endTime?: string;
-  status: string;
-  vehicleId: Guid;
-  driverVehicleId?: Guid;
-  vehicle?: {
-    id: Guid;
-    maskedPlate: string;
-    capacity: number;
-    status: string;
-  };
-  driver?: {
-    id: Guid;
-    fullName: string;
-    phone: string;
-    isPrimary: boolean;
-    snapshottedAtUtc: string;
-  };
-  scheduleSnapshot: {
-    scheduleId: Guid;
-    name: string;
-    startTime: string;
-    endTime: string;
-    rRule: string;
-  };
-  stops: ParentTripStopDto[];
-  createdAt: string;
-  updatedAt?: string;
-}
-
-/**
  * Get trips by date for current parent
  * @param dateISO - ISO date string (YYYY-MM-DD) or null for today
  * @returns Array of ParentTripDto (one per child per trip)
@@ -302,217 +174,128 @@ interface ParentTripDtoResponse {
 export const getParentTripsByDate = async (dateISO?: string | null): Promise<ParentTripDto[]> => {
   try {
     const params = dateISO ? { date: dateISO } : undefined;
-    
     const response = await apiService.get<ParentTripDtoResponse[]>('/trip/parent/date', params);
     
-    // Ensure response is an array
-    if (!Array.isArray(response)) {
-      console.error('API response is not an array:', response);
+    if (!Array.isArray(response) || response.length === 0) {
       return [];
     }
     
-    if (response.length === 0) {
-      return [];
-    }
-    
-    // Get parent's children to use as fallback when attendance is empty
-    // Backend already filtered trips by parent, so if a trip is returned, it belongs to this parent
-    let parentChildren: Array<{ id: string; firstName: string; lastName: string }> = [];
-    try {
-      const userInfo = await authApi.getUserInfo();
-      if (userInfo.userId) {
-        const children = await childrenApi.getChildrenByParent(userInfo.userId);
-        parentChildren = children.map(c => ({
-          id: c.id,
-          firstName: c.firstName,
-          lastName: c.lastName,
-        }));
-      }
-    } catch (error) {
-      console.warn('Could not fetch parent children:', error);
-    }
-    
-    // Map TripDto to ParentTripDto[]
-    // Each trip may have multiple children, so we create one ParentTripDto per child
     const parentTrips: ParentTripDto[] = [];
     
     for (const trip of response) {
-      // Get all unique children from attendance across all stops
-      const childrenMap = new Map<Guid, { name: string; state: string }>();
-      
-      // Check if trip has stops
-      if (trip.stops && trip.stops.length > 0) {
-        for (const stop of trip.stops) {
-          if (stop.attendance && stop.attendance.length > 0) {
-            for (const attendance of stop.attendance) {
-              if (!childrenMap.has(attendance.studentId)) {
-                childrenMap.set(attendance.studentId, {
-                  name: attendance.studentName,
-                  state: attendance.state,
-                });
-              }
-            }
-          }
-        }
-      }
-      
-      // If no children found in attendance, use parent's children as fallback
-      // Backend already filtered trips by parent, so these trips belong to this parent
-      if (childrenMap.size === 0) {
-        if (parentChildren.length > 0) {
-          for (const child of parentChildren) {
-            childrenMap.set(child.id, {
-              name: `${child.firstName} ${child.lastName}`,
-              state: 'Unknown', // No attendance data available
-            });
-          }
-        } else {
-          // If no parent children available, create a generic entry for the trip
-          // Backend already filtered this trip for this parent, so we should show it
-          // Use trip ID as a temporary child ID
-          childrenMap.set(trip.id as Guid, {
-            name: 'Student', // Generic name
-            state: 'Unknown',
-          });
-        }
-      }
-      
-      // At this point, childrenMap should have at least one entry
-      if (childrenMap.size === 0) {
-        console.error(`Still no children for trip ${trip.id} after all fallbacks - this should not happen`);
+      if (!trip.stops || trip.stops.length === 0) {
         continue;
       }
       
-      // Calculate completed stops (stops with actualDeparture)
-      const completedStops = trip.stops?.filter(s => s.actualDeparture).length || 0;
+      // API đã filter sẵn chỉ trả về stops của parent
+      // Pickup = stop đầu tiên, Dropoff = stop cuối cùng
+      const firstStop = trip.stops[0];
+      const lastStop = trip.stops[trip.stops.length - 1];
       
-      // Create one ParentTripDto for each child
-      for (const [childId, childInfo] of childrenMap.entries()) {
-        // Find pickup and dropoff stops for this child
-        // Pickup: first stop where child has attendance (or first stop if no attendance)
-        // Dropoff: last stop where child has attendance (or last stop if no attendance)
-        let pickupStop: ParentTripDto['pickupStop'] | undefined;
-        let dropoffStop: ParentTripDto['dropoffStop'] | undefined;
-        
-        // Check if we have attendance data for this child
-        const hasAttendanceData = trip.stops.some(s => 
-          s.attendance?.some(a => a.studentId === childId)
-        );
-        
-        if (hasAttendanceData) {
-          // Use attendance-based logic
-          for (const stop of trip.stops) {
-            const hasChildAttendance = stop.attendance?.some(a => a.studentId === childId);
-            if (hasChildAttendance) {
-              if (!pickupStop) {
-                pickupStop = {
-                  sequenceOrder: stop.sequence,
-                  pickupPointName: stop.name,
-                    address: stop.location.address,
-                  plannedAt: stop.plannedArrival,
-                  arrivedAt: stop.actualArrival,
-                  departedAt: stop.actualDeparture,
-                    latitude: stop.location?.latitude,
-                    longitude: stop.location?.longitude,
-                };
-              }
-              // Update dropoff to the last stop with child attendance
-              dropoffStop = {
-                sequenceOrder: stop.sequence,
-                pickupPointName: stop.name,
-                  address: stop.location.address,
-                  plannedAt: stop.plannedDeparture,
-                  arrivedAt: stop.actualArrival,
-                  departedAt: stop.actualDeparture,
-                  latitude: stop.location?.latitude,
-                  longitude: stop.location?.longitude,
-              };
+      // Lấy child info từ attendance (nếu có)
+      let childId: Guid | undefined;
+      let childName: string | undefined;
+      
+      // Tìm child đầu tiên từ attendance
+      for (const stop of trip.stops) {
+        if (stop.attendance && stop.attendance.length > 0) {
+          const firstAttendance = stop.attendance[0];
+          childId = firstAttendance.studentId;
+          childName = firstAttendance.studentName;
+          break;
+        }
+      }
+      
+      // Fallback: nếu không có attendance, lấy từ children API
+      if (!childId || !childName) {
+        try {
+          const userInfo = await authApi.getUserInfo();
+          if (userInfo.userId) {
+            const children = await childrenApi.getChildrenByParent(userInfo.userId);
+            if (children.length > 0) {
+              childId = children[0].id;
+              childName = `${children[0].firstName} ${children[0].lastName}`;
             }
           }
-        } else {
-          // No attendance data - use first and last stops
-          // Backend already filtered stops by parent's pickup points
-          if (trip.stops && trip.stops.length > 0) {
-            const firstStop = trip.stops[0];
-            const lastStop = trip.stops[trip.stops.length - 1];
-            
-            pickupStop = {
-              sequenceOrder: firstStop.sequence,
-              pickupPointName: firstStop.name,
-              address: firstStop.location?.address || firstStop.name,
-              plannedAt: firstStop.plannedArrival,
-              arrivedAt: firstStop.actualArrival,
-              departedAt: firstStop.actualDeparture,
-              latitude: firstStop.location?.latitude,
-              longitude: firstStop.location?.longitude,
-            };
-            
-            dropoffStop = {
-              sequenceOrder: lastStop.sequence,
-              pickupPointName: lastStop.name,
-              address: lastStop.location?.address || lastStop.name,
-              plannedAt: lastStop.plannedDeparture,
-              arrivedAt: lastStop.actualArrival,
-              departedAt: lastStop.actualDeparture,
-              latitude: lastStop.location?.latitude,
-              longitude: lastStop.location?.longitude,
-            };
-          }
+        } catch (error) {
+          console.warn('Could not fetch parent children:', error);
         }
-        
-        const parentTrip: ParentTripDto = {
-          id: trip.id,
-          routeId: trip.routeId,
-          serviceDate: trip.serviceDate,
-          plannedStartAt: trip.plannedStartAt,
-          plannedEndAt: trip.plannedEndAt,
-          startTime: trip.startTime,
-          endTime: trip.endTime,
-          status: trip.status as DriverTripStatus,
-          scheduleName: trip.scheduleSnapshot?.name || 'Unknown Schedule',
-          childId: childId,
-          childName: childInfo.name,
-          childAvatar: undefined, // Not available from backend
-          childClassName: undefined, // Not available from backend
-          pickupStop: pickupStop,
-          dropoffStop: dropoffStop,
-          totalStops: trip.stops?.length || 0,
-          completedStops: completedStops,
-          driver: trip.driver ? {
-            id: trip.driver.id,
-            fullName: trip.driver.fullName,
-            phone: trip.driver.phone,
-            isPrimary: trip.driver.isPrimary,
-          } : undefined,
+      }
+      
+      // Nếu vẫn không có child info, skip trip này
+      if (!childId || !childName) {
+        continue;
+      }
+      
+      const completedStops = trip.stops.filter(s => s.actualDeparture).length;
+      
+      const parentTrip: ParentTripDto = {
+        id: trip.id,
+        routeId: trip.routeId,
+        serviceDate: trip.serviceDate,
+        plannedStartAt: trip.plannedStartAt,
+        plannedEndAt: trip.plannedEndAt,
+        startTime: trip.startTime,
+        endTime: trip.endTime,
+        status: trip.status as DriverTripStatus,
+        scheduleName: trip.scheduleSnapshot?.name || 'Unknown Schedule',
+        childId: childId,
+        childName: childName,
+        childAvatar: undefined,
+        childClassName: undefined,
+        pickupStop: {
+          sequenceOrder: firstStop.sequence,
+          pickupPointName: firstStop.name,
+          address: firstStop.location.address,
+          latitude: firstStop.location.latitude,
+          longitude: firstStop.location.longitude,
+          plannedAt: firstStop.plannedArrival,
+          arrivedAt: firstStop.actualArrival,
+          departedAt: firstStop.actualDeparture,
+        },
+        dropoffStop: {
+          sequenceOrder: lastStop.sequence,
+          pickupPointName: lastStop.name,
+          address: lastStop.location.address,
+          latitude: lastStop.location.latitude,
+          longitude: lastStop.location.longitude,
+          plannedAt: lastStop.plannedDeparture,
+          arrivedAt: lastStop.actualArrival,
+          departedAt: lastStop.actualDeparture,
+        },
+        totalStops: trip.stops.length,
+        completedStops: completedStops,
+        driver: trip.driver ? {
+          id: trip.driver.id,
+          fullName: trip.driver.fullName,
+          phone: trip.driver.phone,
+          isPrimary: trip.driver.isPrimary,
+        } : undefined,
         vehicle: trip.vehicle ? {
           id: trip.vehicle.id,
           maskedPlate: trip.vehicle.maskedPlate,
           capacity: trip.vehicle.capacity,
           status: trip.vehicle.status,
         } : undefined,
-          createdAt: trip.createdAt,
-          updatedAt: trip.updatedAt,
-        };
-        
-        parentTrips.push(parentTrip);
-      }
+        createdAt: trip.createdAt,
+        updatedAt: trip.updatedAt,
+      };
+      
+      parentTrips.push(parentTrip);
     }
     
     return parentTrips;
   } catch (error: any) {
     console.error('Error fetching parent trips by date:', error);
     
-    // Handle 401 - Unauthorized
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
     
-    // Handle 404 - No trips found
     if (error.response?.status === 404) {
       return [];
     }
     
-    // Handle other errors
     throw new Error(error.response?.data?.message || 'Failed to load trips. Please try again.');
   }
 };
@@ -526,7 +309,16 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
   try {
     const response = await apiService.get<ParentTripDtoResponse>(`/trip/parent/${tripId}`);
     
-    // Get first child from attendance (or all children if needed)
+    if (!response.stops || response.stops.length === 0) {
+      return null;
+    }
+    
+    // API đã filter sẵn chỉ trả về stops của parent
+    // Pickup = stop đầu tiên, Dropoff = stop cuối cùng
+    const firstStop = response.stops[0];
+    const lastStop = response.stops[response.stops.length - 1];
+    
+    // Lấy child info từ attendance (nếu có)
     let childId: Guid | undefined;
     let childName: string | undefined;
     
@@ -541,38 +333,6 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
     
     if (!childId || !childName) {
       return null;
-    }
-    
-    // Find pickup and dropoff stops
-    let pickupStop: ParentTripDto['pickupStop'] | undefined;
-    let dropoffStop: ParentTripDto['dropoffStop'] | undefined;
-    
-    for (const stop of response.stops) {
-      const hasChildAttendance = stop.attendance?.some(a => a.studentId === childId);
-      if (hasChildAttendance) {
-        if (!pickupStop) {
-          pickupStop = {
-            sequenceOrder: stop.sequence,
-            pickupPointName: stop.name,
-              address: stop.location?.address || stop.name,
-              plannedAt: stop.plannedArrival,
-              arrivedAt: stop.actualArrival,
-              departedAt: stop.actualDeparture,
-              latitude: stop.location?.latitude,
-              longitude: stop.location?.longitude,
-          };
-        }
-        dropoffStop = {
-          sequenceOrder: stop.sequence,
-          pickupPointName: stop.name,
-            address: stop.location?.address || stop.name,
-            plannedAt: stop.plannedDeparture,
-            arrivedAt: stop.actualArrival,
-            departedAt: stop.actualDeparture,
-            latitude: stop.location?.latitude,
-            longitude: stop.location?.longitude,
-        };
-      }
     }
     
     const completedStops = response.stops.filter(s => s.actualDeparture).length;
@@ -591,8 +351,26 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
       childName: childName,
       childAvatar: undefined,
       childClassName: undefined,
-      pickupStop: pickupStop,
-      dropoffStop: dropoffStop,
+      pickupStop: {
+        sequenceOrder: firstStop.sequence,
+        pickupPointName: firstStop.name,
+        address: firstStop.location.address,
+        latitude: firstStop.location.latitude,
+        longitude: firstStop.location.longitude,
+        plannedAt: firstStop.plannedArrival,
+        arrivedAt: firstStop.actualArrival,
+        departedAt: firstStop.actualDeparture,
+      },
+      dropoffStop: {
+        sequenceOrder: lastStop.sequence,
+        pickupPointName: lastStop.name,
+        address: lastStop.location.address,
+        latitude: lastStop.location.latitude,
+        longitude: lastStop.location.longitude,
+        plannedAt: lastStop.plannedDeparture,
+        arrivedAt: lastStop.actualArrival,
+        departedAt: lastStop.actualDeparture,
+      },
       totalStops: response.stops.length,
       completedStops: completedStops,
       driver: response.driver ? {
@@ -615,18 +393,47 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
   } catch (error: any) {
     console.error('Error fetching parent trip detail:', error);
     
-    // Handle 401 - Unauthorized
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
     
-    // Handle 404 - Trip not found
     if (error.response?.status === 404) {
       return null;
     }
     
-    // Handle other errors
     throw new Error(error.response?.data?.message || 'Failed to load trip detail');
   }
 };
 
+/**
+ * Notify parents that driver has arrived at a stop
+ * @param tripId - Trip ID
+ * @param stopId - Stop/Pickup Point ID
+ * @returns Response with notification details
+ */
+export const confirmArrival = async (
+  tripId: string,
+  stopId: string
+): Promise<{ tripId: string; stopId: string; message: string; notifiedAt: string }> => {
+  try {
+    const response = await apiService.post<{
+      tripId: string;
+      stopId: string;
+      message: string;
+      notifiedAt: string;
+    }>(`/trip/${tripId}/stops/${stopId}/confirm-arrival`);
+    return response;
+  } catch (error: any) {
+    console.error('Error notifying arrival at stop:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+
+    if (error.response?.status === 400) {
+      throw new Error(error.response?.data?.message || 'Cannot notify arrival');
+    }
+
+    throw new Error(error.response?.data?.message || 'Failed to notify arrival. Please try again.');
+  }
+};

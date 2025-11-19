@@ -1,17 +1,17 @@
-
 import { tripHubService } from '@/lib/signalr/tripHub.service';
 import type { ParentTripDto } from '@/lib/trip/parentTrip.types';
 import { getParentTripDetail } from '@/lib/trip/trip.api';
 import type { Guid } from '@/lib/types';
+import { getRoute } from '@/lib/vietmap/vietmap.service';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { updateTrip } from '@/store/slices/parentTodaySlice';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Camera, MapView, PointAnnotation, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
+import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -84,12 +84,6 @@ const getStopStatus = (stop: ParentTripDto['pickupStop'] | ParentTripDto['dropof
   return 'pending';
 };
 
-// Mock current bus location (in real app, this would come from SignalR)
-const getMockBusLocation = (): [number, number] => {
-  // Đà Nẵng coordinates - between pickup and dropoff
-  return [108.2022, 16.0544];
-};
-
 type VehicleInfo = {
   id?: Guid;
   maskedPlate: string;
@@ -111,6 +105,9 @@ export default function ParentTripTrackingScreen() {
   const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
   const [showDriverModal, setShowDriverModal] = useState(false);
   const mapRef = useRef<MapViewRef>(null);
+  const hasRealtimeRef = useRef(false);
+  const [routeCoordinates, setRouteCoordinates] = useState<[number, number][] | null>(null);
+  const [isLoadingRoute, setIsLoadingRoute] = useState(false);
 
   // Load trip data - check Redux store first, then fetch from API if not found
   useEffect(() => {
@@ -125,7 +122,7 @@ export default function ParentTripTrackingScreen() {
       try {
         // First, check if trip exists in Redux store
         let tripData: ParentTripDto | null | undefined = tripsFromStore.find(t => t.id === tripId);
-        
+
         // If not in store, fetch from API
         if (!tripData) {
           tripData = await getParentTripDetail(tripId);
@@ -134,13 +131,9 @@ export default function ParentTripTrackingScreen() {
             dispatch(updateTrip(tripData));
           }
         }
-        
+
         if (tripData) {
           setTrip(tripData);
-          // Set initial bus location
-          if (tripData.status === 'InProgress') {
-            setBusLocation(getMockBusLocation());
-          }
         } else {
           Alert.alert('Error', 'Trip not found', [
             { text: 'OK', onPress: () => router.replace('/(parent-tabs)/trips/today') },
@@ -148,7 +141,7 @@ export default function ParentTripTrackingScreen() {
         }
       } catch (error: any) {
         console.error('Error loading trip:', error);
-        const errorMessage = error.message === 'UNAUTHORIZED' 
+        const errorMessage = error.message === 'UNAUTHORIZED'
           ? 'Session expired. Please login again.'
           : error.message || 'Failed to load trip';
         Alert.alert('Error', errorMessage, [
@@ -185,9 +178,11 @@ export default function ParentTripTrackingScreen() {
         tripHubService.onLocationUpdate<LocationUpdate>((location) => {
           if (location.tripId === tripId && trip) {
             const newLocation: [number, number] = [location.longitude, location.latitude];
+
+            hasRealtimeRef.current = true;
             setBusLocation(newLocation);
             setCameraCenter(newLocation);
-            
+
             // Update Redux store to sync with list screen
             // Note: We only update location-related data here, not the full trip object
             // The trip object structure doesn't include location, so we just update the trip
@@ -203,8 +198,6 @@ export default function ParentTripTrackingScreen() {
         console.log('✅ TripHub initialized for trip tracking:', tripId);
       } catch (error) {
         console.error('❌ Error initializing TripHub:', error);
-        // Fallback to mock location
-        setBusLocation(getMockBusLocation());
       }
     };
 
@@ -219,31 +212,131 @@ export default function ParentTripTrackingScreen() {
         });
       }
     };
-  }, [tripId, trip, dispatch]);
+  }, [tripId,trip, dispatch]);
 
+  useEffect(() => {
+    console.log('🚌 Bus location:', busLocation);
+  }, [busLocation]);
+
+  const pickupStatus = trip ? getStopStatus(trip.pickupStop) : 'pending';
+  const dropoffStatus = trip ? getStopStatus(trip.dropoffStop) : 'pending';
+
+  useEffect(() => {
+    const fetchRouteToPickup = async () => {
+      if (
+        trip?.status !== 'InProgress' ||
+        !busLocation ||
+        !trip.pickupStop?.latitude ||
+        !trip.pickupStop?.longitude ||
+        pickupStatus === 'completed'
+      ) {
+        setRouteCoordinates(null);
+        return;
+      }
+
+      setIsLoadingRoute(true);
+      try {
+        const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || '';
+        if (!apiKey) {
+          console.warn('VietMap API key not configured');
+          return;
+        }
+
+
+        const [longitude, latitude] = busLocation;
+
+        const routeData = await getRoute(
+          { lat: latitude, lng: longitude }, // Vị trí hiện tại của xe
+          { lat: trip.pickupStop.latitude, lng: trip.pickupStop.longitude }, // Điểm đón
+          apiKey
+        );
+
+        if (routeData) {
+          setRouteCoordinates(routeData.coordinates);
+          console.log('✅ Route fetched:', routeData.coordinates.length, 'points');
+        } else {
+          setRouteCoordinates(null);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching route:', error);
+        setRouteCoordinates(null);
+      } finally {
+        setIsLoadingRoute(false);
+      }
+    };
+
+    fetchRouteToPickup();
+  }, [busLocation, trip?.pickupStop, trip?.status, pickupStatus]);
 
   const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || '';
   const mapStyle = apiKey
     ? `https://maps.vietmap.vn/maps/styles/tm/style.json?apikey=${apiKey}`
     : undefined;
 
-  // Stops in ParentTripDto use `latitude` and `longitude` on the stop itself
-  const pickupCoordinate = trip?.pickupStop && typeof trip.pickupStop.latitude === 'number' && typeof trip.pickupStop.longitude === 'number'
-    ? ([trip.pickupStop.longitude, trip.pickupStop.latitude] as [number, number])
-    : null;
-
-  const dropoffCoordinate = trip?.dropoffStop && typeof trip.dropoffStop.latitude === 'number' && typeof trip.dropoffStop.longitude === 'number'
-    ? ([trip.dropoffStop.longitude, trip.dropoffStop.latitude] as [number, number])
-    : null;
-
-  // Center map on most relevant coordinate
+  // Center map on bus location or default location
   const getMapCenter = (): [number, number] => {
-    if (cameraCenter) return cameraCenter;
     if (busLocation) return busLocation;
-    if (pickupCoordinate) return pickupCoordinate;
-    if (dropoffCoordinate) return dropoffCoordinate;
-    // Default to Đà Nẵng
+    // Default to Da Nang
     return [108.2022, 16.0544];
+  };
+
+  const busPointKey = useMemo(() => {
+    if (!busLocation) return 'bus';
+    const [lon, lat] = busLocation;
+    return `bus-${lon.toFixed(6)}-${lat.toFixed(6)}`;
+  }, [busLocation]);
+
+  const calculateMapBounds = (): { center: [number, number], zoom: number } => {
+    const points: [number, number][] = [];
+
+    // Add bus location if available
+    if (busLocation) {
+      points.push(busLocation);
+    }
+
+    // Add pickup point if coordinates available
+    if (trip?.pickupStop?.latitude && trip.pickupStop.longitude) {
+      points.push([trip.pickupStop.longitude, trip.pickupStop.latitude]);
+    }
+
+    // Add dropoff point if coordinates are available
+    if (trip?.dropoffStop?.latitude && trip.dropoffStop.longitude) {
+      points.push([trip.dropoffStop.longitude, trip.dropoffStop.latitude]);
+    }
+
+    if (points.length === 0) {
+      return { center: [108.2022, 16.0544], zoom: 13 }; // Default Đà Nẵng
+    }
+
+    if (points.length === 1) {
+      return { center: points[0], zoom: 14 };
+    }
+
+    //Calculate center and zoom to fit all points
+    const lons = points.map(p => p[0]);
+    const lats = points.map(p => p[1]);
+    const minLon = Math.min(...lons);
+    const maxLon = Math.max(...lons);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+
+    const center: [number, number] = [
+      (minLon + maxLon) / 2,
+      (minLat + maxLat) / 2
+    ];
+
+    // calculate zoom base distance
+    const latDiff = maxLat - minLat;
+    const lonDiff = maxLon - minLon;
+    const maxDiff = Math.max(latDiff, lonDiff);
+
+    let zoom = 13;
+    if (maxDiff > 0.1) zoom = 11;
+    else if (maxDiff > 0.05) zoom = 12;
+    else if (maxDiff > 0.01) zoom = 13;
+    else zoom = 14;
+
+    return { center, zoom };
   };
 
   if (loading) {
@@ -262,13 +355,12 @@ export default function ParentTripTrackingScreen() {
     return null;
   }
 
-  const pickupStatus = getStopStatus(trip.pickupStop);
-  const dropoffStatus = getStopStatus(trip.dropoffStop);
+
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FCDC44" />
-      
+
       {/* Header */}
       <LinearGradient
         colors={['#FFD700', '#FFEB3B']}
@@ -288,7 +380,7 @@ export default function ParentTripTrackingScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}>
-        
+
         {/* Trip Info */}
         <View style={styles.tripInfoCard}>
           {/* Child Info */}
@@ -311,9 +403,9 @@ export default function ParentTripTrackingScreen() {
               )}
             </View>
           </View>
-          
+
           <View style={styles.tripInfoDivider} />
-          
+
           <View style={styles.tripInfoRow}>
             <Ionicons name="time-outline" size={20} color="#6B7280" />
             <Text style={styles.tripTime}>
@@ -337,53 +429,79 @@ export default function ParentTripTrackingScreen() {
               attributionEnabled={false}>
               <Camera
                 defaultSettings={{
-                  centerCoordinate: getMapCenter(),
-                  zoomLevel: 13,
+                  centerCoordinate: calculateMapBounds().center,
+                  zoomLevel: calculateMapBounds().zoom,
                   animationDuration: 0,
                 }}
-                centerCoordinate={cameraCenter || getMapCenter()}
-                zoomLevel={cameraCenter ? 14 : 13}
+                centerCoordinate={cameraCenter || calculateMapBounds().center}
+                zoomLevel={cameraCenter ? 14 : calculateMapBounds().zoom}
                 animationDuration={cameraCenter ? 1000 : 0}
               />
-              
+
+              {routeCoordinates && routeCoordinates.length > 0 && (
+                <ShapeSource
+                  id="route-source"
+                  shape={{
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                      type: 'LineString',
+                      coordinates: routeCoordinates,
+                    },
+                  }}>
+                  <LineLayer
+                    id="route-layer"
+                    style={{
+                      lineColor: '#3B82F6',
+                      lineWidth: 8,
+                      lineCap: 'round',
+                      lineJoin: 'round',
+                    }}
+                  />
+                </ShapeSource>
+              )}
               {/* Bus Location Marker */}
               {busLocation && trip.status === 'InProgress' && (
                 <PointAnnotation
                   id="bus-location"
+                  key={busPointKey}
                   coordinate={busLocation}
-                  anchor={{ x: 0.5, y: 0.5 }}>
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  onSelected={() => console.log('🚌 Bus marker selected')}
+                  onDeselected={() => console.log('🚌 Bus marker deselected')}>
                   <View style={styles.busMarker}>
-                    <Ionicons name="bus" size={32} color="#4CAF50" />
                     <View style={styles.busMarkerPulse} />
+                    <Ionicons name="bus" size={32} color="#000000" style={{ zIndex: 10 }} />
                   </View>
                 </PointAnnotation>
               )}
 
+
               {/* Pickup Point Marker */}
-              {pickupCoordinate && (
+              {trip.pickupStop && trip.pickupStop.latitude && trip.pickupStop.longitude && (
                 <PointAnnotation
                   id="pickup-point"
-                  coordinate={pickupCoordinate}
+                  coordinate={[trip.pickupStop.longitude, trip.pickupStop.latitude]}
                   anchor={{ x: 0.5, y: 1 }}>
                   <View style={[
                     styles.stopMarker,
                     pickupStatus === 'completed' && styles.stopMarkerCompleted,
                     pickupStatus === 'arrived' && styles.stopMarkerArrived,
                   ]}>
-                    <Ionicons 
-                      name={pickupStatus === 'completed' ? 'checkmark-circle' : 'location'} 
-                      size={24} 
-                      color="#FFFFFF" 
+                    <Ionicons
+                      name={pickupStatus === 'completed' ? 'checkmark-circle' : 'location'}
+                      size={24}
+                      color="#4CAF50"
                     />
                   </View>
                 </PointAnnotation>
               )}
 
               {/* Dropoff Point Marker */}
-              {dropoffCoordinate && (
+              {trip.dropoffStop && trip.dropoffStop.latitude && trip.dropoffStop.longitude && (
                 <PointAnnotation
                   id="dropoff-point"
-                  coordinate={dropoffCoordinate}
+                  coordinate={[trip.dropoffStop.longitude, trip.dropoffStop.latitude]}
                   anchor={{ x: 0.5, y: 1 }}>
                   <View style={[
                     styles.stopMarker,
@@ -391,10 +509,10 @@ export default function ParentTripTrackingScreen() {
                     dropoffStatus === 'completed' && styles.stopMarkerCompleted,
                     dropoffStatus === 'arrived' && styles.stopMarkerArrived,
                   ]}>
-                    <Ionicons 
-                      name={dropoffStatus === 'completed' ? 'checkmark-circle' : 'location'} 
-                      size={24} 
-                      color="#FFFFFF" 
+                    <Ionicons
+                      name={dropoffStatus === 'completed' ? 'checkmark-circle' : 'location'}
+                      size={24}
+                      color="#FFFFFF"
                     />
                   </View>
                 </PointAnnotation>
@@ -418,7 +536,8 @@ export default function ParentTripTrackingScreen() {
           style={styles.floatingButton}
           onPress={() => setShowDriverModal(true)}
           activeOpacity={0.8}>
-          <MaterialCommunityIcons name="account-tie" size={32} color="#FFFFFF" />
+          <MaterialCommunityIcons name="account-tie" size={30} color="#FFFFFF" />
+          <Text style={styles.floatingButtonLabel}>Driver</Text>
         </TouchableOpacity>
       )}
 
@@ -443,7 +562,7 @@ export default function ParentTripTrackingScreen() {
                 <Ionicons name="close" size={24} color="#000000" />
               </TouchableOpacity>
             </View>
-            
+
             {trip.driver && (
               <View style={styles.modalBody}>
                 <View style={styles.modalDriverAvatarContainer}>
@@ -451,10 +570,10 @@ export default function ParentTripTrackingScreen() {
                     <MaterialCommunityIcons name="account-tie" size={80} color="#6B7280" />
                   </View>
                 </View>
-                
+
                 <View style={styles.modalDriverInfo}>
                   <Text style={styles.modalDriverName}>{trip.driver.fullName}</Text>
-                  
+
                   {/* Vehicle Info */}
                   {trip.vehicle && (
                     <View style={styles.vehicleInfoContainer}>
@@ -483,17 +602,19 @@ export default function ParentTripTrackingScreen() {
                       </View>
                     </View>
                   )}
-                  
+
                   <TouchableOpacity
                     style={styles.callButton}
                     onPress={() => {
                       // Handle call action
                       Alert.alert('Call', `Do you want to call ${trip.driver?.fullName}?`, [
                         { text: 'Cancel', style: 'cancel' },
-                        { text: 'Call', onPress: () => {
-                          // Implement call functionality
-                          console.log('Calling:', trip.driver?.phone);
-                        }},
+                        {
+                          text: 'Call', onPress: () => {
+                            // Implement call functionality
+                            console.log('Calling:', trip.driver?.phone);
+                          }
+                        },
                       ]);
                     }}>
                     <Ionicons name="call" size={20} color="#FFFFFF" />
@@ -814,9 +935,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 30,
     right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     backgroundColor: '#2196F3',
     justifyContent: 'center',
     alignItems: 'center',
@@ -825,8 +946,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 8,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    paddingVertical: 8,
+  },
+  floatingButtonLabel: {
+    marginTop: 4,
+    fontSize: 10,
+    fontFamily: 'RobotoSlab-Bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -992,4 +1119,3 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 });
-
