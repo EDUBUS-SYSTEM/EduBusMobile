@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, Animated, StyleSheet, Easing } from 'react-native';
-import { Image } from 'expo-image';
-import { useAppSelector, useAppDispatch } from '../../store/hooks';
-import { hideAlert } from '../../store/slices/notificationAlertSlice';
-import { useRouter } from 'expo-router';
 import { Audio } from 'expo-av';
+import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { hideAlert } from '../../store/slices/notificationAlertSlice';
 
 export const NotificationAlert = () => {
   const router = useRouter();
@@ -107,7 +107,7 @@ export const NotificationAlert = () => {
     const loadSound = async () => {
       try {
         const { sound } = await Audio.Sound.createAsync(
-          require('@/assets/sounds/siuu-sound-effect.mp3')
+          require('@/assets/sounds/notification-sound.mp3')
         );
 
         if (!isMounted) {

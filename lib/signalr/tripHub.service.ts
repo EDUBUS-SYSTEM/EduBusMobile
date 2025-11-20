@@ -1,4 +1,6 @@
 import { HttpTransportType, HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
+import { store } from '@/store';
+import { fetchUnreadCount } from '@/store/slices/notificationsSlice';
 import { config } from '../config';
 import type { Guid } from '../types';
 
@@ -47,6 +49,8 @@ class TripHubService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 5000; // 5 seconds
+  private unreadRefreshCooldown = 15000;
+  private lastUnreadRefresh = 0;
 
   /**
    * Initialize TripHub SignalR connection
@@ -189,7 +193,10 @@ class TripHubService {
     }
 
     console.log('📡 Subscribing to ReceiveLocationUpdate event');
-    this.connection.on('ReceiveLocationUpdate', callback);
+    this.connection.on('ReceiveLocationUpdate', (data: T) => {
+      this.refreshUnreadCount();
+      callback(data);
+    });
   }
 
   /**
@@ -287,6 +294,16 @@ class TripHubService {
         console.error('❌ TripHub reconnection failed:', error);
       }
     }
+  }
+
+  private refreshUnreadCount(): void {
+    const now = Date.now();
+    if (now - this.lastUnreadRefresh < this.unreadRefreshCooldown) {
+      return;
+    }
+
+    this.lastUnreadRefresh = now;
+    store.dispatch(fetchUnreadCount());
   }
 }
 

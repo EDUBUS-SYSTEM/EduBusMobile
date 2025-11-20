@@ -1,9 +1,14 @@
-import { useEffect } from 'react';
+import {
+  mapParentNotification,
+  type ParentNotificationDto,
+} from '@/lib/notification/notification.api';
+import { NotificationType } from '@/lib/notification/notification.type';
 import { signalRService } from '@/lib/signalr/notificationHub.service';
 import { store } from '@/store';
-import { showAlert } from '@/store/slices/notificationAlertSlice';
 import { useAppSelector } from '@/store/hooks';
-import { NotificationType } from '@/lib/notification/notification.type';
+import { showAlert } from '@/store/slices/notificationAlertSlice';
+import { addNotification } from '@/store/slices/notificationsSlice';
+import { useEffect } from 'react';
 
 /**
  * Custom hook to subscribe to arrival notifications from SignalR
@@ -22,19 +27,39 @@ export const useNotificationAlert = () => {
     console.log('📡 Subscribing to arrival notifications');
     
     // Subscribe to notification events
-    const handleNotification = (notification: any) => {
+    const handleNotification = (notification: ParentNotificationDto) => {
       console.log('🔔 [ReceiveNotification] Notification received:', JSON.stringify(notification, null, 2));
+
+      const normalizedNotification = mapParentNotification(notification);
+      store.dispatch(addNotification(normalizedNotification));
+      
+      const tripId = (() => {
+        const metadataTripId = notification.metadata?.tripId;
+        if (typeof metadataTripId === 'string' && metadataTripId.trim().length > 0) {
+          return metadataTripId;
+        }
+
+        const relatedEntityId = notification.relatedEntityId;
+        return typeof relatedEntityId === 'string' && relatedEntityId.trim().length > 0
+          ? relatedEntityId
+          : undefined;
+      })();
+
+      const etaMinutes = (() => {
+        const etaMetadata = notification.metadata?.estimatedMinutes;
+        return typeof etaMetadata === 'number' ? etaMetadata : undefined;
+      })();
       
       // Check if this is an arrival alert notification
       if (notification.notificationType === NotificationType.TripInfo || 
-          notification.metadata?.estimatedMinutes !== undefined) {
+          etaMinutes !== undefined) {
         console.log('📍 Arrival alert detected, dispatching showAlert');
         
         // Dispatch showAlert action
         store.dispatch(showAlert({
           isVisible: true,
-          tripId: notification.metadata?.tripId || notification.relatedEntityId,
-          etaMinutes: notification.metadata?.estimatedMinutes,
+          tripId,
+          etaMinutes,
           message: notification.message,
           title: notification.title,
         }));
