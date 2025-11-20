@@ -5,14 +5,9 @@ import { Guid } from '../types';
 import { DriverTripDto, DriverTripStatus } from './driverTrip.types';
 import type { ParentTripDto } from './parentTrip.types';
 import type {
-  SimpleTripDto,
   GetTripsByDateResponse,
-  TripDto,
-  TripStopDto,
-  TripLocationDto,
-  ParentTripStopDto,
-  ParentAttendanceDto,
   ParentTripDtoResponse,
+  TripDto
 } from './trip.response.types';
 
 /**
@@ -192,16 +187,16 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
         continue;
       }
       
-      // API already filters to only include the parent's stops
-      // Pickup = first stop, Drop-off = last stop
+      // API đã filter sẵn chỉ trả về stops của parent
+      // Pickup = stop đầu tiên, Dropoff = stop cuối cùng
       const firstStop = trip.stops[0];
       const lastStop = trip.stops[trip.stops.length - 1];
       
-      // Fetch child info from attendance (if available)
+      // Lấy child info từ attendance (nếu có)
       let childId: Guid | undefined;
       let childName: string | undefined;
       
-      // Find the first child record from attendance
+      // Tìm child đầu tiên từ attendance
       for (const stop of trip.stops) {
         if (stop.attendance && stop.attendance.length > 0) {
           const firstAttendance = stop.attendance[0];
@@ -211,7 +206,7 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
         }
       }
       
-      // Fallback: if no attendance data, fetch from the children API
+      // Fallback: nếu không có attendance, lấy từ children API
       if (!childId || !childName) {
         try {
           const userInfo = await authApi.getUserInfo();
@@ -227,7 +222,7 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
         }
       }
       
-      // If child info is still missing, skip this trip
+      // Nếu vẫn không có child info, skip trip này
       if (!childId || !childName) {
         continue;
       }
@@ -318,12 +313,12 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
       return null;
     }
     
-    // API already filters to only include the parent's stops
-    // Pickup = first stop, Drop-off = last stop
+    // API đã filter sẵn chỉ trả về stops của parent
+    // Pickup = stop đầu tiên, Dropoff = stop cuối cùng
     const firstStop = response.stops[0];
     const lastStop = response.stops[response.stops.length - 1];
     
-    // Fetch child info from attendance (if available)
+    // Lấy child info từ attendance (nếu có)
     let childId: Guid | undefined;
     let childName: string | undefined;
     

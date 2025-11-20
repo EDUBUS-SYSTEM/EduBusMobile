@@ -129,7 +129,7 @@ export default function VehicleOverviewScreen() {
           marginTop: 8,
           textAlign: 'center'
         }}>
-          You don't have a vehicle assigned yet. Please contact your administrator.
+          You don&apos;t have a vehicle assigned yet. Please contact your administrator.
         </Text>
       </View>
     );

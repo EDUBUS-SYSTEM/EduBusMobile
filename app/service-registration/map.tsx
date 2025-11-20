@@ -1476,9 +1476,9 @@ export default function MapScreen() {
   if (error && !parentEmail) {
     return (
       <View style={styles.container}>
-        <View style={styles.errorContainer}>
+        <View style={styles.errorScreenContainer}>
           <Ionicons name="alert-circle" size={48} color="#EF5350" />
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorScreenText}>{error}</Text>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}>
@@ -1719,7 +1719,7 @@ export default function MapScreen() {
 
             {submitError && (
               <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{submitError}</Text>
+                <Text style={styles.errorBoxText}>{submitError}</Text>
               </View>
             )}
 
@@ -2064,7 +2064,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 16,
   },
-  errorText: {
+  errorBoxText: {
     color: '#C62828',
     fontSize: 14,
   },
@@ -2086,11 +2086,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  errorContainer: {
+  errorScreenContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  errorScreenText: {
+    color: '#D32F2F',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 16,
   },
   backButton: {
     backgroundColor: '#FDC700',

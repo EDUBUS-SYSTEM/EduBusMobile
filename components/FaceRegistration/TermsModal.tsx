@@ -61,7 +61,7 @@ export default function TermsModal({
             <View style={styles.section}>
               <Text style={styles.sectionHeading}>1. Purpose of Data Collection</Text>
               <Text style={styles.sectionText}>
-                {childName}'s face data will be used for:
+                {childName}&apos;s face data will be used for:
               </Text>
               <Text style={styles.bulletPoint}>
                 • Identity verification for EduBus system
@@ -96,7 +96,7 @@ export default function TermsModal({
                 • Right to decline service usage
               </Text>
               <Text style={styles.sectionText}>
-                • Right to access your child's data
+                • Right to access your child&apos;s data
               </Text>
             </View>
 

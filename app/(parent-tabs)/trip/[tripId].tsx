@@ -1,16 +1,17 @@
+import { tripHubService } from '@/lib/signalr/tripHub.service';
 import type { ParentTripDto } from '@/lib/trip/parentTrip.types';
 import { getParentTripDetail } from '@/lib/trip/trip.api';
-import { tripHubService } from '@/lib/signalr/tripHub.service';
 import type { Guid } from '@/lib/types';
+import { getRoute } from '@/lib/vietmap/vietmap.service';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { updateTrip } from '@/store/slices/parentTodaySlice';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
 import { Image } from 'expo-image';
-import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@/components/vietmap';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useAppSelector, useAppDispatch } from '@/store/hooks';
-import { updateTrip } from '@/store/slices/parentTodaySlice';
 import {
   ActivityIndicator,
   Alert,
@@ -23,7 +24,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { getRoute } from '@/lib/vietmap/vietmap.service';
 
 type Params = { tripId?: Guid };
 
@@ -246,8 +246,8 @@ export default function ParentTripTrackingScreen() {
         const [longitude, latitude] = busLocation;
 
         const routeData = await getRoute(
-          { lat: latitude, lng: longitude }, // Current bus location
-          { lat: trip.pickupStop.latitude, lng: trip.pickupStop.longitude }, // Pickup point
+          { lat: latitude, lng: longitude }, // Vị trí hiện tại của xe
+          { lat: trip.pickupStop.latitude, lng: trip.pickupStop.longitude }, // Điểm đón
           apiKey
         );
 
@@ -305,7 +305,7 @@ export default function ParentTripTrackingScreen() {
     }
 
     if (points.length === 0) {
-      return { center: [108.2022, 16.0544], zoom: 13 }; // Default Da Nang
+      return { center: [108.2022, 16.0544], zoom: 13 }; // Default Đà Nẵng
     }
 
     if (points.length === 1) {
@@ -1119,4 +1119,3 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 });
-
