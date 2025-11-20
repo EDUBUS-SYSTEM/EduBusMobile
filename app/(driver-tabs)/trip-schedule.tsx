@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
@@ -19,7 +18,7 @@ import { DriverSchedule, driverScheduleApi, ScheduleDto } from '../../lib/trip-m
 export default function DriverScheduleScreen() {
   const [schedule, setSchedule] = useState<DriverSchedule>({ dots: [], byDate: {} });
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [schedules, setSchedules] = useState<ScheduleDto[]>([]);
@@ -77,9 +76,9 @@ export default function DriverScheduleScreen() {
   };
 
   const createMarkedDates = () => {
-    const marked: any = {};
-    
-    schedule.dots.forEach(({ date, dots }) => {
+    const marked: Record<string, any> = {};
+
+    for (const { date, dots } of schedule.dots) {
       marked[date] = {
         marked: true,
         dots: dots,
@@ -87,7 +86,7 @@ export default function DriverScheduleScreen() {
         selectedColor: '#F9A826',
         selectedTextColor: '#FFFFFF',
       };
-    });
+    }
 
     return marked;
   };
@@ -106,26 +105,173 @@ export default function DriverScheduleScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={['#F9A826', '#FF8C00']}
-        style={styles.header}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+      {/* Header Section with Yellow Circles Background */}
+      <View
+        style={{
+          paddingTop: 40,
+          paddingBottom: 40,
+          paddingHorizontal: 24,
+          position: "relative",
+          minHeight: 200,
+          backgroundColor: "transparent",
+        }}
       >
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
+        {/* Yellow Circles Background */}
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+          }}
         >
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Schedules</Text>
-        <View style={styles.placeholder} />
-      </LinearGradient>
+          {/* Circle 1 - Top Left */}
+          <View
+            style={{
+              position: "absolute",
+              top: -40,
+              left: -100,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FDE370",
+              opacity: 1,
+            }}
+          />
+
+          {/* Circle 2 - Top Right */}
+          <View
+            style={{
+              position: "absolute",
+              top: -30,
+              left: 40,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FDE370",
+              opacity: 1,
+            }}
+          />
+
+          {/* Circle 3 - Bottom Left */}
+          <View
+            style={{
+              position: "absolute",
+              top: -30,
+              left: 180,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FDE370",
+              opacity: 1,
+            }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              top: -40,
+              left: 320,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FDE370",
+              opacity: 1,
+            }}
+          />
+
+          {/* Circle 4 - Bottom Right */}
+          <View
+            style={{
+              position: "absolute",
+              top: -90,
+              right: 180,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FCCF08",
+              opacity: 1,
+            }}
+          />
+          {/* Circle 5 - Bottom Right */}
+          <View
+            style={{
+              position: "absolute",
+              top: -90,
+              right: 40,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FCCF08",
+              opacity: 1,
+            }}
+          />
+          {/* Circle 6 - Bottom Right */}
+          <View
+            style={{
+              position: "absolute",
+              top: -90,
+              right: 320,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FCCF08",
+              opacity: 1,
+            }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              top: -90,
+              right: -100,
+              width: 200,
+              height: 200,
+              borderRadius: 200,
+              backgroundColor: "#FCCF08",
+              opacity: 1,
+            }}
+          />
+        </View>
+
+        {/* Header Content */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 20,
+          }}
+        >
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#000000" />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: '#000000' }]}>Schedules</Text>
+          <View style={styles.placeholder} />
+        </View>
+
+        {/* Curved White Border */}
+        <View
+          style={{
+            position: "absolute",
+            bottom: -30,
+            left: 0,
+            right: 0,
+            height: 40,
+            backgroundColor: "#FFFFFF",
+            borderTopLeftRadius: 30,
+            borderTopRightRadius: 30,
+          }}
+        />
+      </View>
 
       <ScrollView
-        style={styles.content}
+        style={[styles.content, { marginTop: -80 }]}
+        contentContainerStyle={{ paddingBottom: 320 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing || loading} onRefresh={onRefresh} />
         }
       >
         <View style={styles.chipsContainer}>
@@ -202,7 +348,7 @@ export default function DriverScheduleScreen() {
           />
         </View>
 
-        {selectedDate && schedule.byDate[selectedDate] && (
+        {Boolean(selectedDate && schedule.byDate[selectedDate]) && (
           <View style={styles.selectedDateInfo}>
             <Text style={styles.selectedDateTitle}>
               {new Date(selectedDate).toLocaleDateString('en-US', {
@@ -217,6 +363,22 @@ export default function DriverScheduleScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Bottom Decoration */}
+      <View style={styles.bottomDecorationWrapper} pointerEvents="none">
+        <View style={styles.bottomDecorationBackground}>
+          <View style={[styles.circle, styles.bottomCircleRightFar]} />
+          <View style={[styles.circle, styles.bottomCircleRightMid]} />
+          <View style={[styles.circle, styles.bottomCircleRightNear]} />
+          <View style={[styles.circle, styles.bottomCircleRightEdge]} />
+
+          <View style={[styles.circle, styles.bottomCircleLeftFar]} />
+          <View style={[styles.circle, styles.bottomCircleLeftMid]} />
+          <View style={[styles.circle, styles.bottomCircleLeftNear]} />
+          <View style={[styles.circle, styles.bottomCircleLeftEdge]} />
+        </View>
+        <View style={styles.bottomDecorationCurve} />
+      </View>
 
       <DayModal
         visible={modalVisible}
@@ -247,26 +409,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 30,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    color: '#FFFFFF',
     fontSize: 24,
     fontWeight: 'bold',
     fontFamily: 'RobotoSlab-Bold',
@@ -276,6 +427,76 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  bottomDecorationWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: -90,
+    height: 320,
+  },
+  bottomDecorationBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  bottomDecorationCurve: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 70,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+  },
+  circle: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 220,
+  },
+  bottomCircleRightFar: {
+    backgroundColor: '#FDE370',
+    bottom: -10,
+    right: -120,
+  },
+  bottomCircleRightMid: {
+    backgroundColor: '#FDE370',
+    bottom: 20,
+    right: 20,
+  },
+  bottomCircleRightNear: {
+    backgroundColor: '#FDE370',
+    bottom: 20,
+    right: 180,
+  },
+  bottomCircleRightEdge: {
+    backgroundColor: '#FDE370',
+    bottom: -10,
+    right: 330,
+  },
+  bottomCircleLeftFar: {
+    backgroundColor: '#FCCF08',
+    bottom: -80,
+    left: -120,
+  },
+  bottomCircleLeftMid: {
+    backgroundColor: '#FCCF08',
+    bottom: -70,
+    left: 20,
+  },
+  bottomCircleLeftNear: {
+    backgroundColor: '#FCCF08',
+    bottom: -70,
+    left: 180,
+  },
+  bottomCircleLeftEdge: {
+    backgroundColor: '#FCCF08',
+    bottom: -90,
+    left: 330,
   },
   chipsContainer: {
     paddingHorizontal: 20,

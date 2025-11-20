@@ -19,6 +19,8 @@ export default function SplashScreen() {
             router.replace('/(driver-tabs)/dashboard' as any);
           } else if (userInfo.role === 'Parent') {
             router.replace('/(parent-tabs)/home' as any);
+          } else if (userInfo.role === 'Supervisor') {
+            router.replace('/(supervisor-tabs)/dashboard' as any);
           } else if (userInfo.role === 'Admin') {
             // Admin accounts are not allowed, logout and go to login
             console.log('Admin account detected - logging out');

@@ -4,7 +4,7 @@ import { isRoleAllowed, getRoleErrorMessage } from '@/lib/auth/auth.utils';
 import { signalRService } from '@/lib/signalr/notificationHub.service';
 
 interface UserInfo {
-  role: "Admin" | "Driver" | "Parent" | null;
+  role: "Admin" | "Driver" | "Parent" | "Supervisor" | null;
   fullName: string | null;
 }
 

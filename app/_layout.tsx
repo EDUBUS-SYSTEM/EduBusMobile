@@ -31,9 +31,11 @@ function RootLayoutContent() {
       <Stack>
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="splash" options={{ headerShown: false }} />
+        <Stack.Screen name="login-success-splash" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(parent-tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(driver-tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(supervisor-tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(driver-vehicle)" options={{ headerShown: false }} />
         <Stack.Screen name="(driver-leave)" options={{ headerShown: false }} />
         <Stack.Screen name="account-profile" options={{ headerShown: false }} />
