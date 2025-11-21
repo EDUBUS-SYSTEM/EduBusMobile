@@ -7,7 +7,6 @@ import {
   Alert,
   Image,
   SafeAreaView,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -264,12 +263,8 @@ export default function ChildrenListScreen() {
         </View>
       </View>
 
-      {/* Scrollable Content */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollViewContent}
-        showsVerticalScrollIndicator={false}
-      >
+      {/* Main Content */}
+      <View style={styles.contentContainer}>
         {/* Main content card */}
         <View style={styles.mainCard}>
           <TouchableOpacity
@@ -319,7 +314,7 @@ export default function ChildrenListScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+      </View>
 
       {/* Terms Modal */}
       <TermsModal
@@ -337,10 +332,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
-  scrollView: {
+  contentContainer: {
     flex: 1,
-  },
-  scrollViewContent: {
     paddingBottom: 50,
   },
   logo: {

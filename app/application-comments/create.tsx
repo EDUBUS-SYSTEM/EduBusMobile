@@ -7,10 +7,11 @@ import { useRouter, useNavigation } from "expo-router";
 import { useChildrenList } from "@/hooks/useChildren";
 import { authApi } from "@/lib/auth/auth.api";
 import { studentAbsenceRequestApi } from "@/lib/parent/studentAbsenceRequest.api";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Platform,
   RefreshControl,
   ScrollView,
@@ -19,6 +20,7 @@ import {
   TouchableOpacity,
   View,
   type ViewStyle,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatDateLabel } from "./utils";
@@ -26,6 +28,7 @@ import { formatDateLabel } from "./utils";
 const MIN_REASON_LENGTH = 30;
 
 export default function CreateAbsenceReportScreen() {
+  const { height: screenHeight } = useWindowDimensions();
   const router = useRouter();
   const navigation = useNavigation();
   const {
@@ -34,6 +37,9 @@ export default function CreateAbsenceReportScreen() {
     error: childrenError,
     refetch: refetchChildren,
   } = useChildrenList();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const reasonInputRef = useRef<TextInput>(null);
+  const reasonInputLayout = useRef({ y: 0, height: 0 });
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -63,10 +69,10 @@ export default function CreateAbsenceReportScreen() {
   const scrollContentStyle = useMemo<ViewStyle>(
     () => ({
       padding: 20,
-      paddingBottom: 32,
+      paddingBottom: screenHeight < 800 ? 150 : 100,
       ...(isWeb ? { alignItems: "center" } : {}),
     }),
-    [isWeb],
+    [isWeb, screenHeight],
   );
   const responsiveCardStyle = useMemo<ViewStyle>(
     () =>
@@ -474,13 +480,22 @@ export default function CreateAbsenceReportScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F6FCFF" }}>
-      <ScrollView
+      <KeyboardAvoidingView 
         style={{ flex: 1 }}
-        contentContainerStyle={scrollContentStyle}
-        refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
-        }
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
+        <ScrollView
+          ref={scrollViewRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={scrollContentStyle}
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+          }
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
         <View
           style={[
             {
@@ -871,7 +886,13 @@ export default function CreateAbsenceReportScreen() {
             </View>
           </View>
 
-          <View style={{ marginTop: 18 }}>
+          <View 
+            onLayout={(event) => {
+              const { y, height } = event.nativeEvent.layout;
+              reasonInputLayout.current = { y, height };
+            }}
+            style={{ marginTop: 18 }}
+          >
             <Text
               style={{
                 fontFamily: "RobotoSlab-Bold",
@@ -883,11 +904,25 @@ export default function CreateAbsenceReportScreen() {
               Main reason *
             </Text>
             <TextInput
+              ref={reasonInputRef}
               value={reason}
               onChangeText={setReason}
               placeholder="Example: high fever, staying home for two days."
               placeholderTextColor="#94A3B8"
               multiline
+              onFocus={() => {
+                setTimeout(() => {
+                  if (scrollViewRef.current && reasonInputLayout.current.y > 0) {
+                    // Scroll để input field không bị che bởi keyboard
+                    // Điều chỉnh offset dựa trên kích thước màn hình
+                    const offset = screenHeight < 800 ? 150 : 200;
+                    scrollViewRef.current.scrollTo({
+                      y: Math.max(0, reasonInputLayout.current.y - offset),
+                      animated: true,
+                    });
+                  }
+                }, 300);
+              }}
               style={{
                 minHeight: 100,
                 borderWidth: 1,
@@ -940,7 +975,8 @@ export default function CreateAbsenceReportScreen() {
           </TouchableOpacity>
         </View>
 
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

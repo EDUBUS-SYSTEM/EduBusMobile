@@ -4,14 +4,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { StatusBar, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
+import { useState, useRef } from 'react';
+import { StatusBar, Text, TextInput, TouchableOpacity, View, Alert, KeyboardAvoidingView, ScrollView, Platform, useWindowDimensions } from 'react-native';
 
 export default function LoginScreen() {
+  const { height: screenHeight } = useWindowDimensions();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const emailInputLayout = useRef({ y: 0, height: 0 });
+  const passwordInputLayout = useRef({ y: 0, height: 0 });
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -68,18 +74,60 @@ export default function LoginScreen() {
     }
   };
 
+  const handleEmailFocus = () => {
+    setTimeout(() => {
+      if (scrollViewRef.current && emailInputLayout.current.y > 0) {
+        // Scroll để input field không bị che bởi keyboard
+        // Điều chỉnh offset dựa trên kích thước màn hình
+        const offset = screenHeight < 800 ? 120 : 150;
+        scrollViewRef.current.scrollTo({
+          y: Math.max(0, emailInputLayout.current.y - offset),
+          animated: true,
+        });
+      }
+    }, 300);
+  };
+
+  const handlePasswordFocus = () => {
+    setTimeout(() => {
+      if (scrollViewRef.current && passwordInputLayout.current.y > 0) {
+        // Scroll để input field không bị che bởi keyboard
+        // Điều chỉnh offset dựa trên kích thước màn hình
+        const offset = screenHeight < 800 ? 80 : 120;
+        scrollViewRef.current.scrollTo({
+          y: Math.max(0, passwordInputLayout.current.y - offset),
+          animated: true,
+        });
+      }
+    }, 300);
+  };
+
   return (
-         <View style={{ flex: 1, backgroundColor: '#FFFFFF', position: 'relative' }}>
+    <KeyboardAvoidingView 
+      style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    >
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-     
-     {/* Header Section with 4 Yellow Circles */}
-     <View style={{ 
-       paddingTop: 80, 
-       paddingBottom: 60, 
-       paddingHorizontal: 24,
-       position: 'relative',
-       minHeight: 250
-     }}>
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={{ 
+          flexGrow: 1,
+          paddingBottom: screenHeight < 800 ? 100 : 50
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', position: 'relative' }}>
+          {/* Header Section with 4 Yellow Circles */}
+          <View style={{ 
+            paddingTop: 80, 
+            paddingBottom: 60, 
+            paddingHorizontal: 24,
+            position: 'relative',
+            minHeight: 250
+          }}>
        {/* 4 Yellow Circles Background */}
        <View style={{
          position: 'absolute',
@@ -218,7 +266,12 @@ export default function LoginScreen() {
          zIndex: 0
        }}>
         {/* Username Input Field */}
-        <View style={{
+        <View 
+          onLayout={(event) => {
+            const { y, height } = event.nativeEvent.layout;
+            emailInputLayout.current = { y, height };
+          }}
+          style={{
           flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: '#FFFFFF',
@@ -246,6 +299,7 @@ export default function LoginScreen() {
             <Ionicons name="person" size={18} color="#000000" />
           </View>
           <TextInput
+            ref={emailInputRef}
             style={{
               flex: 1,
               fontSize: 16,
@@ -259,11 +313,19 @@ export default function LoginScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            onFocus={handleEmailFocus}
+            returnKeyType="next"
+            onSubmitEditing={() => passwordInputRef.current?.focus()}
           />
         </View>
         
         {/* Password Input Field */}
-        <View style={{
+        <View 
+          onLayout={(event) => {
+            const { y, height } = event.nativeEvent.layout;
+            passwordInputLayout.current = { y, height };
+          }}
+          style={{
           flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: '#FFFFFF',
@@ -291,6 +353,7 @@ export default function LoginScreen() {
             <Ionicons name="key" size={18} color="#000000" />
           </View>
           <TextInput
+            ref={passwordInputRef}
             style={{
               flex: 1,
               fontSize: 16,
@@ -302,6 +365,9 @@ export default function LoginScreen() {
             secureTextEntry={!showPassword}
             value={password}
             onChangeText={setPassword}
+            onFocus={handlePasswordFocus}
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
           />
           <TouchableOpacity
             onPress={() => setShowPassword(!showPassword)}
@@ -379,7 +445,9 @@ export default function LoginScreen() {
         style={{ width: 400, height: 300 }}
         contentFit="contain"
       />
-    </View>
-   </View>
+        </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
