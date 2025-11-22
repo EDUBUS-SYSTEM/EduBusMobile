@@ -7,6 +7,7 @@ import { router, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Animated, Text, View } from 'react-native';
 import { useAppDispatch } from '@/store/hooks';
+import { fetchUnreadCount } from '@/store/slices/notificationsSlice';
 import { setSignalRConnecting, setSignalRConnected, setSignalRError } from '@/store/slices/signalRSlice';
 
 export default function LoginSuccessSplash() {
@@ -56,6 +57,13 @@ export default function LoginSuccessSplash() {
             console.log('⏳ [LOGIN-SPLASH] SignalR not connected yet, waiting for _layout.tsx to initialize');
           }
           
+          try {
+            await dispatch(fetchUnreadCount()).unwrap();
+            console.log('🔢 Unread notifications preloaded');
+          } catch (unreadError) {
+            console.warn('⚠️ Failed to preload unread notifications:', unreadError);
+          }
+
           setStatusText('Almost ready...');
         } else {
           console.log('⏭️ Skipping SignalR check. Token:', !!token, 'Role:', userInfo?.role);
