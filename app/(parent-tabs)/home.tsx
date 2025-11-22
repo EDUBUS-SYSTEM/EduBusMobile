@@ -1,10 +1,23 @@
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { fetchUnreadCount } from '@/store/slices/notificationsSlice';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useCallback } from 'react';
+import type { ViewStyle } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function ParentHomeScreen() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const unreadCount = useAppSelector((state) => state.notifications.unreadCount);
+
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchUnreadCount());
+    }, [dispatch]),
+  );
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
@@ -194,49 +207,10 @@ export default function ParentHomeScreen() {
           Quick Actions
         </Text>
 
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
-          <TouchableOpacity 
-            onPress={() => router.push('/service-registration/student-selection')}
-            style={{
-              backgroundColor: '#FEFCE8',
-              borderRadius: 15,
-              padding: 20,
-              width: '47%',
-              alignItems: 'center',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 4,
-              elevation: 3,
-              borderWidth: 2,
-              borderColor: '#FDC700'
-            }}>
-            <Ionicons name="clipboard" size={32} color="#D08700" />
-            <Text style={{
-              fontFamily: 'RobotoSlab-Medium',
-              fontSize: 14,
-              color: '#000000',
-              marginTop: 8,
-              textAlign: 'center'
-            }}>
-              Register Service
-            </Text>
-          </TouchableOpacity>
-
+        <View style={styles.quickActionGrid}>
           <TouchableOpacity 
             onPress={() => router.push('/(parent-tabs)/trips/today')}
-            style={{
-            backgroundColor: '#E0F7FA',
-            borderRadius: 15,
-            padding: 20,
-            width: '47%',
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 3
-          }}>
+            style={styles.quickActionCard}>
             <Ionicons name="calendar" size={32} color="#01CBCA" />
             <Text style={{
               fontFamily: 'RobotoSlab-Medium',
@@ -249,18 +223,52 @@ export default function ParentHomeScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={{
-            backgroundColor: '#E0F7FA',
-            borderRadius: 15,
-            padding: 20,
-            width: '47%',
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 3
-          }}>
+          <TouchableOpacity 
+            onPress={() => router.push('/(parent-tabs)/notifications')}
+            style={styles.quickActionCard}>
+            <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="notifications" size={32} color="#01CBCA" />
+              {unreadCount > 0 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: -6,
+                    right: -10,
+                    minWidth: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    backgroundColor: '#FF5722',
+                    paddingHorizontal: 4,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#FFFFFF',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'RobotoSlab-Bold',
+                      fontSize: 11,
+                      color: '#FFFFFF',
+                    }}
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={{
+              fontFamily: 'RobotoSlab-Medium',
+              fontSize: 14,
+              color: '#000000',
+              marginTop: 8,
+              textAlign: 'center'
+            }}>
+              Notifications
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.quickActionCard}>
             <Ionicons name="calendar" size={32} color="#01CBCA" />
             <Text style={{
               fontFamily: 'RobotoSlab-Medium',
@@ -273,19 +281,10 @@ export default function ParentHomeScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={{
-            backgroundColor: '#E0F7FA',
-            borderRadius: 15,
-            padding: 20,
-            width: '47%',
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 3
-          }}>
-            <Ionicons name="notifications" size={32} color="#01CBCA" />
+          <TouchableOpacity 
+            onPress={() => router.push('/service-registration/student-selection')}
+            style={[styles.quickActionCard, styles.quickActionCardHighlight]}>
+            <Ionicons name="clipboard" size={32} color="#D08700" />
             <Text style={{
               fontFamily: 'RobotoSlab-Medium',
               fontSize: 14,
@@ -293,7 +292,7 @@ export default function ParentHomeScreen() {
               marginTop: 8,
               textAlign: 'center'
             }}>
-              Notifications
+              Register Service
             </Text>
           </TouchableOpacity>
         </View>
@@ -358,3 +357,45 @@ export default function ParentHomeScreen() {
     </ScrollView>
   );
 }
+
+const sharedShadow = Platform.select<ViewStyle>({
+  ios: {
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+  },
+  android: {
+    elevation: 6,
+    shadowColor: '#101828',
+  },
+  default: {
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+}) ?? {};
+
+const styles = StyleSheet.create({
+  quickActionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  quickActionCard: {
+    backgroundColor: '#E0F7FA',
+    borderRadius: 15,
+    padding: 20,
+    width: '48%',
+    alignItems: 'center',
+    marginBottom: 15,
+    ...sharedShadow,
+  },
+  quickActionCardHighlight: {
+    backgroundColor: '#FEFCE8',
+    borderWidth: 2,
+    borderColor: '#FDC700',
+  },
+});
