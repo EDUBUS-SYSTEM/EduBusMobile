@@ -44,12 +44,6 @@ export default function ParentAccountScreen() {
     },
     {
       id: 7,
-      title: "Student List",
-      icon: "people-outline",
-      description: "View student list",
-    },
-    {
-      id: 8,
       title: "Logout",
       icon: "log-out-outline",
       description: "Logout",
@@ -216,7 +210,7 @@ export default function ParentAccountScreen() {
       <View
         style={{
           alignItems: "center",
-          marginTop: -35,
+          marginTop: -45,
           marginBottom: 20,
         }}
       >
@@ -254,10 +248,27 @@ export default function ParentAccountScreen() {
       </View>
 
       {/* Menu Items */}
-      <ScrollView style={{ flex: 1, paddingHorizontal: 20 }}>
-        {menuItems.map((item) => (
+      <ScrollView style={{ flex: 1, paddingHorizontal: 20, paddingTop: 8 }}>
+        {menuItems.map((item, index) => (
           <TouchableOpacity
             key={item.id}
+            style={[
+              {
+                backgroundColor: "#E0F7FA",
+                borderRadius: 25,
+                paddingVertical: 16,
+                paddingHorizontal: 20,
+                marginBottom: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 3,
+              },
+              index === 0 && { marginTop: 0 },
+            ]}
             onPress={async () => {
               if (item.id === 1) {
                 router.push("/account-profile" as any);
@@ -272,11 +283,7 @@ export default function ParentAccountScreen() {
                 return;
               }
               if (item.id === 7) {
-                router.push("/student-list" as any); // 👈 Navigate to Student List screen
-                return;
-              }
-              if (item.id === 8) {
-                // 👈 Changed logout to id = 8 instead of 7
+                // Logout
                 try {
                   await authApi.logout();
                 } finally {
@@ -285,20 +292,6 @@ export default function ParentAccountScreen() {
                 return;
               }
               // Add more navigation logic for other menu items here
-            }}
-            style={{
-              backgroundColor: "#E0F7FA",
-              borderRadius: 25,
-              paddingVertical: 16,
-              paddingHorizontal: 20,
-              marginBottom: 12,
-              flexDirection: "row",
-              alignItems: "center",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 4,
-              elevation: 3,
             }}
           >
             <View

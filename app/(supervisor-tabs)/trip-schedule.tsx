@@ -3,7 +3,6 @@ import { router } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
   Platform,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,31 +11,31 @@ import {
 } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
 import DayModal from '../../features/driverSchedule/components/DayModal';
+import { academicCalendarApi, AcademicSemester } from '../../lib/academicCalendar/academicCalendar.api';
 import { authApi } from '../../lib/auth/auth.api';
 import { getSupervisorScheduleByRangeAsDriverTrip } from '../../lib/supervisor/supervisor.api';
-import { DriverSchedule, DriverTrip, ScheduleDto, driverScheduleApi } from '../../lib/trip-mock-data/driverSchedule';
+import { DriverSchedule, DriverTrip } from '../../lib/trip-mock-data/driverSchedule';
 import { DriverTripDto } from '../../lib/trip/driverTrip.types';
 
 export default function SupervisorScheduleScreen() {
   const [schedule, setSchedule] = useState<DriverSchedule>({ dots: [], byDate: {} });
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [schedules, setSchedules] = useState<ScheduleDto[]>([]);
-  const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
+  const [semesters, setSemesters] = useState<AcademicSemester[]>([]);
+  const [selectedSemesterCode, setSelectedSemesterCode] = useState<string>('');
 
-  const loadSchedules = useCallback(async () => {
+  const loadSemesters = useCallback(async () => {
     try {
-      const loadedSchedules = await driverScheduleApi.getActiveSchedules();
-      setSchedules(loadedSchedules);
+      const loadedSemesters = await academicCalendarApi.getActiveSemesters();
+      setSemesters(loadedSemesters);
     } catch (error: any) {
-      console.error('Error loading schedules:', error);
+      console.error('Error loading semesters:', error);
       // Handle error silently for now
     }
   }, []);
 
-  const loadSchedule = useCallback(async (scheduleId: string, startDate: string, endDate: string) => {
+  const loadSchedule = useCallback(async (semesterCode: string, startDate: string, endDate: string) => {
     try {
       setLoading(true);
       const userInfo = await authApi.getUserInfo();
@@ -128,11 +127,6 @@ export default function SupervisorScheduleScreen() {
     }
   }, []);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadSchedules();
-    setRefreshing(false);
-  }, [loadSchedules]);
 
   const handleDateSelect = (day: DateData) => {
     const dateString = day.dateString;
@@ -140,11 +134,11 @@ export default function SupervisorScheduleScreen() {
     setModalVisible(true);
   };
 
-  const handleSchedulePress = async (schedule: ScheduleDto) => {
-    setSelectedScheduleId(schedule.id);
-    const startDate = schedule.effectiveFrom.split('T')[0];
-    const endDate = schedule.effectiveTo ? schedule.effectiveTo.split('T')[0] : '2025-12-31';
-    await loadSchedule(schedule.id, startDate, endDate);
+  const handleSemesterPress = async (semester: AcademicSemester) => {
+    setSelectedSemesterCode(semester.code);
+    const startDate = semester.startDate.split('T')[0];
+    const endDate = semester.endDate.split('T')[0];
+    await loadSchedule(semester.code, startDate, endDate);
   };
 
   const createMarkedDates = () => {
@@ -164,16 +158,16 @@ export default function SupervisorScheduleScreen() {
   };
 
   React.useEffect(() => {
-    loadSchedules();
-  }, [loadSchedules]);
+    loadSemesters();
+  }, [loadSemesters]);
 
   React.useEffect(() => {
-    if (schedules.length > 0) {
-      const firstSchedule = schedules[0];
-      setSelectedScheduleId(firstSchedule.id);
-      loadSchedule(firstSchedule.id, firstSchedule.effectiveFrom.split('T')[0], firstSchedule.effectiveTo ? firstSchedule.effectiveTo.split('T')[0] : '2025-12-31');
+    if (semesters.length > 0) {
+      const firstSemester = semesters[0];
+      setSelectedSemesterCode(firstSemester.code);
+      loadSchedule(firstSemester.code, firstSemester.startDate.split('T')[0], firstSemester.endDate.split('T')[0]);
     }
-  }, [schedules, loadSchedule]);
+  }, [semesters, loadSchedule]);
 
   return (
     <View style={styles.container}>
@@ -339,34 +333,25 @@ export default function SupervisorScheduleScreen() {
         />
       </View>
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        contentInsetAdjustmentBehavior="automatic"
-        refreshControl={
-          <RefreshControl refreshing={refreshing || loading} onRefresh={onRefresh} />
-        }
-      >
+      <View style={styles.content}>
         {/* Semester Selection */}
-        {schedules.length > 0 && (
+        {semesters.length > 0 && (
           <View style={styles.chipsContainer}>
-            <Text style={styles.chipsTitle}>Select Semester</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-              {schedules.map((schedule) => (
+              {semesters.map((semester) => (
                 <TouchableOpacity
-                  key={schedule.id}
+                  key={semester.code}
                   style={[
                     styles.chip,
-                    selectedScheduleId === schedule.id ? styles.chipActive : null
+                    selectedSemesterCode === semester.code ? styles.chipActive : null
                   ]}
-                  onPress={() => handleSchedulePress(schedule)}
+                  onPress={() => handleSemesterPress(semester)}
                 >
                   <Text style={[
                     styles.chipText,
-                    selectedScheduleId === schedule.id ? styles.chipTextActive : null
+                    selectedSemesterCode === semester.code ? styles.chipTextActive : null
                   ]}>
-                    {schedule.name.length > 20 ? schedule.name.substring(0, 20) + '...' : schedule.name}
+                    {semester.name.length > 20 ? semester.name.substring(0, 20) + '...' : semester.name}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -451,14 +436,14 @@ export default function SupervisorScheduleScreen() {
         )} */}
 
         {/* Empty State */}
-        {!loading && schedules.length === 0 && (
+        {!loading && semesters.length === 0 && (
           <View style={styles.emptyState}>
             <Ionicons name="calendar-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>No schedules available</Text>
+            <Text style={styles.emptyText}>No semesters available</Text>
             <Text style={styles.emptySubtext}>Please check back later</Text>
           </View>
         )}
-      </ScrollView>
+      </View>
 
       {/* Bottom Decoration */}
       <View style={styles.bottomDecorationWrapper} pointerEvents="none">
@@ -473,7 +458,6 @@ export default function SupervisorScheduleScreen() {
           <View style={[styles.circle, styles.bottomCircleLeftNear]} />
           <View style={[styles.circle, styles.bottomCircleLeftEdge]} />
         </View>
-        <View style={styles.bottomDecorationCurve} />
       </View>
 
       <DayModal
@@ -524,10 +508,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: 140,
-    paddingTop: 8,
-  },
   bottomDecorationWrapper: {
     position: 'absolute',
     left: 0,
@@ -541,16 +521,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-  },
-  bottomDecorationCurve: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 70,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
   },
   circle: {
     position: 'absolute',
