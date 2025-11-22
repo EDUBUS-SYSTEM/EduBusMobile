@@ -38,15 +38,29 @@ export default function TabBarSupervisor() {
         }}
       />
       <Tabs.Screen
-        name="trips"
+        name="trip-schedule"
         options={{
-          title: 'Trips',
+          title: 'Schedule',
           headerShown: false,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
               name="calendar" 
               size={24} 
               color={focused ? '#01CBCA' : color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="vehicle"
+        options={{
+          title: 'Vehicle',
+          headerShown: false,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name="car" 
+              size={24} 
+              color={focused ? '#01CBCA' : color} 
             />
           ),
         }}
@@ -63,6 +77,13 @@ export default function TabBarSupervisor() {
               color={focused ? '#01CBCA' : color} 
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="trips"
+        options={{
+          href: null, 
+          headerShown: false,
         }}
       />
       <Tabs.Screen
