@@ -7,6 +7,13 @@ export type DriverTripStatus =
   | 'Cancelled'
   | 'Delayed';
 
+export interface DriverTripStopAttendanceDto {
+  studentId: Guid;
+  studentName: string;
+  state: string;
+  boardedAt: string | null;
+}
+
 export interface DriverTripStopDto {
   sequenceOrder: number;
   pickupPointId: Guid;
@@ -20,6 +27,7 @@ export interface DriverTripStopDto {
   totalStudents: number;
   presentStudents: number;
   absentStudents: number;
+  attendance?: DriverTripStopAttendanceDto[];
 }
 
 export interface DriverTripDto {

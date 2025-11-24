@@ -192,7 +192,7 @@ export default function SupervisorAccountScreen() {
       <View
         style={{
           alignItems: "center",
-          marginTop: -35,
+          marginTop: -45,
           marginBottom: 20,
         }}
       >
@@ -230,10 +230,27 @@ export default function SupervisorAccountScreen() {
       </View>
 
       {/* Menu Items */}
-      <ScrollView style={{ flex: 1, paddingHorizontal: 20 }}>
-        {menuItems.map((item) => (
+      <ScrollView style={{ flex: 1, paddingHorizontal: 20, paddingTop: 8 }}>
+        {menuItems.map((item, index) => (
           <TouchableOpacity
             key={item.id}
+            style={[
+              {
+                backgroundColor: "#E0F7FA",
+                borderRadius: 25,
+                paddingVertical: 16,
+                paddingHorizontal: 20,
+                marginBottom: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 3,
+              },
+              index === 0 && { marginTop: 0 },
+            ]}
             onPress={async () => {
               if (item.id === 1) {
                 router.push("/account-profile" as any);
@@ -248,20 +265,6 @@ export default function SupervisorAccountScreen() {
                 return;
               }
               // TODO: Add more navigation logic for other menu items here
-            }}
-            style={{
-              backgroundColor: "#E0F7FA",
-              borderRadius: 25,
-              paddingVertical: 16,
-              paddingHorizontal: 20,
-              marginBottom: 12,
-              flexDirection: "row",
-              alignItems: "center",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 4,
-              elevation: 3,
             }}
           >
             <View

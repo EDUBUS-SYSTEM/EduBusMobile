@@ -7,15 +7,17 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
 import DayModal from '../../features/driverSchedule/components/DayModal';
 import { academicCalendarApi, AcademicSemester } from '../../lib/academicCalendar/academicCalendar.api';
 import { authApi } from '../../lib/auth/auth.api';
-import { DriverSchedule, driverScheduleApi } from '../../lib/trip-mock-data/driverSchedule';
+import { getSupervisorScheduleByRangeAsDriverTrip } from '../../lib/supervisor/supervisor.api';
+import { DriverSchedule, DriverTrip } from '../../lib/trip-mock-data/driverSchedule';
+import { DriverTripDto } from '../../lib/trip/driverTrip.types';
 
-export default function DriverScheduleScreen() {
+export default function SupervisorScheduleScreen() {
   const [schedule, setSchedule] = useState<DriverSchedule>({ dots: [], byDate: {} });
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -27,8 +29,9 @@ export default function DriverScheduleScreen() {
     try {
       const loadedSemesters = await academicCalendarApi.getActiveSemesters();
       setSemesters(loadedSemesters);
-    } catch {
-      // Handle error silently
+    } catch (error: any) {
+      console.error('Error loading semesters:', error);
+      // Handle error silently for now
     }
   }, []);
 
@@ -36,18 +39,88 @@ export default function DriverScheduleScreen() {
     try {
       setLoading(true);
       const userInfo = await authApi.getUserInfo();
-      const driverId = userInfo.userId;
+      const supervisorId = userInfo.userId;
 
-      if (!driverId) return;
+      if (!supervisorId) {
+        console.warn('Supervisor ID not found');
+        return;
+      }
 
-      const scheduleData = await driverScheduleApi.getDriverSchedule(
-        driverId,
-        startDate,
-        endDate
-      );
+      // Try to get schedule from API first
+      try {
+        const apiTrips = await getSupervisorScheduleByRangeAsDriverTrip(supervisorId, startDate, endDate);
 
-      setSchedule(scheduleData);
-    } catch {
+        if (apiTrips && apiTrips.length > 0) {
+          // Convert DriverTripDto[] to DriverTrip[] format for DriverSchedule
+          const byDate: Record<string, DriverTrip[]> = {};
+          const dots: { date: string; dots: { color: string; selectedDotColor?: string }[] }[] = [];
+
+          apiTrips.forEach((trip: DriverTripDto) => {
+            const date = trip.serviceDate ? trip.serviceDate.split('T')[0] : new Date(trip.plannedStartAt).toISOString().split('T')[0];
+            if (!byDate[date]) {
+              byDate[date] = [];
+            }
+
+            // Convert DriverTripDto to DriverTrip format
+            const driverTrip: DriverTrip = {
+              id: trip.id,
+              routeId: trip.routeId,
+              serviceDate: trip.serviceDate,
+              plannedStartAt: trip.plannedStartAt,
+              plannedEndAt: trip.plannedEndAt,
+              startTime: trip.startTime,
+              endTime: trip.endTime,
+              status: trip.status,
+              scheduleSnapshot: {
+                scheduleId: trip.id,
+                name: trip.scheduleName || 'Unknown Schedule',
+                startTime: trip.plannedStartAt.split('T')[1]?.split('.')[0] || '07:30',
+                endTime: trip.plannedEndAt.split('T')[1]?.split('.')[0] || '08:30',
+                rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'
+              },
+              stops: trip.stops.map(stop => ({
+                stopId: stop.pickupPointId,
+                name: stop.pickupPointName || stop.address,
+                plannedArrival: stop.plannedAt,
+                status: stop.departedAt ? 'completed' : 'pending'
+              })),
+              isOverride: trip.isOverride,
+              overrideReason: trip.overrideReason,
+              overrideCreatedBy: trip.overrideCreatedBy || '',
+              overrideCreatedAt: trip.overrideCreatedAt || ''
+            };
+
+            byDate[date].push(driverTrip);
+          });
+
+          // Create dots for dates with trips
+          Object.keys(byDate).forEach(date => {
+            const tripCount = byDate[date].length;
+            const dotColors = ['#4ECDC4', '#FF6B6B', '#45B7D1', '#FFEAA7', '#DDA0DD'];
+            const dateDots = [];
+
+            for (let i = 0; i < Math.min(tripCount, 5); i++) {
+              dateDots.push({
+                color: dotColors[i] || dotColors[4],
+                selectedDotColor: '#F9A826'
+              });
+            }
+
+            dots.push({ date, dots: dateDots });
+          });
+
+          setSchedule({ dots, byDate });
+          return;
+        }
+      } catch (apiError) {
+        console.warn('API call failed, falling back to mock data:', apiError);
+      }
+
+      // If supervisor API fails, don't call driver-only endpoints (causes 403)
+      // Instead, clear current data so UI stays consistent with supervisor role
+      setSchedule({ dots: [], byDate: {} });
+    } catch (error: any) {
+      console.error('Error loading schedule:', error);
       // Handle error silently
     } finally {
       setLoading(false);
@@ -260,53 +333,57 @@ export default function DriverScheduleScreen() {
         />
       </View>
 
-      <View style={[styles.content, { marginTop: -80 }]}>
-        <View style={styles.chipsContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {semesters.map((semester) => (
-              <TouchableOpacity
-                key={semester.code}
-                style={[
-                  styles.chip,
-                  selectedSemesterCode === semester.code ? styles.chipActive : null
-                ]}
-                onPress={() => handleSemesterPress(semester)}
-              >
-                <Text style={[
-                  styles.chipText,
-                  selectedSemesterCode === semester.code ? styles.chipTextActive : null
-                ]}>
-                  {semester.name.length > 15 ? semester.name.substring(0, 15) + '...' : semester.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+      <View style={styles.content}>
+        {/* Semester Selection */}
+        {semesters.length > 0 && (
+          <View style={styles.chipsContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+              {semesters.map((semester) => (
+                <TouchableOpacity
+                  key={semester.code}
+                  style={[
+                    styles.chip,
+                    selectedSemesterCode === semester.code ? styles.chipActive : null
+                  ]}
+                  onPress={() => handleSemesterPress(semester)}
+                >
+                  <Text style={[
+                    styles.chipText,
+                    selectedSemesterCode === semester.code ? styles.chipTextActive : null
+                  ]}>
+                    {semester.name.length > 20 ? semester.name.substring(0, 20) + '...' : semester.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
+        {/* Calendar Card */}
         <View style={styles.calendarContainer}>
           <Calendar
             style={styles.calendar}
             theme={{
               backgroundColor: '#ffffff',
               calendarBackground: '#ffffff',
-              textSectionTitleColor: '#b6c1cd',
+              textSectionTitleColor: '#6B7280',
               selectedDayBackgroundColor: '#F9A826',
               selectedDayTextColor: '#ffffff',
               todayTextColor: '#F9A826',
-              dayTextColor: '#2d4150',
-              textDisabledColor: '#d9e1e8',
+              dayTextColor: '#111827',
+              textDisabledColor: '#D1D5DB',
               arrowColor: '#F9A826',
-              disabledArrowColor: '#d9e1e8',
-              monthTextColor: '#2d4150',
+              disabledArrowColor: '#D1D5DB',
+              monthTextColor: '#111827',
               indicatorColor: '#F9A826',
               textDayFontFamily: 'RobotoSlab-Regular',
               textMonthFontFamily: 'RobotoSlab-Bold',
               textDayHeaderFontFamily: 'RobotoSlab-Medium',
-              textDayFontWeight: '300',
+              textDayFontWeight: '400',
               textMonthFontWeight: 'bold',
               textDayHeaderFontWeight: '600',
               textDayFontSize: 16,
-              textMonthFontSize: 16,
+              textMonthFontSize: 18,
               textDayHeaderFontSize: 13,
             }}
             markingType="dot"
@@ -321,7 +398,7 @@ export default function DriverScheduleScreen() {
             renderArrow={(direction) => (
               <Ionicons
                 name={direction === 'left' ? 'chevron-back' : 'chevron-forward'}
-                size={22}
+                size={24}
                 color="#F9A826"
               />
             )}
@@ -335,18 +412,35 @@ export default function DriverScheduleScreen() {
           />
         </View>
 
-        {Boolean(selectedDate && schedule.byDate[selectedDate]) && (
+        {/* Selected Date Info */}
+        {/* {Boolean(selectedDate && schedule.byDate[selectedDate]) && (
           <View style={styles.selectedDateInfo}>
-            <Text style={styles.selectedDateTitle}>
-              {new Date(selectedDate).toLocaleDateString('en-US', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-              })}
-            </Text>
-            <Text style={styles.tripCount}>
-              {schedule.byDate[selectedDate].length} trip(s) scheduled
-            </Text>
+            <View style={styles.selectedDateHeader}>
+              <Ionicons name="calendar" size={20} color="#F9A826" />
+              <Text style={styles.selectedDateTitle}>
+                {new Date(selectedDate).toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric'
+                })}
+              </Text>
+            </View>
+            <View style={styles.tripCountContainer}>
+              <Ionicons name="car" size={16} color="#6B7280" />
+              <Text style={styles.tripCount}>
+                {schedule.byDate[selectedDate].length} trip(s) scheduled
+              </Text>
+            </View>
+          </View>
+        )} */}
+
+        {/* Empty State */}
+        {!loading && semesters.length === 0 && (
+          <View style={styles.emptyState}>
+            <Ionicons name="calendar-outline" size={64} color="#D1D5DB" />
+            <Text style={styles.emptyText}>No semesters available</Text>
+            <Text style={styles.emptySubtext}>Please check back later</Text>
           </View>
         )}
       </View>
@@ -476,21 +570,41 @@ const styles = StyleSheet.create({
   },
   chipsContainer: {
     paddingHorizontal: 20,
-    paddingTop: 120,
-    paddingBottom: 20,
+    paddingTop: 0,
+    paddingBottom: 10,
+  },
+  chipsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    fontFamily: 'RobotoSlab-Bold',
+    marginBottom: 12,
+  },
+  chipsScroll: {
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
   },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E5E7EB',
-    marginRight: 12,
+    marginRight: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   chipActive: {
     backgroundColor: '#F9A826',
     borderColor: '#F9A826',
+    shadowColor: '#F9A826',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   chipText: {
     fontSize: 14,
@@ -500,36 +614,79 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: '#FFFFFF',
+    fontWeight: '600',
   },
   calendarContainer: {
     marginHorizontal: 20,
     marginTop: 10,
     marginBottom: 20,
-    borderRadius: 15,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
+    padding: 8,
     ...calendarShadow,
   },
   calendar: {
-    borderRadius: 15,
+    borderRadius: 12,
   },
   selectedDateInfo: {
-    margin: 20,
-    padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F9A826',
+    marginHorizontal: 20,
+    marginBottom: 10,
+    padding: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  selectedDateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
   },
   selectedDateTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#111827',
     fontFamily: 'RobotoSlab-Bold',
-    marginBottom: 4,
+    flex: 1,
+  },
+  tripCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
   tripCount: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#6B7280',
+    fontFamily: 'RobotoSlab-Medium',
+  },
+  emptyState: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6B7280',
+    fontFamily: 'RobotoSlab-Bold',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
     fontFamily: 'RobotoSlab-Regular',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });
+

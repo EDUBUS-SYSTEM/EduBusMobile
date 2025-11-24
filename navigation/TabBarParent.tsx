@@ -39,14 +39,7 @@ export default function TabBarParent() {
       <Tabs.Screen
         name="contacts"
         options={{
-          title: 'Contacts',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name="people" 
-              size={24} 
-              color={focused ? '#01CBCA' : color} 
-            />
-          ),
+          href: null, // Hide from tab bar
         }}
       />
       <Tabs.Screen
