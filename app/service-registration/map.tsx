@@ -15,7 +15,11 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WebView } from 'react-native-webview';
-import { pickupPointApi } from '@/lib/parent/pickupPoint.api';
+import {
+  pickupPointApi,
+  REUSE_PICKUP_POINT_STORAGE_KEY,
+  type ReusePickupPointPayload,
+} from '@/lib/parent/pickupPoint.api';
 import { childrenApi } from '@/lib/parent/children.api';
 import { authApi } from '@/lib/auth/auth.api';
 import { useSchoolInfo } from '@/hooks/useSchoolInfo';
@@ -183,6 +187,8 @@ export default function MapScreen() {
   const [semesterFeeInfo, setSemesterFeeInfo] = useState<SemesterFeeInfo | null>(null);
   const [semesterFeeLoading, setSemesterFeeLoading] = useState(false);
   const [semesterFeeError, setSemesterFeeError] = useState('');
+  const [prefilledPickupPoint, setPrefilledPickupPoint] = useState<ReusePickupPointPayload | null>(null);
+  const [unitPriceReady, setUnitPriceReady] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const webViewRef = useRef<WebView>(null);
   // NOTE: These refs are only used for the direct VietMap GL web implementation.
@@ -241,6 +247,29 @@ export default function MapScreen() {
 
         const selectedStudentIds: string[] = JSON.parse(selectedStudentIdsJson);
 
+        const reusePayloadRaw = await AsyncStorage.getItem(REUSE_PICKUP_POINT_STORAGE_KEY);
+        if (reusePayloadRaw) {
+          try {
+            const parsedPayload: ReusePickupPointPayload = JSON.parse(reusePayloadRaw);
+            const isValidPayload =
+              typeof parsedPayload.latitude === 'number' &&
+              typeof parsedPayload.longitude === 'number' &&
+              Array.isArray(parsedPayload.studentIds);
+            const isSameSelection =
+              isValidPayload &&
+              parsedPayload.studentIds.length === selectedStudentIds.length &&
+              parsedPayload.studentIds.every((id) => selectedStudentIds.includes(id));
+
+            if (isValidPayload && isSameSelection) {
+              setPrefilledPickupPoint(parsedPayload);
+            }
+          } catch (storageError) {
+            console.error('Error parsing saved pickup point payload:', storageError);
+          } finally {
+            await AsyncStorage.removeItem(REUSE_PICKUP_POINT_STORAGE_KEY);
+          }
+        }
+
         // Get user info to get parent ID
         const userInfo = await authApi.getUserInfo();
         if (!userInfo.userId) {
@@ -281,6 +310,7 @@ export default function MapScreen() {
         );
       } finally {
         setIsLoading(false);
+        setUnitPriceReady(true);
       }
     };
 
@@ -610,6 +640,38 @@ export default function MapScreen() {
   useEffect(() => {
     handleTempLocationSelectedRef.current = handleTempLocationSelected;
   }, [handleTempLocationSelected]);
+
+  useEffect(() => {
+    if (!prefilledPickupPoint || !unitPriceReady || isLoading) {
+      return;
+    }
+
+    const applyPrefill = async () => {
+      const latestHandleTempLocationSelected = handleTempLocationSelectedRef.current;
+      if (!latestHandleTempLocationSelected) {
+        return;
+      }
+
+      const coords = {
+        lat: prefilledPickupPoint.latitude,
+        lng: prefilledPickupPoint.longitude,
+      };
+
+      try {
+        await latestHandleTempLocationSelected(coords, prefilledPickupPoint.addressText);
+        setSelectedCoords(coords);
+        setTempCoords(null);
+        setShowSubmitForm(true);
+      } catch (prefillError) {
+        console.error('Error applying saved pickup point:', prefillError);
+        Alert.alert('Không thể dùng điểm đón cũ', 'Vui lòng chọn lại điểm đón mới.');
+      } finally {
+        setPrefilledPickupPoint(null);
+      }
+    };
+
+    applyPrefill();
+  }, [prefilledPickupPoint, unitPriceReady, isLoading]);
 
   // Handle search result selection
   const handleSearchResultSelect = useCallback(async (result: VietMapGeocodeResult) => {
