@@ -9,12 +9,15 @@ import { childrenApi } from '@/lib/parent/children.api';
 import { apiService } from '@/lib/api';
 import { API_CONFIG } from '@/constants/ApiConfig';
 import type { Child } from '@/lib/parent/children.type';
-
-interface StudentBriefDto {
-  id: string;
-  firstName: string;
-  lastName: string;
-}
+import {
+  pickupPointApi,
+  type ParentRegistrationSemesterDto,
+  type ParentRegistrationEligibilityDto,
+  type ReusePickupPointPayload,
+  REUSE_PICKUP_POINT_STORAGE_KEY,
+  type StudentBriefDto,
+  type StudentCurrentPickupPointDto,
+} from '@/lib/parent/pickupPoint.api';
 
 function decodeJwtPayload<T = any>(token: string): T | null {
   try {
@@ -33,12 +36,71 @@ function decodeJwtPayload<T = any>(token: string): T | null {
   }
 }
 
+function formatDate(value?: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US');
+}
+
+function isWithinRegistrationWindow(semester?: ParentRegistrationSemesterDto | null) {
+  if (!semester?.registrationStartDate || !semester?.registrationEndDate) {
+    return false;
+  }
+
+  const start = new Date(semester.registrationStartDate);
+  const end = new Date(semester.registrationEndDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return false;
+  }
+
+  const now = new Date();
+  return now >= start && now <= end;
+}
+
+function getCommonPickupPoint(selectedDetails: StudentBriefDto[]): StudentCurrentPickupPointDto | null {
+  if (selectedDetails.length === 0) {
+    return null;
+  }
+
+  const firstPickup = selectedDetails[0].currentPickupPoint;
+  if (
+    !firstPickup ||
+    typeof firstPickup.latitude !== 'number' ||
+    typeof firstPickup.longitude !== 'number'
+  ) {
+    return null;
+  }
+
+  const areAllSharingSamePickup = selectedDetails.every((student) => {
+    const pickup = student.currentPickupPoint;
+    return (
+      pickup &&
+      typeof pickup.latitude === 'number' &&
+      typeof pickup.longitude === 'number' &&
+      pickup.pickupPointId === firstPickup.pickupPointId
+    );
+  });
+
+  return areAllSharingSamePickup ? firstPickup : null;
+}
+
 export default function StudentSelectionScreen() {
   const [students, setStudents] = useState<StudentBriefDto[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [parentEmail, setParentEmail] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [eligibilityInfo, setEligibilityInfo] = useState<ParentRegistrationEligibilityDto | null>(null);
+  const [infoMessage, setInfoMessage] = useState('');
+  const [blockedCount, setBlockedCount] = useState(0);
+  const [isRegistrationWindowActive, setIsRegistrationWindowActive] = useState(true);
+  const registrationWindowLabel =
+    eligibilityInfo?.semester?.registrationStartDate && eligibilityInfo?.semester?.registrationEndDate
+      ? `${formatDate(eligibilityInfo.semester.registrationStartDate)} - ${formatDate(eligibilityInfo.semester.registrationEndDate)}`
+      : '';
+  const registrationClosedMessage =
+    'Registration for the upcoming semester is not open yet. Please return to the home screen.';
 
   useEffect(() => {
     const loadData = async () => {
@@ -107,13 +169,59 @@ export default function StudentSelectionScreen() {
           id: child.id,
           firstName: child.firstName,
           lastName: child.lastName,
+          hasCurrentPickupPoint: false,
+          currentPickupPoint: null,
         }));
 
         if (studentsData.length === 0) {
           setError('No students found for your account. Please contact the school.');
-        } else {
-          setStudents(studentsData);
+          setStudents([]);
+          return;
         }
+
+        let filteredStudents: StudentBriefDto[] = studentsData;
+        let message = '';
+        let hiddenCount = 0;
+
+        try {
+          const eligibilityResponse = await pickupPointApi.getRegistrationEligibility();
+          setEligibilityInfo(eligibilityResponse);
+          const windowActive = isWithinRegistrationWindow(eligibilityResponse.semester);
+          setIsRegistrationWindowActive(windowActive);
+
+          if (!windowActive) {
+            filteredStudents = [];
+            hiddenCount = 0;
+            message = registrationClosedMessage;
+          } else if (eligibilityResponse.eligibleStudents && eligibilityResponse.eligibleStudents.length >= 0) {
+            filteredStudents =
+              eligibilityResponse.eligibleStudents.length > 0 ? eligibilityResponse.eligibleStudents : [];
+            hiddenCount = eligibilityResponse.blockedStudents?.length || 0;
+            message = eligibilityResponse.message || '';
+          }
+        } catch (eligibilityError) {
+          console.warn('Could not load registration eligibility:', eligibilityError);
+          setIsRegistrationWindowActive(false);
+          filteredStudents = [];
+          hiddenCount = 0;
+          if (!message) {
+            message = registrationClosedMessage;
+          }
+        }
+
+        setBlockedCount(hiddenCount);
+        if (message) {
+          setInfoMessage(message);
+        } else {
+          setInfoMessage('');
+        }
+
+        if (filteredStudents.length === 0 && hiddenCount > 0 && !message) {
+          setInfoMessage('All of your students have already been registered for the upcoming semester.');
+        }
+
+        setStudents(filteredStudents);
+        setSelectedStudents((prev) => prev.filter((id) => filteredStudents.some((student) => student.id === id)));
       } catch (err: any) {
         console.error('Error loading data:', err);
         setError(
@@ -138,23 +246,96 @@ export default function StudentSelectionScreen() {
     if (error) setError('');
   };
 
-  const handleContinue = () => {
+  const continueToMap = async (studentIds: string[], reusePayload?: ReusePickupPointPayload) => {
+    try {
+      await AsyncStorage.setItem('selectedStudents', JSON.stringify(studentIds));
+      await AsyncStorage.setItem('parentEmail', parentEmail);
+
+      if (reusePayload) {
+        await AsyncStorage.setItem(
+          REUSE_PICKUP_POINT_STORAGE_KEY,
+          JSON.stringify(reusePayload)
+        );
+      } else {
+        await AsyncStorage.removeItem(REUSE_PICKUP_POINT_STORAGE_KEY);
+      }
+
+      router.push('/service-registration/map');
+    } catch (storageError) {
+      console.error('Error persisting selection:', storageError);
+      Alert.alert('Error', 'Unable to save the registration information. Please try again.');
+    }
+  };
+
+  const handleContinue = async () => {
+    if (students.length === 0) {
+      Alert.alert('No eligible students', 'All of your students have already been registered for the upcoming semester.');
+      return;
+    }
     if (selectedStudents.length === 0) {
       Alert.alert('Selection Required', 'Please select at least one student to continue.');
       return;
     }
 
-    // Store selected students and parent email for next screen
-    AsyncStorage.setItem('selectedStudents', JSON.stringify(selectedStudents));
-    AsyncStorage.setItem('parentEmail', parentEmail);
+    if (!parentEmail) {
+      Alert.alert('Error', 'Parent email not found. Please sign in again.');
+      return;
+    }
 
-    // Navigate to map screen
-    router.push('/service-registration/map');
+    const selectedIdsSnapshot = [...selectedStudents];
+    const selectedDetails = students.filter((student) => selectedIdsSnapshot.includes(student.id));
+    const reuseCandidate = getCommonPickupPoint(selectedDetails);
+
+    if (!reuseCandidate) {
+      await continueToMap(selectedIdsSnapshot);
+      return;
+    }
+
+    const reusePayload: ReusePickupPointPayload = {
+      latitude: reuseCandidate.latitude as number,
+      longitude: reuseCandidate.longitude as number,
+      addressText:
+        reuseCandidate.description?.trim() || reuseCandidate.location?.trim() || 'Current pickup point',
+      pickupPointId: reuseCandidate.pickupPointId,
+      studentIds: selectedIdsSnapshot,
+    };
+
+    Alert.alert(
+      'Reuse current pickup point?',
+      'We found an existing pickup point for the selected students. Do you want to reuse this location for the new registration?',
+      [
+        {
+          text: 'Choose a new location',
+          style: 'cancel',
+          onPress: () => {
+            void continueToMap(selectedIdsSnapshot);
+          },
+        },
+        {
+          text: 'Reuse current location',
+          onPress: () => {
+            void continueToMap(selectedIdsSnapshot, reusePayload);
+          },
+        },
+      ]
+    );
   };
 
   const handleGoBack = () => {
     router.back();
   };
+
+  const handleGoHome = () => {
+    router.replace('/(parent-tabs)/home');
+  };
+  const isContinueDisabled = !isRegistrationWindowActive || selectedStudents.length === 0 || students.length === 0;
+  const continueButtonLabel = !isRegistrationWindowActive
+    ? 'Registration not open'
+    : students.length === 0
+    ? 'No eligible students'
+    : selectedStudents.length === 0
+    ? 'Select at least 1 student'
+    : `Continue with ${selectedStudents.length} student(s)`;
 
   if (loading) {
     return (
@@ -233,6 +414,21 @@ export default function StudentSelectionScreen() {
             </View>
           )}
 
+          {/* Info Message */}
+          {infoMessage ? (
+            <View
+              style={{
+                backgroundColor: '#E8F5E9',
+                borderColor: '#66BB6A',
+                borderWidth: 1,
+                borderRadius: 12,
+                padding: 12,
+                marginBottom: 20,
+              }}>
+              <Text style={{ color: '#2E7D32', fontSize: 14, textAlign: 'center' }}>{infoMessage}</Text>
+            </View>
+          ) : null}
+
           {/* Students List */}
           <View style={{ marginBottom: 20 }}>
             <Text
@@ -246,9 +442,37 @@ export default function StudentSelectionScreen() {
               Student List ({students.length})
             </Text>
 
+            {blockedCount > 0 && students.length > 0 && (
+              <View
+                style={{
+                  backgroundColor: '#FFF3E0',
+                  borderRadius: 12,
+                  padding: 12,
+                  marginBottom: 12,
+                  borderWidth: 1,
+                  borderColor: '#FFB74D',
+                }}>
+                <Text style={{ color: '#E65100', fontSize: 13, textAlign: 'center' }}>
+                  {blockedCount} student(s) are hidden because they are already registered for the upcoming semester.
+                </Text>
+              </View>
+            )}
+
             {students.length === 0 ? (
-              <View style={{ padding: 20, alignItems: 'center' }}>
-                <Text style={{ color: '#666666', fontSize: 16 }}>No students found</Text>
+              <View style={{ padding: 20, alignItems: 'center', gap: 16 }}>
+                <Text style={{ color: '#666666', fontSize: 16, textAlign: 'center' }}>
+                  {infoMessage || 'No eligible students available for registration at this time.'}
+                </Text>
+                <TouchableOpacity
+                  onPress={handleGoHome}
+                  style={{
+                    backgroundColor: '#FDC700',
+                    paddingHorizontal: 24,
+                    paddingVertical: 12,
+                    borderRadius: 20,
+                  }}>
+                  <Text style={{ fontFamily: 'RobotoSlab-Bold', color: '#000000' }}>Go back to Home</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               <View style={{ gap: 12 }}>
@@ -353,11 +577,20 @@ export default function StudentSelectionScreen() {
 
           {/* Action Buttons */}
           <View style={{ gap: 12 }}>
+            {students.length === 0 && (
+              <Text style={{ textAlign: 'center', color: '#666666', fontSize: 13 }}>
+                {isRegistrationWindowActive
+                  ? 'Registration will reopen once the school enables the next semester.'
+                  : registrationClosedMessage}
+              </Text>
+            )}
             <TouchableOpacity
-              onPress={handleContinue}
-              disabled={selectedStudents.length === 0}
+              onPress={() => {
+                void handleContinue();
+              }}
+              disabled={isContinueDisabled}
               style={{
-                backgroundColor: selectedStudents.length === 0 ? '#CCCCCC' : '#FDC700',
+                backgroundColor: isContinueDisabled ? '#CCCCCC' : '#FDC700',
                 borderRadius: 15,
                 padding: 16,
                 alignItems: 'center',
@@ -371,45 +604,55 @@ export default function StudentSelectionScreen() {
                 style={{
                   fontFamily: 'RobotoSlab-Bold',
                   fontSize: 16,
-                  color: selectedStudents.length === 0 ? '#666666' : '#000000',
+                  color: isContinueDisabled ? '#666666' : '#000000',
                 }}>
-                {selectedStudents.length === 0
-                  ? 'Select at least 1 student'
-                  : `Continue with ${selectedStudents.length} student(s)`}
+                {continueButtonLabel}
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* Instructions */}
-          <View
-            style={{
-              backgroundColor: '#E3F2FD',
-              borderRadius: 15,
-              padding: 16,
-              marginTop: 20,
-            }}>
-            <Text
+          {isRegistrationWindowActive && (
+            <View
               style={{
-                fontFamily: 'RobotoSlab-Bold',
-                fontSize: 16,
-                color: '#1565C0',
-                textAlign: 'center',
-                marginBottom: 12,
+                backgroundColor: '#E3F2FD',
+                borderRadius: 15,
+                padding: 16,
+                marginTop: 20,
               }}>
-              💡 Instructions
-            </Text>
-            <View style={{ gap: 8 }}>
-              <Text style={{ fontSize: 14, color: '#1565C0' }}>
-                • Tap on each student to select/deselect
+              <Text
+                style={{
+                  fontFamily: 'RobotoSlab-Bold',
+                  fontSize: 16,
+                  color: '#1565C0',
+                  textAlign: 'center',
+                  marginBottom: 12,
+                }}>
+                💡 Instructions
               </Text>
-              <Text style={{ fontSize: 14, color: '#1565C0' }}>
-                • You can select one or multiple students
-              </Text>
-              <Text style={{ fontSize: 14, color: '#1565C0' }}>
-                • Must select at least 1 student to continue
-              </Text>
+              <View style={{ gap: 8 }}>
+                {eligibilityInfo?.semester && (
+                  <Text style={{ fontSize: 14, color: '#1565C0' }}>
+                    Upcoming semester: {eligibilityInfo.semester.name} ({eligibilityInfo.semester.academicYear})
+                  </Text>
+                )}
+                {registrationWindowLabel ? (
+                  <Text style={{ fontSize: 14, color: '#1565C0' }}>
+                    Registration window: {registrationWindowLabel}
+                  </Text>
+                ) : null}
+                <Text style={{ fontSize: 14, color: '#1565C0' }}>
+                  • Tap on each student to select/deselect
+                </Text>
+                <Text style={{ fontSize: 14, color: '#1565C0' }}>
+                  • You can select one or multiple students
+                </Text>
+                <Text style={{ fontSize: 14, color: '#1565C0' }}>
+                  • Must select at least 1 student to continue
+                </Text>
+              </View>
             </View>
-          </View>
+          )}
         </View>
       </View>
     </ScrollView>

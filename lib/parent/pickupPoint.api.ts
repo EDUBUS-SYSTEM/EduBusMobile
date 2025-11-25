@@ -25,10 +25,45 @@ export interface VerifyOtpRequest {
   otp: string;
 }
 
+export interface StudentCurrentPickupPointDto {
+  pickupPointId: string;
+  description: string;
+  location: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  assignedAt?: string | null;
+}
+
 export interface StudentBriefDto {
   id: string;
   firstName: string;
   lastName: string;
+  hasCurrentPickupPoint: boolean;
+  currentPickupPoint?: StudentCurrentPickupPointDto | null;
+}
+
+export interface StudentRegistrationBlockDto extends StudentBriefDto {
+  status: string;
+  reason: string;
+}
+
+export interface ParentRegistrationSemesterDto {
+  code: string;
+  name: string;
+  academicYear: string;
+  startDate: string;
+  endDate: string;
+  registrationStartDate?: string | null;
+  registrationEndDate?: string | null;
+}
+
+export interface ParentRegistrationEligibilityDto {
+  isRegistrationWindowOpen: boolean;
+  hasEligibleStudents: boolean;
+  semester?: ParentRegistrationSemesterDto;
+  eligibleStudents: StudentBriefDto[];
+  blockedStudents: StudentRegistrationBlockDto[];
+  message?: string;
 }
 
 export interface VerifyOtpWithStudentsResponseDto {
@@ -56,6 +91,16 @@ export interface SubmitPickupPointRequestResponseDto {
   estimatedPriceVnd: number;
   createdAt: string;
 }
+
+export interface ReusePickupPointPayload {
+  latitude: number;
+  longitude: number;
+  addressText: string;
+  pickupPointId?: string;
+  studentIds: string[];
+}
+
+export const REUSE_PICKUP_POINT_STORAGE_KEY = 'reusePickupPoint';
 
 export interface UnitPriceResponseDto {
   id: string;
@@ -96,19 +141,7 @@ export const pickupPointApi = {
 
   // Submit pickup point request
   submitRequest: async (data: SubmitPickupPointRequestDto): Promise<SubmitPickupPointRequestResponseDto> => {
-    const serializedData = JSON.stringify(data, (key, value) => {
-      if (key === 'studentIds' && Array.isArray(value)) {
-        return value.map((id: string) => {
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-            return id;
-          }
-          return id;
-        });
-      }
-      return value;
-    });
-    
-    const response = await apiService.post<SubmitPickupPointRequestResponseDto>('/PickupPoint/submit-request', JSON.parse(serializedData));
+    const response = await apiService.post<SubmitPickupPointRequestResponseDto>('/PickupPoint/submit-request', data);
     return response;
   },
 
@@ -121,6 +154,12 @@ export const pickupPointApi = {
   // Calculate semester fee
   calculateSemesterFee: async (distanceKm: number): Promise<SemesterFeeInfo> => {
     const response = await apiService.post<SemesterFeeInfo>('/Transaction/calculate-fee', { distanceKm });
+    return response;
+  },
+
+  // Check eligibility for parent registration flow
+  getRegistrationEligibility: async (): Promise<ParentRegistrationEligibilityDto> => {
+    const response = await apiService.get<ParentRegistrationEligibilityDto>('/PickupPoint/registration/eligibility');
     return response;
   },
 };
