@@ -1,5 +1,27 @@
 import type { Guid } from '../types';
 import type { DriverTripStatus } from './driverTrip.types';
+import type { TripCurrentLocationDto } from './trip.response.types';
+
+export interface ParentTripChild {
+  id: Guid;
+  name: string;
+  state?: string;
+  boardedAt?: string | null;
+}
+
+export interface ParentTripStop {
+  id: Guid;
+  name: string;
+  sequence: number;
+  plannedArrival: string;
+  actualArrival?: string;
+  plannedDeparture: string;
+  actualDeparture?: string;
+  address: string;
+  latitude?: number;
+  longitude?: number;
+  attendance?: ParentTripChild[];
+}
 
 export interface ParentTripDto {
   id: Guid;
@@ -11,17 +33,21 @@ export interface ParentTripDto {
   endTime?: string;
   status: DriverTripStatus;
   scheduleName: string;
+  tripType?: number; // 0=Unknown, 1=Departure, 2=Return
   // Child information
   childId: Guid;
   childName: string;
   childAvatar?: string;
   childClassName?: string;
+  children?: ParentTripChild[];
+  // All stops for this parent
+  stops?: ParentTripStop[];
   // Child pickup/drop-off point information
   pickupStop?: {
     sequenceOrder: number;
     pickupPointName: string;
     address: string;
-    latitude?: number;  
+    latitude?: number;
     longitude?: number;
     plannedAt: string;
     arrivedAt?: string;
@@ -31,7 +57,7 @@ export interface ParentTripDto {
     sequenceOrder: number;
     pickupPointName: string;
     address: string;
-    latitude?: number;  
+    latitude?: number;
     longitude?: number;
     plannedAt: string;
     arrivedAt?: string;
@@ -54,6 +80,7 @@ export interface ParentTripDto {
     capacity: number;
     status: string;
   };
+  currentLocation?: TripCurrentLocationDto;
   createdAt?: string;
   updatedAt?: string;
 }

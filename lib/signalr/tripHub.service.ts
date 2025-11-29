@@ -1,6 +1,4 @@
 import { HttpTransportType, HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
-import { store } from '@/store';
-import { fetchUnreadCount } from '@/store/slices/notificationsSlice';
 import { config } from '../config';
 import type { Guid } from '../types';
 
@@ -35,7 +33,7 @@ function validateAndNormalizeGuid(guid: Guid | string | string[] | undefined | n
 
   // Validate GUID format: 8-4-4-4-12 hex digits
   const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  
+
   if (!guidRegex.test(cleanedGuid)) {
     throw new Error(`Invalid GUID format: ${guidStr}. Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`);
   }
@@ -49,8 +47,6 @@ class TripHubService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 5000; // 5 seconds
-  private unreadRefreshCooldown = 15000;
-  private lastUnreadRefresh = 0;
 
   /**
    * Initialize TripHub SignalR connection
@@ -64,7 +60,7 @@ class TripHubService {
     try {
       // Build hub URL from API URL
       const hubUrl = config.API_URL.replace('/api', '/tripHub');
-      
+
       console.log('🔌 Connecting to TripHub:', hubUrl);
 
       this.connection = new HubConnectionBuilder()
@@ -149,7 +145,7 @@ class TripHubService {
     try {
       // Validate and normalize GUID
       const normalizedTripId = validateAndNormalizeGuid(tripId);
-      
+
       // Ensure all parameters are the correct type
       const speedValue = speed !== undefined && speed !== null ? speed : null;
       const accuracyValue = accuracy !== undefined && accuracy !== null ? accuracy : null;
@@ -193,10 +189,7 @@ class TripHubService {
     }
 
     console.log('📡 Subscribing to ReceiveLocationUpdate event');
-    this.connection.on('ReceiveLocationUpdate', (data: T) => {
-      this.refreshUnreadCount();
-      callback(data);
-    });
+    this.connection.on('ReceiveLocationUpdate', callback);
   }
 
   /**
@@ -209,6 +202,36 @@ class TripHubService {
 
     console.log(' Unsubscribing from ReceiveLocationUpdate event');
     this.connection.off('ReceiveLocationUpdate');
+  }
+
+  /**
+   * Subscribe to any SignalR event
+   * @param eventName Name of the event to subscribe to
+   * @param callback Callback function when event is received
+   */
+  on<T>(eventName: string, callback: (data: T) => void): void {
+    if (!this.connection) {
+      console.warn(`⚠️ Cannot subscribe to ${eventName}. TripHub not initialized.`);
+      return;
+    }
+
+    console.log(`📡 Subscribing to ${eventName} event`);
+    this.connection.on(eventName, (data: T) => {
+      callback(data);
+    });
+  }
+
+  /**
+   * Unsubscribe from any SignalR event
+   * @param eventName Name of the event to unsubscribe from
+   */
+  off(eventName: string): void {
+    if (!this.connection) {
+      return;
+    }
+
+    console.log(`🔇 Unsubscribing from ${eventName} event`);
+    this.connection.off(eventName);
   }
 
   /**
@@ -272,7 +295,7 @@ class TripHubService {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
       console.log(`🔄 Attempting to reconnect TripHub... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-      
+
       setTimeout(() => {
         this.attemptReconnect();
       }, this.reconnectDelay);
@@ -296,15 +319,7 @@ class TripHubService {
     }
   }
 
-  private refreshUnreadCount(): void {
-    const now = Date.now();
-    if (now - this.lastUnreadRefresh < this.unreadRefreshCooldown) {
-      return;
-    }
 
-    this.lastUnreadRefresh = now;
-    store.dispatch(fetchUnreadCount());
-  }
 }
 
 // Export singleton instance

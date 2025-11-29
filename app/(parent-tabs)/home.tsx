@@ -208,7 +208,7 @@ export default function ParentHomeScreen() {
         </Text>
 
         <View style={styles.quickActionGrid}>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => router.push('/(parent-tabs)/trips/today')}
             style={styles.quickActionCard}>
             <Ionicons name="calendar" size={32} color="#01CBCA" />
@@ -223,7 +223,7 @@ export default function ParentHomeScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => router.push('/(parent-tabs)/notifications')}
             style={styles.quickActionCard}>
             <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
@@ -281,7 +281,7 @@ export default function ParentHomeScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => router.push('/service-registration/student-selection')}
             style={[styles.quickActionCard, styles.quickActionCardHighlight]}>
             <Ionicons name="clipboard" size={32} color="#D08700" />
@@ -299,14 +299,14 @@ export default function ParentHomeScreen() {
 
         {/* Recent Activity */}
         <View style={{ marginTop: 30 }}>
-                  <Text style={{
-          fontFamily: 'RobotoSlab-Bold',
-          fontSize: 20,
-          color: '#000000',
-          marginBottom: 15
-        }}>
-          Recent Activity
-        </Text>
+          <Text style={{
+            fontFamily: 'RobotoSlab-Bold',
+            fontSize: 20,
+            color: '#000000',
+            marginBottom: 15
+          }}>
+            Recent Activity
+          </Text>
 
           <View style={{
             backgroundColor: '#F8F9FA',
@@ -326,7 +326,7 @@ export default function ParentHomeScreen() {
                 color: '#000000',
                 marginLeft: 10
               }}>
-                                 Bus registered for next week
+                Bus registered for next week
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
@@ -337,7 +337,7 @@ export default function ParentHomeScreen() {
                 color: '#000000',
                 marginLeft: 10
               }}>
-                                 Bus will arrive at 7:30 AM
+                Bus will arrive at 7:30 AM
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -348,7 +348,7 @@ export default function ParentHomeScreen() {
                 color: '#000000',
                 marginLeft: 10
               }}>
-                                 Update student information
+                Update student information
               </Text>
             </View>
           </View>

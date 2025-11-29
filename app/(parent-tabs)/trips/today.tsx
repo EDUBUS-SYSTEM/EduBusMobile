@@ -1,4 +1,5 @@
-import type { ParentTripDto } from '@/lib/trip-mock-data/parentTrip.types';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { fetchParentTripsToday } from '@/store/slices/parentTodaySlice';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,8 +16,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { fetchParentTripsToday } from '@/store/slices/parentTodaySlice';
 
 const formatTime = (iso: string) => {
   const date = new Date(iso);
@@ -132,7 +131,7 @@ export default function TripsTodayScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FCDC44" />
-      
+
       {/* Header */}
       <LinearGradient
         colors={['#FFD700', '#FFEB3B']}
@@ -177,97 +176,105 @@ export default function TripsTodayScreen() {
             disabled={trip.status !== 'InProgress'}
             onPress={trip.status === 'InProgress' ? () => handleTripPress(trip.id) : undefined}
             activeOpacity={0.7}>
-              {/* Child Info */}
-              <View style={styles.childInfoRow}>
-                {trip.childAvatar ? (
-                  <Image
-                    source={{ uri: trip.childAvatar }}
-                    style={styles.childAvatar}
-                    contentFit="cover"
-                  />
+            {/* Child Info */}
+            <View style={styles.childInfoRow}>
+              {trip.childAvatar ? (
+                <Image
+                  source={{ uri: trip.childAvatar }}
+                  style={styles.childAvatar}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.childAvatar, styles.avatarPlaceholder]}>
+                  <Ionicons name="person" size={24} color="#9E9E9E" />
+                </View>
+              )}
+              <View style={styles.childInfo}>
+                {trip.children && trip.children.length > 0 ? (
+                  <>
+                    <Text style={styles.childName}>
+                      {trip.children.map(c => c.name).join(', ')}
+                    </Text>
+                    {trip.childClassName && (
+                      <Text style={styles.childClass}>{trip.childClassName}</Text>
+                    )}
+                  </>
                 ) : (
-                  <View style={[styles.childAvatar, styles.avatarPlaceholder]}>
-                    <Ionicons name="person" size={24} color="#9E9E9E" />
-                  </View>
-                )}
-                <View style={styles.childInfo}>
-                  <Text style={styles.childName}>{trip.childName}</Text>
-                  {trip.childClassName && (
-                    <Text style={styles.childClass}>{trip.childClassName}</Text>
-                  )}
-                </View>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    { backgroundColor: getStatusColor(trip.status) },
-                  ]}>
-                  <Text style={styles.statusText}>
-                    {getStatusText(trip.status)}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Time Info */}
-              <View style={styles.timeRow}>
-                <View style={styles.timeItem}>
-                  <Ionicons name="time-outline" size={16} color="#6B7280" />
-                  <Text style={styles.timeText}>
-                    {formatTime(trip.plannedStartAt)} -{' '}
-                    {formatTime(trip.plannedEndAt)}
-                  </Text>
-                </View>
-                <View style={styles.timeItem}>
-                  <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-                  <Text style={styles.scheduleText}>{trip.scheduleName}</Text>
-                </View>
-              </View>
-
-              {/* Pickup/Dropoff Info */}
-              {trip.pickupStop && (
-                <View style={styles.stopInfo}>
-                  <View style={styles.stopRow}>
-                    <Ionicons name="location" size={16} color="#4CAF50" />
-                    <Text style={styles.stopLabel}>Pickup Point</Text>
-                  </View>
-                  <Text style={styles.stopAddress}>
-                    {trip.pickupStop.address}
-                  </Text>
-                  <Text style={styles.stopTime}>
-                    Expected: {formatTime(trip.pickupStop.plannedAt)}
-                  </Text>
-                </View>
-              )}
-
-              {trip.dropoffStop && (
-                <View style={styles.stopInfo}>
-                  <View style={styles.stopRow}>
-                    <Ionicons name="location" size={16} color="#2196F3" />
-                    <Text style={styles.stopLabel}>Drop-off Point</Text>
-                  </View>
-                  <Text style={styles.stopAddress}>
-                    FPT Primary School Da Nang
-                  </Text>
-                  <Text style={styles.stopTime}>
-                    Expected: {formatTime(trip.dropoffStop.plannedAt)}
-                  </Text>
-                </View>
-              )}
-
-              {/* Progress Info */}
-              <View style={styles.progressRow}>
-                {trip.status === 'InProgress' && (
-                  <TouchableOpacity
-                    style={styles.trackButton}
-                    onPress={() => handleTripPress(trip.id)}>
-                    <Ionicons name="navigate" size={16} color="#FFFFFF" />
-                    <Text style={styles.trackButtonText}>Track Now</Text>
-                  </TouchableOpacity>
+                  <>
+                    <Text style={styles.childName}>{trip.childName}</Text>
+                    {trip.childClassName && (
+                      <Text style={styles.childClass}>{trip.childClassName}</Text>
+                    )}
+                  </>
                 )}
               </View>
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: getStatusColor(trip.status) },
+                ]}>
+                <Text style={styles.statusText}>
+                  {getStatusText(trip.status)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Time Info */}
+            <View style={styles.timeRow}>
+              <View style={styles.timeItem}>
+                <Ionicons name="time-outline" size={16} color="#6B7280" />
+                <Text style={styles.timeText}>
+                  {formatTime(trip.plannedStartAt)} -{' '}
+                  {formatTime(trip.plannedEndAt)}
+                </Text>
+              </View>
+              <View style={styles.timeItem}>
+                <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                <Text style={styles.scheduleText}>{trip.scheduleName}</Text>
+              </View>
+            </View>
+
+            {/* Pickup/Dropoff Info */}
+            {trip.pickupStop && (
+              <View style={styles.stopInfo}>
+                <View style={styles.stopRow}>
+                  <Ionicons name="location" size={16} color="#4CAF50" />
+                  <Text style={styles.stopLabel}>Pickup Point</Text>
+                </View>
+                <Text style={styles.stopAddress}>
+                  {trip.pickupStop.address}
+                </Text>
+              </View>
+            )}
+
+            {trip.dropoffStop && (
+              <View style={styles.stopInfo}>
+                <View style={styles.stopRow}>
+                  <Ionicons name="location" size={16} color="#2196F3" />
+                  <Text style={styles.stopLabel}>Drop-off Point</Text>
+                </View>
+                <Text style={styles.stopAddress}>
+                  FPT Primary School Da Nang
+                </Text>
+              </View>
+            )}
+
+            {/* Progress Info */}
+            <View style={styles.progressRow}>
+              {trip.status === 'InProgress' && (
+                <TouchableOpacity
+                  style={styles.trackButton}
+                  onPress={() => handleTripPress(trip.id)}>
+                  <Ionicons name="navigate" size={16} color="#FFFFFF" />
+                  <Text style={styles.trackButtonText}>Track Now</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </SafeAreaView>
+        ))
+        }
+      </ScrollView >
+    </SafeAreaView >
   );
 }
 
