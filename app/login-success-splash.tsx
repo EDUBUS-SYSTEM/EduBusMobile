@@ -37,26 +37,39 @@ export default function LoginSuccessSplash() {
     const initializeAndNavigate = async () => {
       try {
         console.log('🎯 Starting initializeAndNavigate...');
-        
+
         const userInfo = await authApi.getUserInfo();
         console.log('👤 User info:', userInfo);
-        
+
         const token = await AsyncStorage.getItem('accessToken');
         console.log('🔑 Token exists:', !!token);
 
         if (token && (userInfo.role === 'Parent' || userInfo.role === 'Driver' || userInfo.role === 'Supervisor')) {
           console.log('✅ Conditions met for SignalR. Role:', userInfo.role);
-          
-          const isAlreadyConnected = signalRService.isConnected();
-          console.log('🔌 SignalR already connected?', isAlreadyConnected);
-          
-          if (isAlreadyConnected) {
+
+          // IMPORTANT: Always reinitialize SignalR after login to ensure fresh connection
+          // This fixes the issue where switching accounts doesn't update the SignalR connection
+          try {
+            console.log('🔄 [LOGIN-SPLASH] Reinitializing SignalR with fresh token...');
+
+            // Stop existing connection if any
+            if (signalRService.isConnected()) {
+              console.log('🛑 [LOGIN-SPLASH] Stopping existing SignalR connection...');
+              await signalRService.stop();
+            }
+
+            // Initialize SignalR with the new token
+            console.log('🔌 [LOGIN-SPLASH] Starting new SignalR connection...');
+            dispatch(setSignalRConnecting());
+            await signalRService.initialize(token);
             dispatch(setSignalRConnected());
-            console.log('✅ [LOGIN-SPLASH] SignalR already connected, state synced');
-          } else {
-            console.log('⏳ [LOGIN-SPLASH] SignalR not connected yet, waiting for _layout.tsx to initialize');
+            console.log('✅ [LOGIN-SPLASH] SignalR reinitialized successfully');
+          } catch (signalRError: any) {
+            // Don't fail the login flow if SignalR fails
+            console.error('❌ [LOGIN-SPLASH] Failed to reinitialize SignalR:', signalRError);
+            dispatch(setSignalRError(signalRError?.message || 'SignalR initialization failed'));
           }
-          
+
           try {
             await dispatch(fetchUnreadCount()).unwrap();
             console.log('🔢 Unread notifications preloaded');
@@ -78,10 +91,10 @@ export default function LoginSuccessSplash() {
         } else if (userInfo.role === 'Parent') {
           setStatusText('Checking payment status...');
           try {
-            const paymentStatus = await paymentApi.checkUnpaidFees();   
+            const paymentStatus = await paymentApi.checkUnpaidFees();
             // Store in AsyncStorage for usePaymentStatus hook to read later
             await AsyncStorage.setItem('paymentStatus', JSON.stringify(paymentStatus));
-            
+
             // Decide navigation based on payment status
             if (paymentStatus.hasUnpaidFees && paymentStatus.count > 0) {
               console.log('⚠️ Parent has unpaid fees, navigating to notification');
@@ -165,7 +178,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FDE370',
             opacity: 1
           }} />
-          
+
           {/* Circle 2 - Top Right */}
           <View style={{
             position: 'absolute',
@@ -177,7 +190,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FDE370',
             opacity: 1
           }} />
-          
+
           {/* Circle 3 - Top Center */}
           <View style={{
             position: 'absolute',
@@ -189,7 +202,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FDE370',
             opacity: 1
           }} />
-          
+
           <View style={{
             position: 'absolute',
             top: 0,
@@ -200,7 +213,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FDE370',
             opacity: 1
           }} />
-          
+
           {/* Circle 4 - Top Right */}
           <View style={{
             position: 'absolute',
@@ -212,7 +225,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FCCF08',
             opacity: 1
           }} />
-          
+
           {/* Circle 5 - Top Right */}
           <View style={{
             position: 'absolute',
@@ -224,7 +237,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FCCF08',
             opacity: 1
           }} />
-          
+
           {/* Circle 6 - Top Right */}
           <View style={{
             position: 'absolute',
@@ -236,7 +249,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FCCF08',
             opacity: 1
           }} />
-          
+
           <View style={{
             position: 'absolute',
             top: -90,
@@ -250,8 +263,8 @@ export default function LoginSuccessSplash() {
         </View>
 
         {/* Success Text */}
-        <Animated.View style={{ 
-          alignItems: 'center', 
+        <Animated.View style={{
+          alignItems: 'center',
           marginTop: 50,
           opacity: fadeAnim,
           transform: [{ scale: scaleAnim }]
@@ -302,7 +315,7 @@ export default function LoginSuccessSplash() {
               backgroundColor: '#E0F7FA',
               opacity: 0.3,
             }} />
-            
+
             {/* Logo Image */}
             <Image
               source={require('@/assets/images/edubus_logo.png')}
@@ -352,7 +365,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FDE370',
             opacity: 1
           }} />
-          
+
           <View style={{
             position: 'absolute',
             bottom: 10,
@@ -363,7 +376,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FDE370',
             opacity: 1
           }} />
-          
+
           <View style={{
             position: 'absolute',
             bottom: 10,
@@ -374,7 +387,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FDE370',
             opacity: 1
           }} />
-          
+
           <View style={{
             position: 'absolute',
             bottom: 0,
@@ -385,7 +398,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FDE370',
             opacity: 1
           }} />
-          
+
           <View style={{
             position: 'absolute',
             bottom: -80,
@@ -396,7 +409,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FCCF08',
             opacity: 1
           }} />
-          
+
           <View style={{
             position: 'absolute',
             bottom: -80,
@@ -407,7 +420,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FCCF08',
             opacity: 1
           }} />
-          
+
           <View style={{
             position: 'absolute',
             bottom: -90,
@@ -418,7 +431,7 @@ export default function LoginSuccessSplash() {
             backgroundColor: '#FCCF08',
             opacity: 1
           }} />
-          
+
           <View style={{
             position: 'absolute',
             bottom: -90,

@@ -1,6 +1,7 @@
 import { tripHubService } from '@/lib/signalr/tripHub.service';
-import type { ParentTripDto } from '@/lib/trip/parentTrip.types';
+import type { ParentTripChild, ParentTripDto } from '@/lib/trip/parentTrip.types';
 import { getParentTripDetail } from '@/lib/trip/trip.api';
+import { TripType } from '@/lib/trip/trip.response.types';
 import type { Guid } from '@/lib/types';
 import { getRoute } from '@/lib/vietmap/vietmap.service';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
@@ -8,7 +9,6 @@ import { updateTrip } from '@/store/slices/parentTodaySlice';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -34,6 +34,21 @@ interface LocationUpdate {
   speed?: number | null;
   accuracy?: number | null;
   isMoving?: boolean;
+  recordedAt?: string;
+}
+
+interface StopArrivalUpdate {
+  tripId: string;
+  stopId: string;
+  arrivedAt: string;
+}
+
+interface ApproachingStop {
+  id: string;
+  name: string;
+  sequence: number;
+  distance: number; // in kilometers
+  childrenNames: string; // e.g., "A and B"
 }
 
 const formatTime = (iso: string) => {
@@ -77,11 +92,51 @@ const getStatusText = (status: string) => {
   }
 };
 
+type ChildStatusDisplay = {
+  label: string;
+  backgroundColor: string;
+  textColor: string;
+};
+
+const getChildStateDisplay = (state?: string): ChildStatusDisplay => {
+  switch (state) {
+    case 'Boarded':
+    case 'Present':
+      return { label: 'Boarded', backgroundColor: '#4CAF50', textColor: '#FFFFFF' };
+    case 'DroppedOff':
+      return { label: 'Dropped off', backgroundColor: '#2563EB', textColor: '#FFFFFF' };
+    case 'Absent':
+      return { label: 'Absent', backgroundColor: '#EF4444', textColor: '#FFFFFF' };
+    case 'Pending':
+    case 'Scheduled':
+      return { label: 'Waiting to board', backgroundColor: '#9CA3AF', textColor: '#FFFFFF' };
+    default:
+      return { label: state || 'Not updated', backgroundColor: '#9CA3AF', textColor: '#FFFFFF' };
+  }
+};
+
 const getStopStatus = (stop: ParentTripDto['pickupStop'] | ParentTripDto['dropoffStop']) => {
   if (!stop) return 'pending';
   if (stop.departedAt) return 'completed';
   if (stop.arrivedAt) return 'arrived';
   return 'pending';
+};
+
+// Helper: Find current active stop (not yet completed) with lowest sequence
+const getCurrentActiveStop = (stops?: Array<{ id: string; name: string; sequence: number; actualDeparture?: string; attendance?: ParentTripChild[]; address: string }>) => {
+  if (!stops || stops.length === 0) return null;
+
+  // Find first stop without actualDeparture (not yet departed)
+  const activeStop = stops.find(stop => !stop.actualDeparture);
+  return activeStop || null;
+};
+
+// Helper: Check if all pickup stops are completed
+const areAllPickupsCompleted = (stops?: Array<{ actualDeparture?: string }>) => {
+  if (!stops || stops.length === 0) return false;
+
+  // All stops must have actualDeparture
+  return stops.every(stop => stop.actualDeparture);
 };
 
 type VehicleInfo = {
@@ -102,12 +157,29 @@ export default function ParentTripTrackingScreen() {
   const [trip, setTrip] = useState<ParentTripWithVehicle | null>(null);
   const [loading, setLoading] = useState(true);
   const [busLocation, setBusLocation] = useState<[number, number] | null>(null);
-  const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
+  const [centerOnBusTimestamp, setCenterOnBusTimestamp] = useState<number>(0);
   const [showDriverModal, setShowDriverModal] = useState(false);
+  const [showChildModal, setShowChildModal] = useState(false);
+  const [selectedChild, setSelectedChild] = useState<ParentTripChild | null>(null);
   const mapRef = useRef<MapViewRef>(null);
   const hasRealtimeRef = useRef(false);
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][] | null>(null);
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
+  const [approachingStops, setApproachingStops] = useState<ApproachingStop[]>([]);
+  const childStatusList = useMemo<ParentTripChild[]>(() => {
+    if (trip?.children && trip.children.length > 0) {
+      return trip.children;
+    }
+
+    if (trip?.childId && trip.childName) {
+      return [{
+        id: trip.childId,
+        name: trip.childName,
+      }];
+    }
+
+    return [];
+  }, [trip?.children, trip?.childId, trip?.childName]);
 
   // Load trip data - check Redux store first, then fetch from API if not found
   useEffect(() => {
@@ -153,6 +225,18 @@ export default function ParentTripTrackingScreen() {
     })();
   }, [tripId, tripsFromStore, dispatch]);
 
+  // Seed bus location from API response before realtime hub connects
+  useEffect(() => {
+    if (
+      trip?.currentLocation &&
+      typeof trip.currentLocation.longitude === 'number' &&
+      typeof trip.currentLocation.latitude === 'number' &&
+      !hasRealtimeRef.current
+    ) {
+      setBusLocation([trip.currentLocation.longitude, trip.currentLocation.latitude]);
+    }
+  }, [trip?.currentLocation, trip?.id]);
+
   // Initialize TripHub connection for real-time location updates
   useEffect(() => {
     if (!tripId || !trip || trip.status !== 'InProgress') return;
@@ -181,17 +265,74 @@ export default function ParentTripTrackingScreen() {
 
             hasRealtimeRef.current = true;
             setBusLocation(newLocation);
-            setCameraCenter(newLocation);
+            // Removed: setCameraCenter(newLocation); - Camera no longer auto-follows bus
 
-            // Update Redux store to sync with list screen
-            // Note: We only update location-related data here, not the full trip object
-            // The trip object structure doesn't include location, so we just update the trip
-            // to trigger a re-render in list screen if needed
+            // Update Redux store so list screens have the latest bus position
             dispatch(updateTrip({
               ...trip,
-              // Location updates don't change trip data structure,
-              // but updating Redux ensures list screen stays in sync
+              currentLocation: {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                recordedAt: location.recordedAt,
+                speed: location.speed ?? undefined,
+                accuracy: location.accuracy ?? undefined,
+                isMoving: location.isMoving,
+              },
             }));
+          }
+        });
+
+        // Subscribe to stop arrival events
+        tripHubService.on<StopArrivalUpdate>('StopArrivalConfirmed', (data) => {
+          console.log('🚏 Stop arrival confirmed:', data);
+
+          if (data.tripId === tripId && trip) {
+            // Update trip data with arrival time
+            const updatedTrip = { ...trip };
+            let wasUpdated = false;
+
+            // Update stops array if exists
+            if (updatedTrip.stops) {
+              const stopIndex = updatedTrip.stops.findIndex(stop => stop.id === data.stopId);
+              if (stopIndex !== -1) {
+                updatedTrip.stops = updatedTrip.stops.map(stop =>
+                  stop.id === data.stopId
+                    ? { ...stop, actualArrival: data.arrivedAt }
+                    : stop
+                );
+                wasUpdated = true;
+                console.log('✅ Updated stops array with arrival time');
+
+                // Also update pickupStop or dropoffStop if they match this stop's sequence
+                const arrivedStop = updatedTrip.stops[stopIndex];
+
+                if (updatedTrip.pickupStop?.sequenceOrder === arrivedStop.sequence) {
+                  updatedTrip.pickupStop = {
+                    ...updatedTrip.pickupStop,
+                    arrivedAt: data.arrivedAt,
+                  };
+                  console.log('✅ Updated pickup stop arrival time');
+                }
+
+                if (updatedTrip.dropoffStop?.sequenceOrder === arrivedStop.sequence) {
+                  updatedTrip.dropoffStop = {
+                    ...updatedTrip.dropoffStop,
+                    arrivedAt: data.arrivedAt,
+                  };
+                  console.log('✅ Updated dropoff stop arrival time');
+                }
+              }
+            }
+
+            if (wasUpdated) {
+              // Update local state
+              setTrip(updatedTrip);
+
+              // Update Redux store
+              dispatch(updateTrip(updatedTrip));
+
+              console.log('✅ Trip state updated with stop arrival');
+            }
           }
         });
 
@@ -206,17 +347,28 @@ export default function ParentTripTrackingScreen() {
     // Cleanup
     return () => {
       tripHubService.offLocationUpdate();
+      tripHubService.off('StopArrivalConfirmed');
       if (tripId) {
         tripHubService.leaveTrip(tripId).catch((error) => {
           console.error('❌ Error leaving trip:', error);
         });
       }
     };
-  }, [tripId,trip, dispatch]);
+  }, [tripId, trip, dispatch]);
 
   useEffect(() => {
     console.log('🚌 Bus location:', busLocation);
   }, [busLocation]);
+
+  // Calculate current active stop and status
+  const currentStop = useMemo(() => getCurrentActiveStop(trip?.stops), [trip?.stops]);
+  const allPickupsCompleted = useMemo(() => areAllPickupsCompleted(trip?.stops), [trip?.stops]);
+  const currentStopStatus = useMemo(() => {
+    if (!currentStop) return 'pending';
+    if (currentStop.actualDeparture) return 'completed';
+    if ((currentStop as any).actualArrival) return 'arrived';
+    return 'pending';
+  }, [currentStop]);
 
   const pickupStatus = trip ? getStopStatus(trip.pickupStop) : 'pending';
   const dropoffStatus = trip ? getStopStatus(trip.dropoffStop) : 'pending';
@@ -226,10 +378,18 @@ export default function ParentTripTrackingScreen() {
       if (
         trip?.status !== 'InProgress' ||
         !busLocation ||
-        !trip.pickupStop?.latitude ||
-        !trip.pickupStop?.longitude ||
-        pickupStatus === 'completed'
+        !trip.stops ||
+        trip.stops.length === 0
       ) {
+        setRouteCoordinates(null);
+        return;
+      }
+
+      // Find next uncompleted pickup stop (stop without departedAt)
+      const nextStop = trip.stops.find(stop => !stop.actualDeparture);
+
+      if (!nextStop || !nextStop.latitude || !nextStop.longitude) {
+        // No more uncompleted stops or stop has no coordinates
         setRouteCoordinates(null);
         return;
       }
@@ -242,18 +402,17 @@ export default function ParentTripTrackingScreen() {
           return;
         }
 
-
         const [longitude, latitude] = busLocation;
 
         const routeData = await getRoute(
           { lat: latitude, lng: longitude }, // Vị trí hiện tại của xe
-          { lat: trip.pickupStop.latitude, lng: trip.pickupStop.longitude }, // Điểm đón
+          { lat: nextStop.latitude, lng: nextStop.longitude }, // Điểm đón tiếp theo
           apiKey
         );
 
         if (routeData) {
           setRouteCoordinates(routeData.coordinates);
-          console.log('✅ Route fetched:', routeData.coordinates.length, 'points');
+          console.log('✅ Route fetched to next stop:', nextStop.name, '-', routeData.coordinates.length, 'points');
         } else {
           setRouteCoordinates(null);
         }
@@ -266,7 +425,97 @@ export default function ParentTripTrackingScreen() {
     };
 
     fetchRouteToPickup();
-  }, [busLocation, trip?.pickupStop, trip?.status, pickupStatus]);
+  }, [busLocation, trip?.stops, trip?.status]);
+
+  // Calculate approaching stops (within 2km) every 60 seconds
+  useEffect(() => {
+    const calculateApproachingStops = async () => {
+      if (
+        trip?.status !== 'InProgress' ||
+        !busLocation ||
+        !trip.stops ||
+        trip.stops.length === 0
+      ) {
+        setApproachingStops([]);
+        return;
+      }
+
+      const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || '';
+      if (!apiKey) {
+        console.warn('⚠️ VietMap API key not configured');
+        return;
+      }
+
+      const pendingStops = trip.stops.filter(stop => !stop.actualDeparture);
+
+      if (pendingStops.length === 0) {
+        setApproachingStops([]);
+        return;
+      }
+
+      console.log(`🔍 Calculating distances to ${pendingStops.length} pending stops...`);
+
+      try {
+        const stopsWithDistance = await Promise.all(
+          pendingStops.map(async (stop) => {
+            if (!stop.latitude || !stop.longitude) {
+              return null;
+            }
+
+            try {
+              const [longitude, latitude] = busLocation;
+
+              const routeData = await getRoute(
+                { lat: latitude, lng: longitude },
+                { lat: stop.latitude, lng: stop.longitude },
+                apiKey
+              );
+
+              if (routeData && routeData.distance) {
+                const distanceInKm = routeData.distance; // Already in km from vietmap.service.ts
+                const childrenNames = stop.attendance?.map(c => c.name).join(' and ') || '';
+
+                return {
+                  id: stop.id,
+                  name: stop.name,
+                  sequence: stop.sequence,
+                  distance: distanceInKm,
+                  childrenNames,
+                };
+              }
+
+              return null;
+            } catch (error) {
+              console.error(`❌ Error calculating distance to stop ${stop.name}:`, error);
+              return null;
+            }
+          })
+        );
+
+        const approaching = stopsWithDistance
+          .filter((stop): stop is ApproachingStop => stop !== null && stop.distance <= 2)
+          .sort((a, b) => a.distance - b.distance);
+
+        setApproachingStops(approaching);
+
+        if (approaching.length > 0) {
+          console.log(`✅ Found ${approaching.length} approaching stops:`, approaching.map(s => `${s.name} (${s.distance.toFixed(1)}km)`));
+        } else {
+          console.log('ℹ️ No stops within 2km');
+        }
+      } catch (error) {
+        console.error('❌ Error calculating approaching stops:', error);
+        setApproachingStops([]);
+      }
+    };
+
+    calculateApproachingStops();
+    const interval = setInterval(calculateApproachingStops, 60000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [trip?.status, trip?.stops, busLocation]);
 
   const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || '';
   const mapStyle = apiKey
@@ -289,10 +538,8 @@ export default function ParentTripTrackingScreen() {
   const calculateMapBounds = (): { center: [number, number], zoom: number } => {
     const points: [number, number][] = [];
 
-    // Add bus location if available
-    if (busLocation) {
-      points.push(busLocation);
-    }
+    // Don't include bus location - we only want pickup/dropoff points for initial view
+    // This prevents camera from updating when bus moves
 
     // Add pickup point if coordinates available
     if (trip?.pickupStop?.latitude && trip.pickupStop.longitude) {
@@ -339,6 +586,11 @@ export default function ParentTripTrackingScreen() {
     return { center, zoom };
   };
 
+  // Cache initial map bounds - only calculate once when trip loads
+  const initialMapBounds = useMemo(() => {
+    return calculateMapBounds();
+  }, [trip?.pickupStop?.latitude, trip?.pickupStop?.longitude, trip?.dropoffStop?.latitude, trip?.dropoffStop?.longitude]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -383,29 +635,6 @@ export default function ParentTripTrackingScreen() {
 
         {/* Trip Info */}
         <View style={styles.tripInfoCard}>
-          {/* Child Info */}
-          <View style={styles.childInfoRow}>
-            {trip.childAvatar ? (
-              <Image
-                source={{ uri: trip.childAvatar }}
-                style={styles.childAvatar}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[styles.childAvatar, styles.avatarPlaceholder]}>
-                <Ionicons name="person" size={32} color="#9E9E9E" />
-              </View>
-            )}
-            <View style={styles.childInfo}>
-              <Text style={styles.childName}>{trip.childName}</Text>
-              {trip.childClassName && (
-                <Text style={styles.childClass}>{trip.childClassName}</Text>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.tripInfoDivider} />
-
           <View style={styles.tripInfoRow}>
             <Ionicons name="time-outline" size={20} color="#6B7280" />
             <Text style={styles.tripTime}>
@@ -416,7 +645,232 @@ export default function ParentTripTrackingScreen() {
             <Ionicons name="calendar-outline" size={20} color="#6B7280" />
             <Text style={styles.tripSchedule}>{trip.scheduleName}</Text>
           </View>
+
+          <View style={styles.tripInfoDivider} />
+
+          {/* Child Info */}
+          <View style={styles.childInfoRow}>
+            <View style={styles.childInfo}>
+              <View style={styles.childInfoHeader}>
+                <Text style={styles.childInfoTitle}>Children</Text>
+                {childStatusList.length > 0 && (
+                  <Text style={styles.childCountText}>
+                    {childStatusList.length} children
+                  </Text>
+                )}
+              </View>
+              {childStatusList.length === 0 ? (
+                <Text style={styles.childEmptyText}>No children assigned to this trip yet</Text>
+              ) : (
+                <View style={styles.childStatusList}>
+                  {childStatusList.map((child) => {
+                    const statusDisplay = getChildStateDisplay(child.state);
+                    const childSubtitle = child.boardedAt
+                      ? `Boarded at ${formatTime(child.boardedAt)}`
+                      : statusDisplay.label === 'Dropped off'
+                        ? 'Pickup and drop-off completed'
+                        : statusDisplay.label === 'Absent'
+                          ? 'Marked absent'
+                          : undefined;
+                    return (
+                      <TouchableOpacity
+                        key={child.id}
+                        style={styles.childStatusRow}
+                        onPress={() => {
+                          setSelectedChild(child);
+                          setShowChildModal(true);
+                        }}
+                        activeOpacity={0.7}>
+                        <View style={styles.childStatusInfo}>
+                          <View style={styles.childNameRow}>
+                            <Ionicons name="person" size={20} color="#F59E0B" style={styles.childIcon} />
+                            <Text style={styles.childName}>{child.name}</Text>
+                          </View>
+                          {childSubtitle && <Text style={styles.childStatusTime}>{childSubtitle}</Text>}
+                        </View>
+                        <View style={[styles.childStatusBadge, { backgroundColor: statusDisplay.backgroundColor }]}>
+                          <Text style={[styles.childStatusBadgeText, { color: statusDisplay.textColor }]}>
+                            {statusDisplay.label}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+              {trip.childClassName && childStatusList.length === 1 && (
+                <Text style={styles.childClass}>Class {trip.childClassName}</Text>
+              )}
+            </View>
+          </View>
         </View>
+
+        {/* Bus Status Banner */}
+        {trip.status === 'InProgress' && (
+          <>
+            {/* Approaching Stops Banner - Only show if no stop has arrived yet */}
+            {approachingStops.length > 0 && currentStopStatus !== 'arrived' && (
+              <View style={styles.statusBanner}>
+                <View style={styles.statusBannerIconContainer}>
+                  <Ionicons name="bus" size={24} color="#FFFFFF" />
+                </View>
+                <View style={styles.statusBannerContent}>
+                  {approachingStops.length === 1 ? (
+                    <Text style={styles.statusBannerTitle}>
+                      The bus is approaching the {trip.tripType === TripType.Departure ? 'pickup' : trip.tripType === TripType.Return ? 'drop-off' : 'pickup/drop-off'} point for{' '}
+                      <Text style={styles.statusBannerTextBold}>
+                        {approachingStops[0].childrenNames}
+                      </Text>
+                      , about {approachingStops[0].distance < 1
+                        ? `${Math.round(approachingStops[0].distance * 1000)}m`
+                        : `${approachingStops[0].distance.toFixed(1)}km`} away
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={styles.statusBannerTitle}>
+                        The bus is approaching:
+                      </Text>
+                      {approachingStops.map((stop) => (
+                        <Text key={stop.id} style={styles.statusBannerBulletItem}>
+                          • {trip.tripType === TripType.Departure ? 'Pickup' : trip.tripType === TripType.Return ? 'Drop-off' : 'Pickup/Drop-off'} point for{' '}
+                          <Text style={styles.statusBannerTextBold}>
+                            {stop.childrenNames}
+                          </Text>
+                          , about {stop.distance < 1
+                            ? `${Math.round(stop.distance * 1000)}m`
+                            : `${stop.distance.toFixed(1)}km`} away
+                        </Text>
+                      ))}
+                    </>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* DEPARTURE Trip (TripType.Departure) */}
+            {trip.tripType === TripType.Departure && (
+              <>
+                {/* Case 1: Trip started, heading to pickup point */}
+                {approachingStops.length === 0 && !allPickupsCompleted && currentStop && currentStopStatus === 'pending' && (
+                  <View style={styles.statusBanner}>
+                    <View style={styles.statusBannerIconContainer}>
+                      <Ionicons name="bus" size={24} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.statusBannerContent}>
+                      <Text style={styles.statusBannerTitle}>
+                        The school bus has started the trip.
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Case 2: Bus arrived at pickup point */}
+                {!allPickupsCompleted && currentStop && currentStopStatus === 'arrived' && (
+                  <View style={styles.statusBanner}>
+                    <View style={styles.statusBannerIconContainer}>
+                      <Ionicons name="bus" size={24} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.statusBannerContent}>
+                      <Text style={styles.statusBannerTitle}>
+                        The bus has arrived at the pickup point for{' '}
+                        <Text style={styles.statusBannerTextBold}>
+                          {currentStop.attendance?.map(c => c.name).join(' and ') || 'students'}
+                        </Text>
+                        ! Please bring your child to the bus
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+
+
+            {/* RETURN Trip (TripType.Return) */}
+            {trip.tripType === TripType.Return && (
+              <>
+                {/* Case 1: Trip started, heading to drop-off point */}
+                {approachingStops.length === 0 && !allPickupsCompleted && currentStop && currentStopStatus === 'pending' && (
+                  <View style={styles.statusBanner}>
+                    <View style={styles.statusBannerIconContainer}>
+                      <Ionicons name="bus" size={24} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.statusBannerContent}>
+                      <Text style={styles.statusBannerTitle}>
+                        The school bus has started the trip.
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Case 2: Bus arrived at drop-off point */}
+                {!allPickupsCompleted && currentStop && currentStopStatus === 'arrived' && (
+                  <View style={styles.statusBanner}>
+                    <View style={styles.statusBannerIconContainer}>
+                      <Ionicons name="bus" size={24} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.statusBannerContent}>
+                      <Text style={styles.statusBannerTitle}>
+                        The bus has arrived at the drop-off point for{' '}
+                        <Text style={styles.statusBannerTextBold}>
+                          {currentStop.attendance?.map(c => c.name).join(' and ') || 'students'}
+                        </Text>
+                        ! Please pick up your child
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+
+
+            {/* Fallback for Unknown or undefined tripType - keep original behavior */}
+            {(trip.tripType === undefined || trip.tripType === TripType.Unknown) && (
+              <>
+                {/* Case 1: Still have pickup stops not yet completed */}
+                {approachingStops.length === 0 && !allPickupsCompleted && currentStop && (
+                  <View style={styles.statusBanner}>
+                    <View style={styles.statusBannerIconContainer}>
+                      <Ionicons name="bus" size={24} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.statusBannerContent}>
+                      <Text style={styles.statusBannerTitle}>
+                        {currentStopStatus === 'arrived'
+                          ? 'Bus has arrived!'
+                          : 'Bus is on the way'}
+                      </Text>
+                      <Text style={styles.statusBannerText}>
+                        {currentStopStatus === 'arrived' ? 'Picking up ' : 'Heading to pickup point for '}
+                        <Text style={styles.statusBannerTextBold}>
+                          {currentStop.attendance?.map(c => c.name).join(' and ') || 'students'}
+                        </Text>
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Case 2: All pickup stops completed → Heading to school */}
+                {approachingStops.length === 0 && allPickupsCompleted && trip.dropoffStop && (
+                  <View style={[styles.statusBanner, styles.statusBannerSchool]}>
+                    <View style={styles.statusBannerIconContainer}>
+                      <Ionicons name="school" size={24} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.statusBannerContent}>
+                      <Text style={styles.statusBannerTitle}>
+                        Heading to school
+                      </Text>
+                      <Text style={styles.statusBannerText}>
+                        All students picked up, on the way to{' '}
+                        <Text style={styles.statusBannerTextBold}>
+                          {trip.dropoffStop.pickupPointName || 'school'}
+                        </Text>
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+          </>
+        )}
 
         {/* Map View */}
         <View style={styles.mapContainer}>
@@ -428,14 +882,12 @@ export default function ParentTripTrackingScreen() {
               logoEnabled={false}
               attributionEnabled={false}>
               <Camera
+                key={`camera-${centerOnBusTimestamp}`}
                 defaultSettings={{
-                  centerCoordinate: calculateMapBounds().center,
-                  zoomLevel: calculateMapBounds().zoom,
-                  animationDuration: 0,
+                  centerCoordinate: centerOnBusTimestamp > 0 && busLocation ? busLocation : initialMapBounds.center,
+                  zoomLevel: centerOnBusTimestamp > 0 && busLocation ? 14 : initialMapBounds.zoom,
+                  animationDuration: centerOnBusTimestamp > 0 && busLocation ? 1000 : 0,
                 }}
-                centerCoordinate={cameraCenter || calculateMapBounds().center}
-                zoomLevel={cameraCenter ? 14 : calculateMapBounds().zoom}
-                animationDuration={cameraCenter ? 1000 : 0}
               />
 
               {routeCoordinates && routeCoordinates.length > 0 && (
@@ -486,11 +938,10 @@ export default function ParentTripTrackingScreen() {
                   <View style={[
                     styles.stopMarker,
                     pickupStatus === 'completed' && styles.stopMarkerCompleted,
-                    pickupStatus === 'arrived' && styles.stopMarkerArrived,
                   ]}>
                     <Ionicons
                       name={pickupStatus === 'completed' ? 'checkmark-circle' : 'location'}
-                      size={24}
+                      size={36}
                       color="#4CAF50"
                     />
                   </View>
@@ -507,11 +958,10 @@ export default function ParentTripTrackingScreen() {
                     styles.stopMarker,
                     styles.stopMarkerDropoff,
                     dropoffStatus === 'completed' && styles.stopMarkerCompleted,
-                    dropoffStatus === 'arrived' && styles.stopMarkerArrived,
                   ]}>
                     <Ionicons
                       name={dropoffStatus === 'completed' ? 'checkmark-circle' : 'location'}
-                      size={24}
+                      size={36}
                       color="#FFFFFF"
                     />
                   </View>
@@ -527,19 +977,37 @@ export default function ParentTripTrackingScreen() {
               </Text>
             </View>
           )}
+
+          {/* Center on Bus Button - Positioned inside map container */}
+          {busLocation && trip.status === 'InProgress' && (
+            <TouchableOpacity
+              style={styles.centerOnBusButton}
+              onPress={() => {
+                if (busLocation) {
+                  // Use timestamp to trigger camera re-mount and center on bus
+                  setCenterOnBusTimestamp(Date.now());
+                }
+              }}
+              activeOpacity={0.8}>
+              <Ionicons name="locate" size={24} color="#000000" />
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
 
-      {/* Floating Driver Info Button */}
-      {trip.driver && (
-        <TouchableOpacity
-          style={styles.floatingButton}
-          onPress={() => setShowDriverModal(true)}
-          activeOpacity={0.8}>
-          <MaterialCommunityIcons name="account-tie" size={30} color="#FFFFFF" />
-          <Text style={styles.floatingButtonLabel}>Driver</Text>
-        </TouchableOpacity>
-      )}
+      {/* Floating Buttons */}
+      <View style={styles.floatingButtonsContainer}>
+        {/* Driver Info Button */}
+        {trip.driver && (
+          <TouchableOpacity
+            style={styles.floatingButton}
+            onPress={() => setShowDriverModal(true)}
+            activeOpacity={0.8}>
+            <MaterialCommunityIcons name="account-tie" size={30} color="#FFFFFF" />
+            <Text style={styles.floatingButtonLabel}>Driver</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Driver Info Modal */}
       <Modal
@@ -621,12 +1089,97 @@ export default function ParentTripTrackingScreen() {
                     <Text style={styles.callButtonText}>{trip.driver.phone}</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </View >
+            )
+            }
+          </View >
+        </View >
+      </Modal >
+
+      {/* Child Info Modal */}
+      < Modal
+        visible={showChildModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowChildModal(false)}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowChildModal(false)}
+          />
+          <View style={styles.modalContent}>
+            {selectedChild && (
+              <>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{selectedChild.name}</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowChildModal(false)}
+                    style={styles.modalCloseButton}>
+                    <Ionicons name="close" size={24} color="#000000" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.modalBody}>
+                  <View style={styles.modalDriverAvatarContainer}>
+                    <View style={[styles.modalDriverAvatar, styles.avatarPlaceholder]}>
+                      <Ionicons name="person" size={80} color="#6B7280" />
+                    </View>
+                  </View>
+
+                  <View style={styles.modalDriverInfo}>
+                    {/* Address Info */}
+                    {trip?.pickupStop?.address && (
+                      <View style={styles.vehicleInfoContainer}>
+                        <View style={styles.vehicleInfoItem}>
+                          <View style={styles.vehicleInfoIcon}>
+                            <Ionicons name="location" size={18} color="#6B7280" />
+                          </View>
+                          <View style={styles.vehicleInfoText}>
+                            <Text style={styles.vehicleInfoValue}>
+                              {trip.pickupStop.address}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Status Info */}
+                    <View style={styles.vehicleInfoContainer}>
+                      <View style={styles.vehicleInfoItem}>
+                        <View style={styles.vehicleInfoIcon}>
+                          <Ionicons name="information-circle" size={18} color="#6B7280" />
+                        </View>
+                        <View style={styles.vehicleInfoText}>
+                          <View style={styles.childModalStatusContainer}>
+                            <View style={[
+                              styles.childModalStatusBadge,
+                              { backgroundColor: getChildStateDisplay(selectedChild.state).backgroundColor }
+                            ]}>
+                              <Text style={[
+                                styles.childModalStatusText,
+                                { color: getChildStateDisplay(selectedChild.state).textColor }
+                              ]}>
+                                {getChildStateDisplay(selectedChild.state).label}
+                              </Text>
+                            </View>
+                          </View>
+                          {selectedChild.boardedAt && (
+                            <Text style={styles.vehicleInfoSubtext}>
+                              Boarded at {formatTime(selectedChild.boardedAt)}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </>
             )}
           </View>
         </View>
-      </Modal>
-    </SafeAreaView>
+      </Modal >
+    </SafeAreaView >
   );
 }
 
@@ -716,12 +1269,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  childAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 12,
-  },
   avatarPlaceholder: {
     backgroundColor: '#E0E0E0',
     justifyContent: 'center',
@@ -730,11 +1277,65 @@ const styles = StyleSheet.create({
   childInfo: {
     flex: 1,
   },
+  childInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  childInfoTitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'RobotoSlab-Medium',
+    textTransform: 'uppercase',
+  },
+  childCountText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontFamily: 'RobotoSlab-Medium',
+  },
+  childStatusList: {
+  },
+  childStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 8,
+  },
+  childStatusInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  childNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  childIcon: {
+    marginRight: 8,
+  },
   childName: {
     fontSize: 20,
     fontFamily: 'RobotoSlab-Bold',
     color: '#000000',
-    marginBottom: 4,
+  },
+  childStatusTime: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'RobotoSlab-Regular',
+  },
+  childStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    minWidth: 96,
+    alignItems: 'center',
   },
   childClass: {
     fontSize: 14,
@@ -750,6 +1351,70 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontFamily: 'RobotoSlab-Bold',
+  },
+  statusBanner: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#90CAF9',
+  },
+  statusBannerIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#2196F3',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  statusBannerContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  statusBannerTitle: {
+    fontSize: 16,
+    fontFamily: 'RobotoSlab-Bold',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  statusBannerText: {
+    fontSize: 14,
+    fontFamily: 'RobotoSlab-Regular',
+    color: '#000000',
+  },
+  statusBannerTextBold: {
+    fontSize: 14,
+    fontFamily: 'RobotoSlab-Bold',
+    color: '#000000',
+  },
+  statusBannerBulletItem: {
+    fontSize: 14,
+    fontFamily: 'RobotoSlab-Regular',
+    color: '#000000',
+    marginTop: 6,
+    lineHeight: 20,
+  },
+  statusBannerSchool: {
+    backgroundColor: '#C8E6C9',
+    borderColor: '#81C784',
+  },
+  childStatusBadgeText: {
+    fontSize: 12,
+    fontFamily: 'RobotoSlab-Bold',
+  },
+  childEmptyText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontFamily: 'RobotoSlab-Regular',
   },
   tripInfoCard: {
     backgroundColor: '#F5F5F5',
@@ -830,9 +1495,9 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   stopMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
@@ -931,10 +1596,13 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontFamily: 'RobotoSlab-Bold',
   },
-  floatingButton: {
+  floatingButtonsContainer: {
     position: 'absolute',
     bottom: 30,
     right: 20,
+    gap: 16,
+  },
+  floatingButton: {
     width: 70,
     height: 70,
     borderRadius: 35,
@@ -947,6 +1615,22 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 8,
     paddingVertical: 8,
+  },
+  centerOnBusButton: {
+    position: 'absolute',
+    bottom: 20,   // 20px from bottom of map
+    left: 20,     // 20px from left edge of map
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#FFDD00',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
   },
   floatingButtonLabel: {
     marginTop: 4,
@@ -1073,6 +1757,12 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontFamily: 'RobotoSlab-Bold',
   },
+  vehicleInfoSubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'RobotoSlab-Regular',
+    marginTop: 4,
+  },
   modalInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1117,5 +1807,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'RobotoSlab-Bold',
     marginLeft: 8,
+  },
+  childModalStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  childModalStatusBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  childModalStatusText: {
+    fontSize: 14,
+    fontFamily: 'RobotoSlab-Bold',
   },
 });

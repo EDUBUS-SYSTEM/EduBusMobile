@@ -3,7 +3,7 @@ import { authApi } from '../auth/auth.api';
 import { childrenApi } from '../parent/children.api';
 import { Guid } from '../types';
 import { DriverTripDto, DriverTripStatus } from './driverTrip.types';
-import type { ParentTripDto } from './parentTrip.types';
+import type { ParentTripChild, ParentTripDto } from './parentTrip.types';
 import type {
   GetTripsByDateResponse,
   ParentTripDtoResponse,
@@ -24,7 +24,7 @@ export const getTripsByDate = async (dateISO?: string | null): Promise<DriverTri
   try {
     const params = dateISO ? { date: dateISO } : undefined;
     const response = await apiService.get<GetTripsByDateResponse>('/trip/by-date', params);
-    
+
     // Map SimpleTripDto to DriverTripDto
     // Note: SimpleTripDto doesn't have all fields, so we use defaults for missing fields
     const trips: DriverTripDto[] = response.trips.map((trip, index) => ({
@@ -37,9 +37,9 @@ export const getTripsByDate = async (dateISO?: string | null): Promise<DriverTri
       endTime: undefined,
       status: trip.status as DriverTripDto['status'],
       scheduleName: trip.name,
-      totalStops: trip.totalStops, 
+      totalStops: trip.totalStops,
       completedStops: trip.completedStops,
-      stops: [], 
+      stops: [],
       isOverride: false, // Not available in SimpleTripDto
       overrideReason: '', // Not available in SimpleTripDto
       overrideCreatedBy: undefined,
@@ -50,17 +50,17 @@ export const getTripsByDate = async (dateISO?: string | null): Promise<DriverTri
     return trips;
   } catch (error: any) {
     console.error('Error fetching trips by date:', error);
-    
+
     // Handle 401 - Unauthorized
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
-    
+
     // Handle 404 - No trips found
     if (error.response?.status === 404) {
       return [];
     }
-    
+
     // Handle other errors
     throw new Error(error.response?.data?.message || 'Failed to load trips. Please try again.');
   }
@@ -74,10 +74,10 @@ export const getTripsByDate = async (dateISO?: string | null): Promise<DriverTri
 export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
   try {
     const response = await apiService.get<TripDto>(`/trip/${tripId}/detail-for-driver`);
-    
+
     // Calculate completed stops (stops with actualDeparture)
     const completedStops = response.stops.filter(s => s.actualDeparture).length;
-    
+
     // Map TripDto to DriverTripDto
     const driverTrip: DriverTripDto = {
       id: response.id,
@@ -98,12 +98,18 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
         plannedAt: stop.plannedArrival,
         arrivedAt: stop.actualArrival,
         departedAt: stop.actualDeparture,
-        address: stop.name, 
-        latitude: stop.location.latitude || 0, 
-        longitude: stop.location.longitude || 0, 
-        totalStudents: stop.attendance.length || 0, 
+        address: stop.name,
+        latitude: stop.location.latitude || 0,
+        longitude: stop.location.longitude || 0,
+        totalStudents: stop.attendance.length || 0,
         presentStudents: 0, // Not available - may need backend update
         absentStudents: 0, // Not available - may need backend update
+        attendance: stop.attendance?.map(att => ({
+          studentId: att.studentId,
+          studentName: att.studentName,
+          state: att.state,
+          boardedAt: att.boardedAt ?? null,
+        })) || [],
       })),
       isOverride: false, // Not in TripDto - may need backend update
       overrideReason: '',
@@ -116,17 +122,17 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
     return driverTrip;
   } catch (error: any) {
     console.error('Error fetching trip detail:', error);
-    
+
     // Handle 401 - Unauthorized
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
-    
+
     // Handle 404 - Trip not found
     if (error.response?.status === 404) {
       throw new Error('Trip not found or you don\'t have access to this trip');
     }
-    
+
     // Handle other errors
     throw new Error(error.response?.data?.message || 'Failed to load trip detail');
   }
@@ -139,24 +145,24 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
  */
 export const startTrip = async (tripId: string): Promise<{ tripId: string; message: string; startedAt: string }> => {
   try {
-    
+
     const response = await apiService.post<{ tripId: string; message: string; startedAt: string }>(
       `/trip/${tripId}/start`
     );
     return response;
   } catch (error: any) {
     console.error('Error starting trip:', error);
-    
+
     // Handle 401 - Unauthorized
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
-    
+
     // Handle 400 - Bad Request (trip not found, wrong status, etc.)
     if (error.response?.status === 400) {
       throw new Error(error.response?.data?.message || 'Cannot start trip');
     }
-    
+
     // Handle other errors
     throw new Error(error.response?.data?.message || 'Failed to start trip. Please try again.');
   }
@@ -165,6 +171,36 @@ export const startTrip = async (tripId: string): Promise<{ tripId: string; messa
 /**
  * Parent Trip API Functions
  */
+
+const extractChildrenFromStops = (stops: ParentTripDtoResponse['stops']): ParentTripChild[] => {
+  if (!Array.isArray(stops)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const children: ParentTripChild[] = [];
+
+  for (const stop of stops) {
+    if (!stop.attendance || stop.attendance.length === 0) {
+      continue;
+    }
+
+    for (const student of stop.attendance) {
+      if (seen.has(student.studentId)) {
+        continue;
+      }
+      seen.add(student.studentId);
+      children.push({
+        id: student.studentId,
+        name: student.studentName,
+        state: student.state,
+        boardedAt: student.boardedAt ?? null,
+      });
+    }
+  }
+
+  return children;
+};
 
 /**
  * Get trips by date for current parent
@@ -175,37 +211,28 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
   try {
     const params = dateISO ? { date: dateISO } : undefined;
     const response = await apiService.get<ParentTripDtoResponse[]>('/trip/parent/date', params);
-    
     if (!Array.isArray(response) || response.length === 0) {
       return [];
     }
-    
+
     const parentTrips: ParentTripDto[] = [];
-    
+
     for (const trip of response) {
       if (!trip.stops || trip.stops.length === 0) {
         continue;
       }
-      
+
       // API đã filter sẵn chỉ trả về stops của parent
       // Pickup = stop đầu tiên, Dropoff = stop cuối cùng
       const firstStop = trip.stops[0];
       const lastStop = trip.stops[trip.stops.length - 1];
-      
+
+      const children = extractChildrenFromStops(trip.stops);
+
       // Lấy child info từ attendance (nếu có)
-      let childId: Guid | undefined;
-      let childName: string | undefined;
-      
-      // Tìm child đầu tiên từ attendance
-      for (const stop of trip.stops) {
-        if (stop.attendance && stop.attendance.length > 0) {
-          const firstAttendance = stop.attendance[0];
-          childId = firstAttendance.studentId;
-          childName = firstAttendance.studentName;
-          break;
-        }
-      }
-      
+      let childId: Guid | undefined = children[0]?.id;
+      let childName: string | undefined = children[0]?.name;
+
       // Fallback: nếu không có attendance, lấy từ children API
       if (!childId || !childName) {
         try {
@@ -221,14 +248,14 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
           console.warn('Could not fetch parent children:', error);
         }
       }
-      
+
       // Nếu vẫn không có child info, skip trip này
       if (!childId || !childName) {
         continue;
       }
-      
+
       const completedStops = trip.stops.filter(s => s.actualDeparture).length;
-      
+
       const parentTrip: ParentTripDto = {
         id: trip.id,
         routeId: trip.routeId,
@@ -239,10 +266,30 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
         endTime: trip.endTime,
         status: trip.status as DriverTripStatus,
         scheduleName: trip.scheduleSnapshot?.name || 'Unknown Schedule',
+        tripType: trip.scheduleSnapshot?.tripType,
         childId: childId,
         childName: childName,
         childAvatar: undefined,
         childClassName: undefined,
+        children,
+        stops: trip.stops.map(stop => ({
+          id: stop.id,
+          name: stop.name,
+          sequence: stop.sequence,
+          plannedArrival: stop.plannedArrival,
+          actualArrival: stop.actualArrival,
+          plannedDeparture: stop.plannedDeparture,
+          actualDeparture: stop.actualDeparture,
+          address: stop.location.address,
+          latitude: stop.location.latitude,
+          longitude: stop.location.longitude,
+          attendance: stop.attendance?.map(att => ({
+            id: att.studentId,
+            name: att.studentName,
+            state: att.state,
+            boardedAt: att.boardedAt ?? null,
+          })) || [],
+        })),
         pickupStop: {
           sequenceOrder: firstStop.sequence,
           pickupPointName: firstStop.name,
@@ -277,25 +324,35 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
           capacity: trip.vehicle.capacity,
           status: trip.vehicle.status,
         } : undefined,
+        currentLocation: trip.currentLocation
+          ? {
+            latitude: trip.currentLocation.latitude,
+            longitude: trip.currentLocation.longitude,
+            recordedAt: trip.currentLocation.recordedAt,
+            speed: trip.currentLocation.speed,
+            accuracy: trip.currentLocation.accuracy,
+            isMoving: trip.currentLocation.isMoving,
+          }
+          : undefined,
         createdAt: trip.createdAt,
         updatedAt: trip.updatedAt,
       };
-      
+
       parentTrips.push(parentTrip);
     }
-    
+
     return parentTrips;
   } catch (error: any) {
     console.error('Error fetching parent trips by date:', error);
-    
+
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
-    
+
     if (error.response?.status === 404) {
       return [];
     }
-    
+
     throw new Error(error.response?.data?.message || 'Failed to load trips. Please try again.');
   }
 };
@@ -308,35 +365,27 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
 export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto | null> => {
   try {
     const response = await apiService.get<ParentTripDtoResponse>(`/trip/parent/${tripId}`);
-    
     if (!response.stops || response.stops.length === 0) {
       return null;
     }
-    
+
     // API đã filter sẵn chỉ trả về stops của parent
     // Pickup = stop đầu tiên, Dropoff = stop cuối cùng
     const firstStop = response.stops[0];
     const lastStop = response.stops[response.stops.length - 1];
-    
+
+    const children = extractChildrenFromStops(response.stops);
+
     // Lấy child info từ attendance (nếu có)
-    let childId: Guid | undefined;
-    let childName: string | undefined;
-    
-    for (const stop of response.stops) {
-      if (stop.attendance && stop.attendance.length > 0) {
-        const firstAttendance = stop.attendance[0];
-        childId = firstAttendance.studentId;
-        childName = firstAttendance.studentName;
-        break;
-      }
-    }
-    
+    let childId: Guid | undefined = children[0]?.id;
+    let childName: string | undefined = children[0]?.name;
+
     if (!childId || !childName) {
       return null;
     }
-    
+
     const completedStops = response.stops.filter(s => s.actualDeparture).length;
-    
+
     const parentTrip: ParentTripDto = {
       id: response.id,
       routeId: response.routeId,
@@ -347,10 +396,30 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
       endTime: response.endTime,
       status: response.status as DriverTripStatus,
       scheduleName: response.scheduleSnapshot.name,
+      tripType: response.scheduleSnapshot.tripType,
       childId: childId,
       childName: childName,
       childAvatar: undefined,
       childClassName: undefined,
+      children,
+      stops: response.stops.map(stop => ({
+        id: stop.id,
+        name: stop.name,
+        sequence: stop.sequence,
+        plannedArrival: stop.plannedArrival,
+        actualArrival: stop.actualArrival,
+        plannedDeparture: stop.plannedDeparture,
+        actualDeparture: stop.actualDeparture,
+        address: stop.location.address,
+        latitude: stop.location.latitude,
+        longitude: stop.location.longitude,
+        attendance: stop.attendance?.map(att => ({
+          id: att.studentId,
+          name: att.studentName,
+          state: att.state,
+          boardedAt: att.boardedAt ?? null,
+        })) || [],
+      })),
       pickupStop: {
         sequenceOrder: firstStop.sequence,
         pickupPointName: firstStop.name,
@@ -385,22 +454,32 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
         capacity: response.vehicle.capacity,
         status: response.vehicle.status,
       } : undefined,
+      currentLocation: response.currentLocation
+        ? {
+          latitude: response.currentLocation.latitude,
+          longitude: response.currentLocation.longitude,
+          recordedAt: response.currentLocation.recordedAt,
+          speed: response.currentLocation.speed,
+          accuracy: response.currentLocation.accuracy,
+          isMoving: response.currentLocation.isMoving,
+        }
+        : undefined,
       createdAt: response.createdAt,
       updatedAt: response.updatedAt,
     };
-    
+
     return parentTrip;
   } catch (error: any) {
     console.error('Error fetching parent trip detail:', error);
-    
+
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
-    
+
     if (error.response?.status === 404) {
       return null;
     }
-    
+
     throw new Error(error.response?.data?.message || 'Failed to load trip detail');
   }
 };

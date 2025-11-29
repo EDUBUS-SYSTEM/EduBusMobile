@@ -6,7 +6,7 @@ import { NotificationType } from '@/lib/notification/notification.type';
 import { signalRService } from '@/lib/signalr/notificationHub.service';
 import { store } from '@/store';
 import { useAppSelector } from '@/store/hooks';
-import { showAlert } from '@/store/slices/notificationAlertSlice';
+import { enqueueAlert } from '@/store/slices/notificationAlertSlice';
 import { addNotification } from '@/store/slices/notificationsSlice';
 import { useEffect } from 'react';
 
@@ -17,22 +17,22 @@ import { useEffect } from 'react';
  */
 export const useNotificationAlert = () => {
   const isSignalRConnected = useAppSelector((state) => state.signalR.isConnected);
-  
+
   useEffect(() => {
     if (!isSignalRConnected) {
       console.log('⏳ Waiting for SignalR connection...');
       return;
     }
-    
+
     console.log('📡 Subscribing to arrival notifications');
-    
+
     // Subscribe to notification events
     const handleNotification = (notification: ParentNotificationDto) => {
       console.log('🔔 [ReceiveNotification] Notification received:', JSON.stringify(notification, null, 2));
 
       const normalizedNotification = mapParentNotification(notification);
       store.dispatch(addNotification(normalizedNotification));
-      
+
       const tripId = (() => {
         const metadataTripId = notification.metadata?.tripId;
         if (typeof metadataTripId === 'string' && metadataTripId.trim().length > 0) {
@@ -49,19 +49,20 @@ export const useNotificationAlert = () => {
         const etaMetadata = notification.metadata?.estimatedMinutes;
         return typeof etaMetadata === 'number' ? etaMetadata : undefined;
       })();
-      
+
       // Check if this is an arrival alert notification
-      if (notification.notificationType === NotificationType.TripInfo || 
-          etaMinutes !== undefined) {
-        console.log('📍 Arrival alert detected, dispatching showAlert');
-        
-        // Dispatch showAlert action
-        store.dispatch(showAlert({
-          isVisible: true,
+      if (notification.notificationType === NotificationType.TripInfo ||
+        etaMinutes !== undefined) {
+        console.log('📍 Arrival alert detected, enqueuing to notification queue');
+
+        // Enqueue alert to the queue system
+        store.dispatch(enqueueAlert({
+          notificationId: notification.id,
           tripId,
           etaMinutes,
           message: notification.message,
           title: notification.title,
+          notificationType: notification.notificationType?.toString(),
         }));
       }
       else {
@@ -76,5 +77,5 @@ export const useNotificationAlert = () => {
       console.log('📴 Unsubscribing from arrival notifications');
       signalRService.offNotificationReceived();
     };
-  }, [isSignalRConnected]); 
+  }, [isSignalRConnected]);
 };

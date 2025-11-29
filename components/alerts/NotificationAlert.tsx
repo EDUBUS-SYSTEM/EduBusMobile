@@ -4,52 +4,64 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { hideAlert } from '../../store/slices/notificationAlertSlice';
+import { hideCurrentAlert, showNextAlert } from '../../store/slices/notificationAlertSlice';
+import { markNotificationAsRead } from '../../store/slices/notificationsSlice';
 
 export const NotificationAlert = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const alert = useAppSelector(state => state.notificationAlert);
+  const { current, isVisible, totalInQueue } = useAppSelector(state => state.notificationAlert);
 
   const slideAnim = useRef(new Animated.Value(-100)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [shouldRender, setShouldRender] = useState(false);
-  const [cachedContent, setCachedContent] = useState<{ title?: string; message?: string; tripId?: string }>({});
+  const [cachedContent, setCachedContent] = useState<{ notificationId?: string; title?: string; message?: string; tripId?: string }>({});
   const isHidingRef = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
+
   // Debug: Log alert state changes
   useEffect(() => {
-    console.log('🔔 ArrivalAlert state:', {
-      isVisible: alert.isVisible,
-      title: alert.title,
-      message: alert.message,
-      tripId: alert.tripId,
+    console.log('🔔 NotificationAlert state:', {
+      isVisible,
+      current,
+      totalInQueue,
     });
-  }, [alert.isVisible, alert.title, alert.message, alert.tripId]);
+  }, [isVisible, current, totalInQueue]);
 
   // Handle button press - defined before early return to follow Rules of Hooks
   const handlePress = useCallback(() => {
-    const tripId = alert.tripId || cachedContent.tripId;
+    const notificationId = current?.notificationId || cachedContent.notificationId;
+    const tripId = current?.tripId || cachedContent.tripId;
+
+    // Mark notification as read
+    if (notificationId) {
+      dispatch(markNotificationAsRead(notificationId));
+    }
+
+    // Navigate to trip detail
     if (tripId) router.push(`/(parent-tabs)/trip/${tripId}`);
-    dispatch(hideAlert());
-  }, [alert.tripId, cachedContent.tripId, router, dispatch]);
+
+    // Hide current alert
+    dispatch(hideCurrentAlert());
+  }, [current, cachedContent, router, dispatch]);
 
   // Track when alert becomes visible to start rendering and cache content
   useEffect(() => {
-    if (alert.isVisible) {
+    if (isVisible && current) {
       setShouldRender(true);
       // Cache the content so it persists during hide animation
       setCachedContent({
-        title: alert.title,
-        message: alert.message,
-        tripId: alert.tripId,
+        notificationId: current.notificationId,
+        title: current.title,
+        message: current.message,
+        tripId: current.tripId,
       });
     }
-  }, [alert.isVisible, alert.title, alert.message, alert.tripId]);
+  }, [isVisible, current]);
 
   // Animation effect when alert shows/hides
   useEffect(() => {
-    if (alert.isVisible) {
+    if (isVisible) {
       // Reset hiding flag when showing
       isHidingRef.current = false;
       // Show animation: slide down + fade in
@@ -66,42 +78,47 @@ export const NotificationAlert = () => {
         }),
       ]).start();
     } else if (shouldRender && !isHidingRef.current) {
-      // Hide animation: slide up + fade out (very slow and smooth)
+      // Hide animation: slide up + fade out (faster when queue has items)
       isHidingRef.current = true;
+      const animDuration = totalInQueue > 1 ? 600 : 1000;
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: -150,
-          duration: 1000,
+          duration: animDuration,
           easing: Easing.bezier(0.25, 0.1, 0.25, 1),
           useNativeDriver: true,
         }),
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 1000,
+          duration: animDuration,
           easing: Easing.bezier(0.25, 0.1, 0.25, 1),
           useNativeDriver: true,
         }),
       ]).start(() => {
-        // Only unmount after animation completes
+        // After animation completes, show next alert or unmount
         setShouldRender(false);
         setCachedContent({});
         isHidingRef.current = false;
+        // Trigger next alert in queue
+        dispatch(showNextAlert());
       });
     }
-  }, [alert.isVisible, shouldRender, slideAnim, fadeAnim]);
+  }, [isVisible, shouldRender, slideAnim, fadeAnim, totalInQueue, dispatch]);
 
-  // Auto-hide alert after 15 seconds
+  // Auto-hide alert - dynamic duration based on queue
   useEffect(() => {
-    if (alert.isVisible) {
+    if (isVisible) {
+      // Shorter duration when processing queue, longer when it's the only notification
+      const duration = totalInQueue > 1 ? 6000 : 10000;
       const timer = setTimeout(() => {
-        dispatch(hideAlert());
-      }, 10000); // 15 seconds
+        dispatch(hideCurrentAlert());
+      }, duration);
 
       return () => clearTimeout(timer);
     }
-  }, [alert.isVisible, dispatch]);
+  }, [isVisible, totalInQueue, dispatch]);
 
-    useEffect(() => {
+  useEffect(() => {
     let isMounted = true;
 
     const loadSound = async () => {
@@ -136,10 +153,10 @@ export const NotificationAlert = () => {
   }, []);
 
   useEffect(() => {
-    if (alert.isVisible && soundRef.current) {
+    if (isVisible && soundRef.current) {
       soundRef.current.replayAsync();
     }
-  }, [alert.isVisible]);
+  }, [isVisible]);
 
   // Don't render if we haven't started rendering yet or animation is complete
   if (!shouldRender) {
@@ -151,13 +168,13 @@ export const NotificationAlert = () => {
       style={[styles.container, {
         transform: [{ translateY: slideAnim }],
         opacity: fadeAnim,
-        pointerEvents: alert.isVisible ? 'auto' : 'none',
+        pointerEvents: isVisible ? 'auto' : 'none',
       }]}
     >
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={handlePress}
-        disabled={!alert.isVisible}
+        disabled={!isVisible}
       >
         <View style={styles.content}>
           <Image
@@ -166,9 +183,9 @@ export const NotificationAlert = () => {
             contentFit="contain"
           />
           <View style={styles.textContainer}>
-            <Text style={styles.title}>The shuttle is approaching</Text>
+            <Text style={styles.title}>{current?.title || cachedContent.title}</Text>
             <Text style={styles.subtitle}>
-              {alert.message || cachedContent.message || ''}
+              {current?.message || cachedContent.message || ''}
             </Text>
           </View>
         </View>

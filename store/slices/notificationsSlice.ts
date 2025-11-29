@@ -83,8 +83,18 @@ export const fetchUnreadCount = createAsyncThunk(
   'notifications/fetchUnreadCount',
   async (_, { rejectWithValue }) => {
     try {
-      const { count } = await notificationApi.getUnreadCount();
-      console.log('count', count);
+      const response = await notificationApi.getUnreadCount();
+
+      // Handle both formats: plain number or {count: number}
+      let count: number;
+      if (typeof response === 'number') {
+        count = response;
+      } else if (response && typeof response === 'object' && 'count' in response) {
+        count = (response as { count: number }).count ?? 0;
+      } else {
+        count = 0;
+      }
+
       return count;
     } catch (error: any) {
       const message = error?.message ?? 'Failed to fetch unread count';
@@ -105,8 +115,8 @@ const notificationsSlice = createSlice({
       const exists = state.items.some((notification) => notification.id === action.payload.id);
       state.items = exists
         ? state.items.map((notification) =>
-            notification.id === action.payload.id ? action.payload : notification,
-          )
+          notification.id === action.payload.id ? action.payload : notification,
+        )
         : [action.payload, ...state.items];
       state.unreadCount = state.items.filter((notification) => !notification.isRead).length;
     },
