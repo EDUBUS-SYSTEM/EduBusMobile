@@ -1,28 +1,44 @@
-import { getSupervisorTripDetail, updateAttendance } from '@/lib/supervisor/supervisor.api';
+import { getSupervisorTripDetail, submitManualAttendance } from '@/lib/supervisor/supervisor.api';
 import { SupervisorTripDetailDto } from '@/lib/supervisor/supervisor.types';
 import type { Guid } from '@/lib/types';
+import { toHourMinute } from '@/utils/date.utils';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Params = { tripId?: Guid };
 
-// Extract time directly from string to avoid timezone shifts
+// Format time for attendance (convert to Vietnam timezone)
 const formatTime = (iso: string) => {
   if (!iso) return '--:--';
   try {
-    // Check if it's an ISO string with 'T'
-    if (iso.includes('T')) {
-      return iso.split('T')[1].substring(0, 5);
-    }
-    // Fallback for other formats or if it's already a time
     const date = new Date(iso);
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
+    const vnTimeString = date.toLocaleString('en-US', { 
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    return vnTimeString;
+  } catch {
+    return '--:--';
+  }
+};
+
+// Format time for planned times (no timezone conversion)
+const formatPlannedTime = (iso: string) => {
+  if (!iso) return '--:--';
+  try {
+    const date = new Date(iso);
+    const timeString = date.toLocaleString('en-US', { 
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    return timeString;
   } catch {
     return '--:--';
   }
@@ -40,32 +56,37 @@ const getInitials = (name?: string) => {
 };
 
 const getStatusColor = (status: string): string => {
+  const normalizedStatus = status?.toLowerCase() || '';
   const colors: Record<string, string> = {
-    Scheduled: '#E8F5E8',
-    InProgress: '#E3F2FD',
-    Completed: '#F3E5F5',
-    Delayed: '#FFF3E0',
-    Cancelled: '#FFEBEE',
+    scheduled: '#D3E5FF',
+    inprogress: '#FEF3C7',
+    completed: '#E8F5E8',
+    delayed: '#FFEBEE',
+    cancelled: '#FFB8C2',
   };
-  return colors[status] || '#F3F4F6';
+  return colors[normalizedStatus] || '#F5F5F5';
 };
 
 const getStatusTextColor = (status: string): string => {
+  const normalizedStatus = status?.toLowerCase() || '';
   const colors: Record<string, string> = {
-    Scheduled: '#4CAF50',
-    InProgress: '#2196F3',
-    Completed: '#9C27B0',
-    Delayed: '#FF9800',
-    Cancelled: '#F44336',
+    scheduled: '#0D6EFD',
+    inprogress: '#F59E0B',
+    completed: '#4CAF50',
+    delayed: '#F44336',
+    cancelled: '#FF0000',
   };
-  return colors[status] || '#6B7280';
+  return colors[normalizedStatus] || '#757575';
 };
 
 export default function SupervisorTripDetailScreen() {
   const { tripId } = useLocalSearchParams<Params>();
   const [trip, setTrip] = React.useState<SupervisorTripDetailDto | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [attendanceStatus, setAttendanceStatus] = React.useState<Record<string, 'present' | 'absent' | null>>({});
+  const [boardingStatus, setBoardingStatus] = React.useState<Record<string, 'Present' | 'Absent' | null>>({});
+  const [alightingStatus, setAlightingStatus] = React.useState<Record<string, 'Present' | 'Absent' | null>>({});
+  const [showBoardingDropdown, setShowBoardingDropdown] = React.useState<{ studentId: string; stopSequence: number; position: { x: number; y: number; width: number } } | null>(null);
+  const [showAlightingDropdown, setShowAlightingDropdown] = React.useState<{ studentId: string; stopSequence: number; position: { x: number; y: number; width: number } } | null>(null);
   const insets = useSafeAreaInsets();
 
   const loadTripData = React.useCallback(async () => {
@@ -78,26 +99,34 @@ export default function SupervisorTripDetailScreen() {
 
       setTrip(tripData);
 
-      // Initialize attendance status for all students from stops
-      const initialStatus: Record<string, 'present' | 'absent' | null> = {};
+      // Initialize boarding and alighting status for all students from stops
+      const initialBoarding: Record<string, 'Present' | 'Absent' | null> = {};
+      const initialAlighting: Record<string, 'Present' | 'Absent' | null> = {};
+      
       tripData.stops.forEach(stop => {
         if (stop.attendance && Array.isArray(stop.attendance)) {
+          // Group by studentId to handle merged records from backend
+          const studentAttendanceMap = new Map<string, typeof stop.attendance[0]>();
+          
           stop.attendance.forEach((attendance) => {
             const studentId = attendance.studentId;
-            if (studentId) {
-              const state = attendance.state;
-              if (state === 'Present' || state === 'Boarded') {
-                initialStatus[studentId] = 'present';
-              } else if (state === 'Absent') {
-                initialStatus[studentId] = 'absent';
-              } else {
-                initialStatus[studentId] = null;
-              }
+            if (studentId && !studentAttendanceMap.has(studentId)) {
+              studentAttendanceMap.set(studentId, attendance);
+            }
+          });
+          
+          studentAttendanceMap.forEach((attendance, studentId) => {
+            if (attendance.boardStatus) {
+              initialBoarding[studentId] = attendance.boardStatus as 'Present' | 'Absent';
+            }
+            if (attendance.alightStatus) {
+              initialAlighting[studentId] = attendance.alightStatus as 'Present' | 'Absent';
             }
           });
         }
       });
-      setAttendanceStatus(initialStatus);
+      setBoardingStatus(initialBoarding);
+      setAlightingStatus(initialAlighting);
     } catch (error: any) {
       console.error('Error loading trip:', error);
       const errorMessage = error.message === 'UNAUTHORIZED'
@@ -123,64 +152,53 @@ export default function SupervisorTripDetailScreen() {
     loadTripData();
   }, [tripId, loadTripData]);
 
-  const handleAttendance = async (studentId: string, status: 'present' | 'absent') => {
+  const handleBoardingStatus = async (studentId: string, stopSequence: number, status: 'Present' | 'Absent') => {
     if (!trip || !tripId) {
       Alert.alert('Error', 'Trip information is missing');
       return;
     }
 
-    // Optimistically update UI
-    const newStatus = attendanceStatus[studentId] === status ? null : status;
-    setAttendanceStatus(prev => ({
+    setBoardingStatus(prev => ({
       ...prev,
-      [studentId]: newStatus
+      [studentId]: status
     }));
+    setShowBoardingDropdown(null);
 
-    // Find the stop that contains this student
-    let stopId: string | undefined;
-    for (const stop of trip.stops) {
-      if (stop.attendance) {
-        const attendance = stop.attendance.find(a => a.studentId === studentId);
-        if (attendance) {
-          stopId = stop.id;
-          break;
-        }
-      }
-    }
-
-    if (!stopId) {
-      Alert.alert('Error', 'Could not find student stop information');
-      // Revert UI change
-      setAttendanceStatus(prev => ({
+    try {
+      await submitManualAttendance(tripId, stopSequence, studentId, status, null);
+      await loadTripData();
+    } catch (error: any) {
+      console.error('Error updating boarding:', error);
+      setBoardingStatus(prev => ({
         ...prev,
-        [studentId]: attendanceStatus[studentId]
+        [studentId]: prev[studentId]
       }));
+      Alert.alert('Error', error.message || 'Failed to update boarding. Please try again.');
+    }
+  };
+
+  const handleAlightingStatus = async (studentId: string, stopSequence: number, status: 'Present' | 'Absent') => {
+    if (!trip || !tripId) {
+      Alert.alert('Error', 'Trip information is missing');
       return;
     }
 
-    // Call API to update attendance
+    setAlightingStatus(prev => ({
+      ...prev,
+      [studentId]: status
+    }));
+    setShowAlightingDropdown(null);
+
     try {
-      const apiState = newStatus === 'present' ? 'Present' : newStatus === 'absent' ? 'Absent' : null;
-      if (apiState) {
-        await updateAttendance(tripId, stopId, studentId, apiState);
-        // Success - UI already updated
-      } else {
-        // If status is null, we might want to clear attendance
-        // For now, just keep the UI update
-      }
+      await submitManualAttendance(tripId, stopSequence, studentId, null, status);
+      await loadTripData();
     } catch (error: any) {
-      console.error('Error updating attendance:', error);
-
-      // Revert UI change on error
-      setAttendanceStatus(prev => ({
+      console.error('Error updating alighting:', error);
+      setAlightingStatus(prev => ({
         ...prev,
-        [studentId]: attendanceStatus[studentId]
+        [studentId]: prev[studentId]
       }));
-
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to update attendance. Please try again.'
-      );
+      Alert.alert('Error', error.message || 'Failed to update alighting. Please try again.');
     }
   };
 
@@ -202,11 +220,12 @@ export default function SupervisorTripDetailScreen() {
     return null;
   }
 
-  // Calculate total students
   const totalStudents = trip.stops.reduce((acc, stop) => acc + (stop.attendance?.length || 0), 0);
 
-  // Calculate completed stops (stops with actualDeparture)
-  const completedStops = trip.stops.filter(s => s.actualDeparture).length;
+  const completedStudents = trip.stops.reduce((acc, stop) => {
+    const alightedCount = stop.attendance?.filter(a => a.alightStatus === 'Present').length || 0;
+    return acc + alightedCount;
+  }, 0);
 
   return (
     <View style={styles.container}>
@@ -230,7 +249,7 @@ export default function SupervisorTripDetailScreen() {
 
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>
-              Trip Details
+              Trip Attendances
             </Text>
             <Text style={styles.headerSubtitle}>
               {trip.routeName}
@@ -244,7 +263,7 @@ export default function SupervisorTripDetailScreen() {
             <View style={styles.timeContainer}>
               <Ionicons name="time-outline" size={16} color="#666" />
               <Text style={styles.tripTime}>
-                {formatTime(trip.plannedStartAt)} - {formatTime(trip.plannedEndAt)}
+                {toHourMinute(trip.plannedStartAt)} - {toHourMinute(trip.plannedEndAt)}
               </Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(trip.status) }]}>
@@ -262,7 +281,7 @@ export default function SupervisorTripDetailScreen() {
             </Text>
             <View style={styles.statDot} />
             <Text style={styles.statText}>
-              <Text style={{ fontWeight: 'bold' }}>{completedStops}</Text> Completed
+              <Text style={{ fontWeight: 'bold' }}>{completedStudents}</Text> Completed
             </Text>
           </View>
         </View>
@@ -272,6 +291,11 @@ export default function SupervisorTripDetailScreen() {
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20, paddingTop: 20 }}
         showsVerticalScrollIndicator={false}
+        onScrollBeginDrag={() => {
+          // Close dropdowns when scrolling
+          setShowBoardingDropdown(null);
+          setShowAlightingDropdown(null);
+        }}
       >
         {/* Driver & Vehicle Info */}
         <View style={styles.sectionContainer}>
@@ -340,15 +364,43 @@ export default function SupervisorTripDetailScreen() {
               {/* Students List for this stop */}
               <View style={styles.stopStudents}>
                 {stop.attendance && stop.attendance.length > 0 ? (
-                  stop.attendance.map((student) => {
-                    const currentStatus = attendanceStatus[student.studentId];
+                  // Filter to get unique students only (in case backend returns duplicates)
+                  stop.attendance
+                    .filter((student, index, self) => 
+                      index === self.findIndex(s => s.studentId === student.studentId)
+                    )
+                    .map((student) => {
+                    const boardingStatusValue = boardingStatus[student.studentId];
+                    const alightingStatusValue = alightingStatus[student.studentId];
+                    const isBoarded = boardingStatusValue !== null && boardingStatusValue !== undefined;
+                    const isAlighted = alightingStatusValue !== null && alightingStatusValue !== undefined;
+                    
+                    const boardedAt = student.boardedAt ? formatTime(student.boardedAt) : null;
+                    const alightedAt = student.alightedAt ? formatTime(student.alightedAt) : null;
+                    
+                    let statusText = 'Not Checked';
+                    if (isAlighted) {
+                      statusText = alightingStatusValue === 'Present' 
+                        ? `Alighted${alightedAt ? ` (${alightedAt})` : ''}` 
+                        : `Absent (Alighting)${alightedAt ? ` (${alightedAt})` : ''}`;
+                    } else if (isBoarded) {
+                      statusText = boardingStatusValue === 'Present' 
+                        ? `Boarded${boardedAt ? ` (${boardedAt})` : ''}` 
+                        : `Absent (Boarding)${boardedAt ? ` (${boardedAt})` : ''}`;
+                    }
+                    
+                    const uniqueKey = `${stop.id}-${student.studentId}`;
+                    let boardingButtonRef: View | null = null;
+                    let alightingButtonRef: View | null = null;
+                    
                     return (
                       <View
-                        key={student.studentId}
+                        key={uniqueKey}
                         style={[
                           styles.studentCard,
-                          currentStatus === 'present' && styles.studentCardPresent,
-                          currentStatus === 'absent' && styles.studentCardAbsent
+                          isBoarded && boardingStatusValue === 'Present' && styles.studentCardPresent,
+                          isAlighted && alightingStatusValue === 'Present' && styles.studentCardAlighted,
+                          (boardingStatusValue === 'Absent' || alightingStatusValue === 'Absent') && styles.studentCardAbsent
                         ]}
                       >
                         <View style={styles.studentHeader}>
@@ -362,80 +414,141 @@ export default function SupervisorTripDetailScreen() {
                             <Text style={styles.studentMeta} numberOfLines={1}>
                               {(student.className || 'No class info') + ` • Stop ${stop.sequence}`}
                             </Text>
+                            {/* Show boarding/alighting status with times */}
+                            {(isBoarded || isAlighted) && (
+                              <View style={styles.attendanceStatusRow}>
+                                {isBoarded && boardingStatusValue && (
+                                  <Text style={styles.attendanceStatusText}>
+                                    Boarding: {boardingStatusValue}
+                                    {student.boardedAt && ` • ${formatTime(student.boardedAt)}`}
+                                  </Text>
+                                )}
+                                {isAlighted && alightingStatusValue && (
+                                  <Text style={styles.attendanceStatusText}>
+                                    Alighting: {alightingStatusValue}
+                                    {student.alightedAt && ` • ${formatTime(student.alightedAt)}`}
+                                  </Text>
+                                )}
+                              </View>
+                            )}
                           </View>
                           <View
                             style={[
                               styles.statusPill,
-                              currentStatus === 'present'
+                              isAlighted
+                                ? styles.statusPillAlighted
+                                : isBoarded
                                 ? styles.statusPillPresent
-                                : currentStatus === 'absent'
-                                ? styles.statusPillAbsent
                                 : styles.statusPillPending
                             ]}
                           >
                             <Text
                               style={[
                                 styles.statusPillText,
-                                currentStatus === 'present' && styles.statusPillTextActive,
-                                currentStatus === 'absent' && styles.statusPillTextActive
+                                (isBoarded || isAlighted) && styles.statusPillTextActive
                               ]}
                             >
-                              {currentStatus === 'present'
-                                ? 'Checked-in'
-                                : currentStatus === 'absent'
-                                ? 'Absent'
-                                : 'Pending'}
+                              {statusText}
                             </Text>
                           </View>
                         </View>
 
+                        {trip.status === 'InProgress' && (
                         <View style={styles.attendanceButtons}>
-                          <TouchableOpacity
-                            style={[
-                              styles.attendanceBtn,
-                              styles.presentBtn,
-                              currentStatus === 'present' && styles.presentBtnActive
-                            ]}
-                            onPress={() => handleAttendance(student.studentId, 'present')}
+                          {/* Boarding Button with Dropdown */}
+                          <View 
+                            style={styles.dropdownContainer}
+                            ref={(ref) => { boardingButtonRef = ref; }}
                           >
-                            <Ionicons
-                              name={currentStatus === 'present' ? 'checkmark-circle' : 'checkmark-circle-outline'}
-                              size={18}
-                              color={currentStatus === 'present' ? '#FFFFFF' : '#2E7D32'}
-                            />
-                            <Text
+                            <TouchableOpacity
                               style={[
-                                styles.attendanceBtnText,
-                                currentStatus === 'present' && styles.attendanceBtnTextActive
+                                styles.attendanceBtn,
+                                styles.boardingBtn,
+                                isBoarded && boardingStatusValue === 'Present' && styles.boardingBtnActive,
+                                boardingStatusValue === 'Absent' && styles.boardingBtnAbsent
                               ]}
+                              onPress={() => {
+                                if (showBoardingDropdown?.studentId === student.studentId) {
+                                  setShowBoardingDropdown(null);
+                                } else {
+                                  boardingButtonRef?.measureInWindow((x, y, width, height) => {
+                                    setShowBoardingDropdown({ 
+                                      studentId: student.studentId, 
+                                      stopSequence: stop.sequence,
+                                      position: { x, y: y + height, width }
+                                    });
+                                    setShowAlightingDropdown(null);
+                                  });
+                                }
+                              }}
+                              disabled={false}
                             >
-                              Present
-                            </Text>
-                          </TouchableOpacity>
+                              <Ionicons
+                                name={isBoarded ? 'checkmark-circle' : 'arrow-up-circle-outline'}
+                                size={18}
+                                color={isBoarded && boardingStatusValue === 'Present' ? '#FFFFFF' : boardingStatusValue === 'Absent' ? '#FFFFFF' : '#2E7D32'}
+                              />
+                              <Text
+                                style={[
+                                  styles.attendanceBtnText,
+                                  (isBoarded && boardingStatusValue === 'Present') || boardingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
+                                ]}
+                                numberOfLines={1}
+                              >
+                                Boarding {isBoarded && boardingStatusValue ? `(${boardingStatusValue})` : ''}
+                              </Text>
+                              <Ionicons name="chevron-down" size={14} color={isBoarded && boardingStatusValue === 'Present' ? '#FFFFFF' : boardingStatusValue === 'Absent' ? '#FFFFFF' : '#2E7D32'} />
+                            </TouchableOpacity>
+                          </View>
 
-                          <TouchableOpacity
-                            style={[
-                              styles.attendanceBtn,
-                              styles.absentBtn,
-                              currentStatus === 'absent' && styles.absentBtnActive
-                            ]}
-                            onPress={() => handleAttendance(student.studentId, 'absent')}
+                          {/* Alighting Button with Dropdown */}
+                          <View 
+                            style={styles.dropdownContainer}
+                            ref={(ref) => { alightingButtonRef = ref; }}
                           >
-                            <Ionicons
-                              name={currentStatus === 'absent' ? 'close-circle' : 'close-circle-outline'}
-                              size={18}
-                              color={currentStatus === 'absent' ? '#FFFFFF' : '#C62828'}
-                            />
-                            <Text
+                            <TouchableOpacity
                               style={[
-                                styles.attendanceBtnText,
-                                currentStatus === 'absent' && styles.attendanceBtnTextActive
+                                styles.attendanceBtn,
+                                styles.alightingBtn,
+                                isAlighted && alightingStatusValue === 'Present' && styles.alightingBtnActive,
+                                alightingStatusValue === 'Absent' && styles.alightingBtnAbsent,
+                                ((!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress') && styles.attendanceBtnDisabled
                               ]}
+                              onPress={() => {
+                                if (showAlightingDropdown?.studentId === student.studentId) {
+                                  setShowAlightingDropdown(null);
+                                } else {
+                                  alightingButtonRef?.measureInWindow((x, y, width, height) => {
+                                    setShowAlightingDropdown({ 
+                                      studentId: student.studentId, 
+                                      stopSequence: stop.sequence,
+                                      position: { x, y: y + height, width }
+                                    });
+                                    setShowBoardingDropdown(null);
+                                  });
+                                }
+                              }}
+                              disabled={(!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress'}
                             >
-                              Absent
-                            </Text>
-                          </TouchableOpacity>
+                              <Ionicons
+                                name={isAlighted ? 'checkmark-circle' : 'arrow-down-circle-outline'}
+                                size={18}
+                                color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'}
+                              />
+                              <Text
+                                style={[
+                                  styles.attendanceBtnText,
+                                  (isAlighted && alightingStatusValue === 'Present') || alightingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
+                                ]}
+                                numberOfLines={1}
+                              >
+                                Alighting {isAlighted && alightingStatusValue ? `(${alightingStatusValue})` : ''}
+                              </Text>
+                              <Ionicons name="chevron-down" size={14} color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'} />
+                            </TouchableOpacity>
+                          </View>
                         </View>
+                        )}
                       </View>
                     );
                   })
@@ -447,6 +560,118 @@ export default function SupervisorTripDetailScreen() {
           ))}
         </View>
       </ScrollView>
+
+      {/* Modal for Boarding Dropdown */}
+      <Modal
+        visible={showBoardingDropdown !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowBoardingDropdown(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowBoardingDropdown(null)}
+        >
+          {showBoardingDropdown && (() => {
+            const student = trip.stops
+              .flatMap(s => s.attendance || [])
+              .find(a => a.studentId === showBoardingDropdown.studentId);
+            const boardingStatusValue = boardingStatus[showBoardingDropdown.studentId];
+            
+            return (
+              <View
+                style={[
+                  styles.modalDropdown,
+                  {
+                    top: showBoardingDropdown.position.y,
+                    left: showBoardingDropdown.position.x,
+                    width: showBoardingDropdown.position.width,
+                  }
+                ]}
+                onStartShouldSetResponder={() => true}
+              >
+                <TouchableOpacity
+                  style={[styles.dropdownItem, boardingStatusValue === 'Present' && styles.dropdownItemActive]}
+                  onPress={() => {
+                    if (student) {
+                      handleBoardingStatus(showBoardingDropdown.studentId, showBoardingDropdown.stopSequence, 'Present');
+                    }
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, boardingStatusValue === 'Present' && styles.dropdownItemTextActive]}>Present</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.dropdownItem, boardingStatusValue === 'Absent' && styles.dropdownItemActive]}
+                  onPress={() => {
+                    if (student) {
+                      handleBoardingStatus(showBoardingDropdown.studentId, showBoardingDropdown.stopSequence, 'Absent');
+                    }
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, boardingStatusValue === 'Absent' && styles.dropdownItemTextActive]}>Absent</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Modal for Alighting Dropdown */}
+      <Modal
+        visible={showAlightingDropdown !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowAlightingDropdown(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAlightingDropdown(null)}
+        >
+          {showAlightingDropdown && (() => {
+            const student = trip.stops
+              .flatMap(s => s.attendance || [])
+              .find(a => a.studentId === showAlightingDropdown.studentId);
+            const alightingStatusValue = alightingStatus[showAlightingDropdown.studentId];
+            
+            return (
+              <View
+                style={[
+                  styles.modalDropdown,
+                  {
+                    top: showAlightingDropdown.position.y,
+                    left: showAlightingDropdown.position.x,
+                    width: showAlightingDropdown.position.width,
+                  }
+                ]}
+                onStartShouldSetResponder={() => true}
+              >
+                <TouchableOpacity
+                  style={[styles.dropdownItem, alightingStatusValue === 'Present' && styles.dropdownItemActive]}
+                  onPress={() => {
+                    if (student) {
+                      handleAlightingStatus(showAlightingDropdown.studentId, showAlightingDropdown.stopSequence, 'Present');
+                    }
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, alightingStatusValue === 'Present' && styles.dropdownItemTextActive]}>Present</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.dropdownItem, alightingStatusValue === 'Absent' && styles.dropdownItemActive]}
+                  onPress={() => {
+                    if (student) {
+                      handleAlightingStatus(showAlightingDropdown.studentId, showAlightingDropdown.stopSequence, 'Absent');
+                    }
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, alightingStatusValue === 'Absent' && styles.dropdownItemTextActive]}>Absent</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -713,6 +938,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   studentCardPresent: {
+    borderColor: 'rgba(25, 118, 210, 0.35)',
+    backgroundColor: '#E3F2FD',
+  },
+  studentCardAlighted: {
     borderColor: 'rgba(46, 125, 50, 0.35)',
     backgroundColor: '#F2FFF4',
   },
@@ -752,6 +981,15 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
+  attendanceStatusRow: {
+    marginTop: 4,
+    gap: 2,
+  },
+  attendanceStatusText: {
+    fontFamily: 'RobotoSlab-Regular',
+    fontSize: 11,
+    color: '#4B5563',
+  },
   statusPill: {
     paddingHorizontal: 12,
     paddingVertical: 4,
@@ -763,6 +1001,9 @@ const styles = StyleSheet.create({
   },
   statusPillPresent: {
     backgroundColor: '#C8E6C9',
+  },
+  statusPillAlighted: {
+    backgroundColor: '#BBDEFB',
   },
   statusPillAbsent: {
     backgroundColor: '#FFCDD2',
@@ -777,19 +1018,102 @@ const styles = StyleSheet.create({
   },
   attendanceButtons: {
     flexDirection: 'row',
-    gap: 30,
+    gap: 12,
     flexShrink: 0,
     marginTop: 12,
+  },
+  dropdownContainer: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 1000,
   },
   attendanceBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
     gap: 6,
+    minWidth: 100,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  modalDropdown: {
+    position: 'absolute',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 100,
+    overflow: 'hidden',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 30,
+    zIndex: 99999,
+    overflow: 'visible',
+  },
+  dropdownItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  dropdownItemActive: {
+    backgroundColor: '#E3F2FD',
+  },
+  dropdownItemText: {
+    fontFamily: 'RobotoSlab-Medium',
+    fontSize: 14,
+    color: '#333',
+  },
+  dropdownItemTextActive: {
+    color: '#1976D2',
+    fontWeight: 'bold',
+  },
+  boardingBtn: {
+    borderColor: '#4CAF50',
+    backgroundColor: '#F0FFF4',
+  },
+  alightingBtn: {
+    borderColor: '#1976D2',
+    backgroundColor: '#E3F2FD',
+  },
+  boardingBtnActive: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  boardingBtnAbsent: {
+    backgroundColor: '#F44336',
+    borderColor: '#F44336',
+  },
+  alightingBtnActive: {
+    backgroundColor: '#1976D2',
+    borderColor: '#1976D2',
+  },
+  alightingBtnAbsent: {
+    backgroundColor: '#F44336',
+    borderColor: '#F44336',
   },
   presentBtn: {
     borderColor: '#4CAF50',
@@ -814,6 +1138,9 @@ const styles = StyleSheet.create({
   },
   attendanceBtnTextActive: {
     color: '#FFFFFF',
+  },
+  attendanceBtnDisabled: {
+    opacity: 0.5,
   },
   noStudentsText: {
     fontFamily: 'RobotoSlab-Regular',

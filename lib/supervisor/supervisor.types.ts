@@ -10,7 +10,10 @@ export interface SupervisorAttendanceDto {
   studentName: string;
   className: string;
   boardedAt?: string | null;
-  state: string; // 'Present', 'Absent', 'Boarded', 'Pending', etc.
+  alightedAt?: string | null;
+  state: string;
+  boardStatus?: string | null;
+  alightStatus?: string | null;
 }
 
 export interface SupervisorTripStopDto {

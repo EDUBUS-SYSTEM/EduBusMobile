@@ -1,27 +1,36 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
-import React from 'react';
-import { ScrollView, Text, View, TouchableOpacity } from 'react-native';
-import { router } from 'expo-router';
+import { getSupervisorTripsToday } from '@/lib/supervisor/supervisor.api';
+import { DriverTripDto } from '@/lib/trip/driverTrip.types';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchDriverTripsToday } from '@/store/slices/driverTodaySlice';
 import { getTodayISOString, toHourMinute } from '@/utils/date.utils';
-import { getSupervisorTripsToday } from '@/lib/supervisor/supervisor.api';
-import { DriverTripDto } from '@/lib/trip/driverTrip.types';
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { router } from 'expo-router';
+import React from 'react';
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
-const statusColor: Record<string, string> = {
-  Scheduled: '#4CAF50',
-  InProgress: '#2196F3',
-  Completed: '#9C27B0',
-  Delayed: '#FF9800',
-  Cancelled: '#F44336',
+const getStatusBgColor = (status: string): string => {
+  const normalizedStatus = status?.toLowerCase() || '';
+  const colors: Record<string, string> = {
+    scheduled: '#D3E5FF',
+    inprogress: '#FEF3C7',
+    completed: '#E8F5E8',
+    delayed: '#FFEBEE',
+    cancelled: '#FFB8C2',
+  };
+  return colors[normalizedStatus] || '#F5F5F5';
 };
-const statusBg: Record<string, string> = {
-  Scheduled: '#E8F5E8',
-  InProgress: '#E3F2FD',
-  Completed: '#F3E5F5',
-  Delayed: '#FFF3E0',
-  Cancelled: '#FFEBEE',
+
+const getStatusTextColor = (status: string): string => {
+  const normalizedStatus = status?.toLowerCase() || '';
+  const colors: Record<string, string> = {
+    scheduled: '#0D6EFD',
+    inprogress: '#F59E0B',
+    completed: '#4CAF50',
+    delayed: '#F44336',
+    cancelled: '#FF0000',
+  };
+  return colors[normalizedStatus] || '#757575';
 };
 
 export default function SupervisorDashboardScreen() {
@@ -338,11 +347,11 @@ export default function SupervisorDashboardScreen() {
                       <Text style={{ marginLeft: 6, fontFamily: 'RobotoSlab-Regular', color: '#4B5563' }}>{trip.scheduleName}</Text>
                     </View>
                   </View>
-                  <View style={{ backgroundColor: statusBg[trip.status] || '#F3F4F6', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
+                  <View style={{ backgroundColor: getStatusBgColor(trip.status), paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
                     <Text style={{
                       fontFamily: 'RobotoSlab-Bold',
                       fontSize: 12,
-                      color: statusColor[trip.status] || '#6B7280'
+                      color: getStatusTextColor(trip.status)
                     }}>{trip.status}</Text>
                   </View>
                 </View>
@@ -350,9 +359,6 @@ export default function SupervisorDashboardScreen() {
                 <View style={{ flexDirection: 'row', marginTop: 12 }}>
                   <View style={{ backgroundColor: '#F9FAFB', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8 }}>
                     <Text style={{ fontFamily: 'RobotoSlab-Medium', color: '#6B7280', fontSize: 12 }}>Stops: {trip.totalStops}</Text>
-                  </View>
-                  <View style={{ backgroundColor: '#F9FAFB', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-                    <Text style={{ fontFamily: 'RobotoSlab-Medium', color: '#6B7280', fontSize: 12 }}>Completed: {trip.completedStops}/{trip.totalStops}</Text>
                   </View>
                 </View>
               </View>
