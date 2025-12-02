@@ -216,16 +216,47 @@ export const getSupervisorTripDetailAsDriverTrip = async (tripId: string): Promi
   }
 };
 
-/**
- * Update student attendance for a trip
- * NOTE: Currently uses /Trip/{id}/attendance endpoint which requires Admin role.
- * Backend needs to add Supervisor role to authorization: [Authorize(Roles = Roles.Admin + "," + Roles.Supervisor)]
- * @param tripId - Trip ID
- * @param stopId - Stop/Pickup Point ID
- * @param studentId - Student ID
- * @param state - Attendance state: 'Present', 'Absent', 'Boarded', etc.
- * @returns Response with success message
- */
+export const submitManualAttendance = async (
+  tripId: string,
+  stopSequence: number,
+  studentId: string,
+  boardStatus?: 'Present' | 'Absent' | null,
+  alightStatus?: 'Present' | 'Absent' | null
+): Promise<{ success: boolean; message: string; studentId: string; timestamp: string }> => {
+  try {
+    const response = await apiService.post<{
+      success: boolean;
+      message: string;
+      studentId: string;
+      timestamp: string;
+    }>(`/Trip/${tripId}/attendance/manual`, {
+      stopId: stopSequence,
+      studentId: studentId,
+      boardStatus: boardStatus || null,
+      alightStatus: alightStatus || null,
+      timestamp: new Date().toISOString(),
+    });
+    return response;
+  } catch (error: any) {
+    console.error('Error submitting manual attendance:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+
+    if (error.response?.status === 403) {
+      throw new Error('You don\'t have permission to update attendance. Please contact administrator.');
+    }
+
+    if (error.response?.status === 400 || error.response?.status === 404) {
+      throw new Error(error.response?.data?.message || 'Cannot update attendance');
+    }
+
+    throw new Error(error.response?.data?.message || 'Failed to update attendance. Please try again.');
+  }
+};
+
+
 export const updateAttendance = async (
   tripId: string,
   stopId: string,
@@ -233,8 +264,6 @@ export const updateAttendance = async (
   state: string
 ): Promise<{ tripId: string; stopId: string; studentId: string; state: string; message: string }> => {
   try {
-    // Using /Trip/{id}/attendance endpoint
-    // TODO: Backend needs to add Supervisor role to authorization
     const response = await apiService.put<{
       tripId: string;
       stopId: string;
