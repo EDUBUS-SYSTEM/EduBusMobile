@@ -32,6 +32,8 @@ export default function TripDetailScreen() {
   const [loading, setLoading] = React.useState(true);
   const [clickedCoordinate, setClickedCoordinate] = useState<[number, number] | null>(null);
   const [showStopsModal, setShowStopsModal] = useState(false);
+  const [selectedStop, setSelectedStop] = useState<DriverTripStopDto | null>(null);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [routeSegments, setRouteSegments] = useState<[number, number][][]>([]);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -277,16 +279,9 @@ export default function TripDetailScreen() {
     setTrip(updatedTrip);
   };
 
-  const handleUpdateStudents = (stop: DriverTripStopDto, present: number, absent: number) => {
-    if (!trip) return;
-
-    const updatedStops = trip.stops.map((s) =>
-      s.sequenceOrder === stop.sequenceOrder
-        ? { ...s, presentStudents: present, absentStudents: absent }
-        : s
-    );
-
-    setTrip({ ...trip, stops: updatedStops });
+  const handleViewAttendance = (stop: DriverTripStopDto) => {
+    setSelectedStop(stop);
+    setShowAttendanceModal(true);
   };
 
   const mapRef = useRef<MapViewRef>(null);
@@ -306,25 +301,25 @@ export default function TripDetailScreen() {
     }
 
     const coordinates = trip.stops.map((stop) => [stop.longitude, stop.latitude] as [number, number]);
-    
+
     // Calculate bounds
     const lngs = coordinates.map((c) => c[0]);
     const lats = coordinates.map((c) => c[1]);
-    
+
     const minLng = Math.min(...lngs);
     const maxLng = Math.max(...lngs);
     const minLat = Math.min(...lats);
     const maxLat = Math.max(...lats);
-    
+
     // Calculate center
     const centerLng = (minLng + maxLng) / 2;
     const centerLat = (minLat + maxLat) / 2;
-    
+
     // Calculate zoom level (simple approximation)
     const lngDiff = maxLng - minLng;
     const latDiff = maxLat - minLat;
     const maxDiff = Math.max(lngDiff, latDiff);
-    
+
     // Increased zoom levels for closer view
     let zoomLevel = 14;
     if (maxDiff > 0.1) zoomLevel = 12;
@@ -332,12 +327,22 @@ export default function TripDetailScreen() {
     else if (maxDiff > 0.02) zoomLevel = 14;
     else if (maxDiff > 0.01) zoomLevel = 15;
     else zoomLevel = 16;
-    
+
     return {
       centerCoordinate: [centerLng, centerLat] as [number, number],
       zoomLevel,
     };
   }, [trip]);
+
+  const getCameraSettings = React.useCallback(() => {
+    if (clickedCoordinate) {
+      return {
+        centerCoordinate: clickedCoordinate,
+        zoomLevel: 15,
+      };
+    }
+    return getMapBounds();
+  }, [clickedCoordinate, getMapBounds]);
 
   const handleMapPress = (feature: GeoJSON.Feature) => {
     try {
@@ -413,7 +418,9 @@ export default function TripDetailScreen() {
         <View style={{ width: 40 }} />
       </LinearGradient>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content}
+        contentContainerStyle={{ paddingBottom: 80 }}
+        showsVerticalScrollIndicator={false}>
         {/* Trip Info Card */}
         <View style={styles.tripInfoCard}>
           <View style={styles.tripInfoRow}>
@@ -462,8 +469,8 @@ export default function TripDetailScreen() {
                   zoomLevel: 12,
                   animationDuration: 0,
                 }}
-                centerCoordinate={getMapBounds().centerCoordinate}
-                zoomLevel={getMapBounds().zoomLevel}
+                centerCoordinate={getCameraSettings().centerCoordinate}
+                zoomLevel={getCameraSettings().zoomLevel}
                 animationDuration={trip ? 500 : 0}
               />
               {/* Routes between all stops in sequence - placed before markers to avoid covering them */}
@@ -526,7 +533,7 @@ export default function TripDetailScreen() {
             </View>
           )}
         </View>
-      </View>
+      </ScrollView>
 
       {/* Floating Pickup Points Button */}
       <TouchableOpacity
@@ -553,7 +560,7 @@ export default function TripDetailScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Pickup Points</Text>
+              <Text style={styles.modalTitle}>Stops</Text>
               <TouchableOpacity
                 onPress={() => setShowStopsModal(false)}
                 style={styles.modalCloseButton}
@@ -570,7 +577,10 @@ export default function TripDetailScreen() {
                 const status = getStopStatus(stop);
                 const isArrived = status === 'arrived' || status === 'completed';
                 return (
-                  <View key={stop.sequenceOrder} style={styles.stopItem}>
+                  <TouchableOpacity key={stop.sequenceOrder}
+                    style={styles.stopItem}
+                    onPress={() => handleViewAttendance(stop)}
+                    activeOpacity={0.7}>
                     <View style={styles.stopItemLeft}>
                       <View style={[styles.stopNumberBadge, { backgroundColor: getStopStatusColor(status) }]}>
                         <Text style={styles.stopNumberText}>{stop.sequenceOrder}</Text>
@@ -579,17 +589,9 @@ export default function TripDetailScreen() {
                         <Text style={styles.stopName}>{stop.pickupPointName}</Text>
                         <View style={styles.stopChipsRow}>
                           <View style={styles.stopChip}>
-                            <Ionicons name="time-outline" size={14} color="#6B7280" />
-                            <Text style={styles.stopChipText}>{formatTime(stop.plannedAt)}</Text>
+                            <Ionicons name="people-outline" size={14} color="#6B7280" />
+                            <Text style={styles.stopChipText}>{stop.totalStudents} student{stop.totalStudents !== 1 ? 's' : ''}</Text>
                           </View>
-                          {Array.isArray((stop as any).students) && (stop as any).students.length > 0 && (
-                            <View style={styles.stopChip}>
-                              <Ionicons name="people-outline" size={14} color="#6B7280" />
-                              <Text style={styles.stopChipText} numberOfLines={1}>
-                                {(stop as any).students.map((s: any) => s.studentName).join(', ')}
-                              </Text>
-                            </View>
-                          )}
                         </View>
                       </View>
                     </View>
@@ -603,9 +605,69 @@ export default function TripDetailScreen() {
                         <Ionicons name="notifications" size={18} color={isArrived ? '#D1D5DB' : '#000000'} />
                       </TouchableOpacity>
                     </View>
-                  </View>
+                  </TouchableOpacity >
                 );
               })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      {/* Attendance Modal */}
+      <Modal
+        visible={showAttendanceModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowAttendanceModal(false)}
+      >
+        <View style={styles.attendanceModalOverlay}>
+          <View style={styles.attendanceModalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.attendanceModalHeader}>
+              <TouchableOpacity
+                onPress={() => setShowAttendanceModal(false)}
+                style={styles.attendanceCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#374151" />
+              </TouchableOpacity>
+              <Text style={styles.attendanceModalTitle}>
+                {selectedStop?.pickupPointName || 'Attendance'}
+              </Text>
+            </View>
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={{ paddingBottom: 32 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {selectedStop?.attendance && selectedStop.attendance.length > 0 ? (
+                selectedStop.attendance.map((student, index) => (
+                  <View key={student.studentId} style={styles.studentItem}>
+                    <View style={styles.studentInfo}>
+                      <View style={styles.studentNumberBadge}>
+                        <Text style={styles.studentNumberText}>{index + 1}</Text>
+                      </View>
+                      <View style={styles.studentDetails}>
+                        <Text style={styles.studentName}>{student.studentName}</Text>
+                        {student.boardedAt && (
+                          <Text style={styles.studentBoardedTime}>
+                            Boarded: {formatTime(student.boardedAt)}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <View style={[
+                      styles.studentStateBadge,
+                      { backgroundColor: getStudentStateColor(student.state) }
+                    ]}>
+                      <Text style={styles.studentStateText}>{student.state}</Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="people-outline" size={48} color="#D1D5DB" />
+                  <Text style={styles.emptyStateText}>No attendance data</Text>
+                </View>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -633,7 +695,16 @@ const getStopStatusColor = (status: 'pending' | 'arrived' | 'completed'): string
   };
   return colors[status];
 };
-
+const getStudentStateColor = (state: string): string => {
+  const colors: Record<string, string> = {
+    Present: '#10B981',
+    Absent: '#EF4444',
+    Boarded: '#3B82F6',
+    NotBoarded: '#F59E0B',
+    default: '#9CA3AF',
+  };
+  return colors[state] || colors.default;
+};
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   loadingContainer: {
@@ -720,7 +791,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   mapContainer: {
-    flex: 1,
+    height: 600,
     borderRadius: 16,
     overflow: 'hidden',
     marginTop: 8,
@@ -903,7 +974,7 @@ const styles = StyleSheet.create({
   stopItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'flex-end',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
@@ -923,7 +994,7 @@ const styles = StyleSheet.create({
   stopItemRight: {
     flexDirection: 'column',
     alignItems: 'flex-end',
-    gap: 8,
+
   },
   stopNumberBadge: {
     width: 40,
@@ -1004,5 +1075,117 @@ const styles = StyleSheet.create({
   },
   notifyButtonTextDisabled: {
     color: '#D1D5DB',
+  },
+  studentItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  studentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  studentNumberBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  studentNumberText: {
+    fontFamily: 'RobotoSlab-Bold',
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  studentDetails: {
+    flex: 1,
+  },
+  studentName: {
+    fontFamily: 'RobotoSlab-Bold',
+    fontSize: 16,
+    color: '#111827',
+    marginBottom: 2,
+  },
+  studentBoardedTime: {
+    fontFamily: 'RobotoSlab-Regular',
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  studentStateBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  studentStateText: {
+    fontFamily: 'RobotoSlab-Bold',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  emptyStateText: {
+    fontFamily: 'RobotoSlab-Regular',
+    fontSize: 16,
+    color: '#9CA3AF',
+    marginTop: 16,
+  },
+
+  attendanceModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  attendanceModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    width: '100%',
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+
+  attendanceModalHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  attendanceCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    marginBottom: 12,
+  },
+  attendanceModalTitle: {
+    fontFamily: 'RobotoSlab-Bold',
+    fontSize: 20,
+    color: '#111827',
   },
 });

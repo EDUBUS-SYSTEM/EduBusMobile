@@ -1,7 +1,7 @@
+import { store } from '@/store';
+import { setSignalRConnected, setSignalRConnecting, setSignalRDisconnected, setSignalRError } from '@/store/slices/signalRSlice';
 import { HttpTransportType, HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
 import { config } from '../config';
-import { store } from '@/store';
-import { setSignalRConnecting, setSignalRConnected, setSignalRDisconnected, setSignalRError } from '@/store/slices/signalRSlice';
 
 class SignalRService {
   private connection: HubConnection | null = null;
@@ -14,15 +14,17 @@ class SignalRService {
    * Initialize SignalR connection
    */
   async initialize(token: string): Promise<void> {
+    // If connection exists, stop it first to ensure clean reinitialization
     if (this.connection) {
-      console.log('SignalR already initialized');
-      return;
+      console.log('⚠️ SignalR connection exists, stopping it first...');
+      await this.stop();
+      console.log('✅ Existing connection stopped, proceeding with fresh initialization');
     }
 
     try {
       // Build hub URL from API URL
       const hubUrl = config.API_URL.replace('/api', '/notificationHub');
-      
+
       console.log('🔌 Connecting to SignalR hub:', hubUrl);
 
       this.connection = new HubConnectionBuilder()
@@ -59,7 +61,7 @@ class SignalRService {
         this.reconnectAttempts = 0;
         store.dispatch(setSignalRConnected());
       });
-      
+
       this.startConnectionStateMonitor();
 
       // Start connection
@@ -80,16 +82,18 @@ class SignalRService {
    */
   async stop(): Promise<void> {
     this.stopConnectionStateMonitor();
-    
+
     if (this.connection) {
       try {
         await this.connection.stop();
         console.log('🛑 SignalR connection stopped');
         store.dispatch(setSignalRDisconnected());
-        this.connection = null;
       } catch (error) {
         console.error('Error stopping SignalR:', error);
         store.dispatch(setSignalRDisconnected());
+      } finally {
+        // Always nullify connection to ensure clean state
+        this.connection = null;
       }
     }
   }
@@ -143,7 +147,7 @@ class SignalRService {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
       console.log(`🔄 Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-      
+
       setTimeout(() => {
         this.attemptReconnect();
       }, this.reconnectDelay);
@@ -169,21 +173,21 @@ class SignalRService {
       }
     }
   }
-  
+
   /**
    * Start monitoring connection state to keep Redux in sync
    */
   private startConnectionStateMonitor(): void {
     this.stopConnectionStateMonitor();
-    
+
     this.connectionStateMonitor = setInterval(() => {
       if (!this.connection) {
         return;
       }
-      
+
       const state = this.connection.state;
       const currentReduxState = store.getState().signalR.isConnected;
-      
+
       if (state === HubConnectionState.Connected && !currentReduxState) {
         console.log('🔄 Syncing Redux: Connection is actually connected');
         store.dispatch(setSignalRConnected());
@@ -199,7 +203,7 @@ class SignalRService {
       }
     }, 2000);
   }
-  
+
   /**
    * Stop monitoring connection state
    */
@@ -230,7 +234,7 @@ class SignalRService {
     console.log('📡 Subscribing to ReceiveNotification event');
     this.connection.on('ReceiveNotification', callback);
     console.log('✅ Successfully subscribed to ReceiveNotification event');
-    
+
   }
 
   /**

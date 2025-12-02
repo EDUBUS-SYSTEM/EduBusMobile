@@ -75,6 +75,14 @@ export const mockParentTrips: ParentTripDto[] = [
     childName: mockChildren[0].name,
     childAvatar: mockChildren[0].avatar,
     childClassName: mockChildren[0].className,
+    children: [
+      {
+        id: mockChildren[0].id,
+        name: mockChildren[0].name,
+        state: 'Pending',
+        boardedAt: null,
+      },
+    ],
     // OUTBOUND: Pickup at home (Dragon Bridge) - already visited
     pickupStop: {
       sequenceOrder: 1,
@@ -108,6 +116,14 @@ export const mockParentTrips: ParentTripDto[] = [
     childName: mockChildren[1].name,
     childAvatar: mockChildren[1].avatar,
     childClassName: mockChildren[1].className,
+    children: [
+      {
+        id: mockChildren[1].id,
+        name: mockChildren[1].name,
+        state: 'Pending',
+        boardedAt: null,
+      },
+    ],
     // OUTBOUND: Pickup at home (Marble Mountains)
     pickupStop: {
       sequenceOrder: 1,
@@ -143,6 +159,14 @@ export const mockParentTrips: ParentTripDto[] = [
     childName: mockChildren[0].name,
     childAvatar: mockChildren[0].avatar,
     childClassName: mockChildren[0].className,
+    children: [
+      {
+        id: mockChildren[0].id,
+        name: mockChildren[0].name,
+        state: 'Pending',
+        boardedAt: null,
+      },
+    ],
     // RETURN: Pickup at school (FPT University) - reverse route
     pickupStop: {
       sequenceOrder: 1,
@@ -174,6 +198,14 @@ export const mockParentTrips: ParentTripDto[] = [
     childName: mockChildren[1].name,
     childAvatar: mockChildren[1].avatar,
     childClassName: mockChildren[1].className,
+    children: [
+      {
+        id: mockChildren[1].id,
+        name: mockChildren[1].name,
+        state: 'Pending',
+        boardedAt: null,
+      },
+    ],
     // RETURN: Pickup at school (FPT University) - reverse route
     pickupStop: {
       sequenceOrder: 1,

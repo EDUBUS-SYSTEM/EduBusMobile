@@ -6,6 +6,15 @@ import type { Guid } from '../types';
  */
 
 /**
+ * TripType enum 
+ */
+export enum TripType {
+  Unknown = 0,
+  Departure = 1,
+  Return = 2
+}
+
+/**
  * SimpleTripDto response from backend (used in /trip/by-date)
  */
 export interface SimpleTripDto {
@@ -31,6 +40,15 @@ export interface TripLocationDto {
   latitude: number;
   longitude: number;
   address: string;
+}
+
+export interface TripCurrentLocationDto {
+  latitude: number;
+  longitude: number;
+  recordedAt?: string;
+  speed?: number;
+  accuracy?: number;
+  isMoving?: boolean;
 }
 
 /**
@@ -80,12 +98,14 @@ export interface TripDto {
     isPrimary: boolean;
     snapshottedAtUtc: string;
   };
+  currentLocation?: TripCurrentLocationDto;
   scheduleSnapshot: {
     scheduleId: Guid;
     name: string;
     startTime: string;
     endTime: string;
     rRule: string;
+    tripType: TripType;
   };
   stops: TripStopDto[];
   createdAt: string;
@@ -138,12 +158,14 @@ export interface ParentTripDtoResponse {
     isPrimary: boolean;
     snapshottedAtUtc: string;
   };
+  currentLocation?: TripCurrentLocationDto;
   scheduleSnapshot: {
     scheduleId: Guid;
     name: string;
     startTime: string;
     endTime: string;
     rRule: string;
+    tripType: TripType;
   };
   stops: ParentTripStopDto[];
   createdAt: string;
