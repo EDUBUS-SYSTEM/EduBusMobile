@@ -126,6 +126,43 @@ export interface SemesterFeeInfo {
   };
 }
 
+export interface ParentRegistrationInfoDto {
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  address: string;
+  dateOfBirth: string;
+  gender: number;
+  createdAt: string;
+}
+
+export interface PickupPointRequestDetailDto {
+  id: string;
+  parentEmail: string;
+  parentInfo?: ParentRegistrationInfoDto;
+  students: StudentBriefDto[];
+  addressText: string;
+  latitude: number;
+  longitude: number;
+  distanceKm: number;
+  description: string;
+  reason: string;
+  unitPricePerKm: number;
+  totalFee: number;
+  semesterName: string;
+  semesterCode: string;
+  academicYear: string;
+  semesterStartDate: string;
+  semesterEndDate: string;
+  totalSchoolDays: number;
+  status: string;
+  adminNotes: string;
+  reviewedAt?: string | null;
+  reviewedByAdminId?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
 export const pickupPointApi = {
   // Register parent (public endpoint)
   registerParent: async (data: ParentRegistrationRequestDto): Promise<ParentRegistrationResponseDto> => {
@@ -160,6 +197,13 @@ export const pickupPointApi = {
   // Check eligibility for parent registration flow
   getRegistrationEligibility: async (): Promise<ParentRegistrationEligibilityDto> => {
     const response = await apiService.get<ParentRegistrationEligibilityDto>('/PickupPoint/registration/eligibility');
+    return response;
+  },
+
+  // Get pickup point registration history for current parent
+  getParentRequests: async (status?: string): Promise<PickupPointRequestDetailDto[]> => {
+    const params = status ? { status } : undefined;
+    const response = await apiService.get<PickupPointRequestDetailDto[]>('/PickupPoint/parent/requests', params);
     return response;
   },
 };
