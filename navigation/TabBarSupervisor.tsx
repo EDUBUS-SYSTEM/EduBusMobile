@@ -1,8 +1,10 @@
+import { useAppSelector } from '@/store/hooks';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
 
 export default function TabBarSupervisor() {
+  const unreadCount = useAppSelector((state) => state.notifications.unreadCount);
   return (
     <Tabs
       screenOptions={{
@@ -73,6 +75,20 @@ export default function TabBarSupervisor() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
               name="person" 
+              size={24} 
+              color={focused ? '#01CBCA' : color} 
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Notifications',
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? "notifications" : "notifications-outline"}
               size={24} 
               color={focused ? '#01CBCA' : color} 
             />
