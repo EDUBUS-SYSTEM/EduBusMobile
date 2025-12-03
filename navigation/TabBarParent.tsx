@@ -28,10 +28,10 @@ export default function TabBarParent() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name="home" 
-              size={24} 
-              color={focused ? '#01CBCA' : color} 
+            <Ionicons
+              name="home"
+              size={24}
+              color={focused ? '#01CBCA' : color}
             />
           ),
         }}
@@ -47,10 +47,10 @@ export default function TabBarParent() {
         options={{
           title: 'Children List',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name="people-circle" 
-              size={24} 
-              color={focused ? '#01CBCA' : color} 
+            <Ionicons
+              name="people-circle"
+              size={24}
+              color={focused ? '#01CBCA' : color}
             />
           ),
         }}
@@ -60,10 +60,10 @@ export default function TabBarParent() {
         options={{
           title: 'Payments',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name="wallet" 
-              size={24} 
-              color={focused ? '#01CBCA' : color} 
+            <Ionicons
+              name="wallet"
+              size={24}
+              color={focused ? '#01CBCA' : color}
             />
           ),
         }}
@@ -73,10 +73,10 @@ export default function TabBarParent() {
         options={{
           title: 'Account',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name="person" 
-              size={24} 
-              color={focused ? '#01CBCA' : color} 
+            <Ionicons
+              name="person"
+              size={24}
+              color={focused ? '#01CBCA' : color}
             />
           ),
         }}
@@ -106,7 +106,19 @@ export default function TabBarParent() {
         }}
       />
       <Tabs.Screen
+        name="trips/calendar"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
         name="trip/[tripId]"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="trip-detail/[tripId]"
         options={{
           href: null, // Hide from tab bar
         }}
