@@ -1,6 +1,7 @@
+import { AttendanceUpdatedEvent } from '@/lib/signalr/signalr.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
 import { DriverTripDto, DriverTripStopDto } from '@/lib/trip/driverTrip.types';
-import { confirmArrival, getTripDetail } from '@/lib/trip/trip.api';
+import { confirmArrival, endTrip, getTripDetail } from '@/lib/trip/trip.api';
 import type { Guid } from '@/lib/types';
 import { getRoute } from '@/lib/vietmap/vietmap.service';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,7 +10,7 @@ import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewR
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type Params = { tripId?: Guid };
 
@@ -30,15 +31,17 @@ export default function TripDetailScreen() {
   const { tripId } = useLocalSearchParams<Params>();
   const [trip, setTrip] = React.useState<DriverTripDto | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [clickedCoordinate, setClickedCoordinate] = useState<[number, number] | null>(null);
   const [showStopsModal, setShowStopsModal] = useState(false);
   const [selectedStop, setSelectedStop] = useState<DriverTripStopDto | null>(null);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [routeSegments, setRouteSegments] = useState<[number, number][][]>([]);
+  const [routeTrigger, setRouteTrigger] = useState(0); // Trigger for route recalculation
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load trip data
-  React.useEffect(() => {
+  // Helper to load trip data (used on mount and pull-to-refresh)
+  const fetchTripDetail = React.useCallback(async () => {
     if (!tripId) {
       Alert.alert('Error', 'Trip ID is missing', [
         { text: 'OK', onPress: () => router.back() },
@@ -46,23 +49,32 @@ export default function TripDetailScreen() {
       return;
     }
 
-    (async () => {
-      try {
-        const tripData = await getTripDetail(tripId);
-        setTrip(tripData);
-      } catch (error: any) {
-        console.error('Error loading trip:', error);
-        const errorMessage = error.message === 'UNAUTHORIZED'
-          ? 'You are not authorized to view this trip'
-          : error.message || 'Failed to load trip';
-        Alert.alert('Error', errorMessage, [
-          { text: 'OK', onPress: () => router.back() },
-        ]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    try {
+      const tripData = await getTripDetail(tripId);
+      setTrip(tripData);
+    } catch (error: any) {
+      console.error('Error loading trip:', error);
+      const errorMessage = error.message === 'UNAUTHORIZED'
+        ? 'You are not authorized to view this trip'
+        : error.message || 'Failed to load trip';
+      Alert.alert('Error', errorMessage, [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   }, [tripId]);
+
+  // Initial load
+  React.useEffect(() => {
+    fetchTripDetail();
+  }, [fetchTripDetail]);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await fetchTripDetail();
+    setRefreshing(false);
+  }, [fetchTripDetail]);
 
   // Initialize TripHub connection
   React.useEffect(() => {
@@ -83,6 +95,125 @@ export default function TripDetailScreen() {
           await tripHubService.initialize(token);
         }
 
+        // Join trip group to receive events
+        await tripHubService.joinTrip(tripId);
+        console.log('✅ Joined trip group:', tripId);
+
+        // Subscribe to attendance update events
+        tripHubService.on<AttendanceUpdatedEvent>('AttendanceUpdated', (data) => {
+          console.log('🔔 ===============================================');
+          console.log('🔔 Driver - AttendanceUpdated Event Received');
+          console.log('🔔 ===============================================');
+          console.log('📦 Event Data:');
+          console.log('  - tripId:', data.tripId);
+          console.log('  - stopId:', data.stopId);
+          console.log('  - arrivedAt (top):', data.arrivedAt);
+          console.log('  - departedAt (top):', data.departedAt);
+          console.log('  - attendance.arrivedAt:', data.attendance?.arrivedAt);
+          console.log('  - attendance.departedAt:', data.attendance?.departedAt);
+          console.log('  - Full JSON:', JSON.stringify(data, null, 2));
+
+          if (data.tripId === tripId) {
+            // Use functional state update to avoid stale closure
+            setTrip((currentTrip) => {
+              if (!currentTrip) return currentTrip;
+
+              const updatedTrip: DriverTripDto = { ...currentTrip };
+              let wasUpdated = false;
+
+              if (updatedTrip.stops) {
+                updatedTrip.stops = updatedTrip.stops.map((stop) => {
+                  // FIX: Cập nhật departedAt/arrivedAt độc lập với attendance
+                  // Nếu stopId match, cập nhật timing ngay cả khi không có attendance
+                  if (stop.stopPointId === data.stopId) {
+                    console.log('  ✅ Found matching stop:', stop.stopPointName);
+                    console.log('     Current state:');
+                    console.log('       - arrivedAt:', stop.arrivedAt);
+                    console.log('       - departedAt:', stop.departedAt);
+
+                    const updatedStop: DriverTripStopDto = { ...stop };
+                    let stopWasUpdated = false;
+
+                    // FIX: Backend gửi arrivedAt/departedAt trong attendance object, không phải top-level
+                    const eventArrivedAt = data.arrivedAt || data.attendance?.arrivedAt;
+                    const eventDepartedAt = data.departedAt || data.attendance?.departedAt;
+
+                    console.log('     Event values:');
+                    console.log('       - eventArrivedAt:', eventArrivedAt);
+                    console.log('       - eventDepartedAt:', eventDepartedAt);
+
+                    // Cập nhật arrivedAt/departedAt nếu có (không phụ thuộc vào attendance)
+                    if (eventArrivedAt && stop.arrivedAt !== eventArrivedAt) {
+                      updatedStop.arrivedAt = eventArrivedAt;
+                      stopWasUpdated = true;
+                      console.log('     🔄 Updating arrivedAt:', eventArrivedAt);
+                    }
+                    if (eventDepartedAt && stop.departedAt !== eventDepartedAt) {
+                      updatedStop.departedAt = eventDepartedAt;
+                      stopWasUpdated = true;
+                      console.log('     🔄 Updating departedAt:', eventDepartedAt);
+                    }
+
+                    // Cập nhật attendance nếu có
+                    if (stop.attendance) {
+                      const hasAttendanceUpdate = stop.attendance.some(
+                        (student) => student.studentId === data.attendance.studentId
+                      );
+
+                      if (hasAttendanceUpdate) {
+                        updatedStop.attendance = stop.attendance.map((student) =>
+                          student.studentId === data.attendance.studentId
+                            ? {
+                              ...student,
+                              state: data.attendance.state || student.state,
+                              boardStatus: data.attendance.boardStatus ?? null,
+                              alightStatus: data.attendance.alightStatus ?? null,
+                              boardedAt: data.attendance.boardedAt ?? null,
+                              alightedAt: data.attendance.alightedAt ?? null,
+                            }
+                            : student
+                        );
+                        stopWasUpdated = true;
+                      }
+                    }
+
+                    if (stopWasUpdated) {
+                      wasUpdated = true;
+                      return updatedStop;
+                    }
+                  }
+
+                  return stop; // Return unchanged
+                });
+
+                if (wasUpdated) {
+                  console.log('✅ Driver - Updated stop timing and/or attendance in stops array');
+                }
+              }
+
+              if (wasUpdated) {
+                // Recalculate completedStops based on departedAt
+                const completedCount = updatedTrip.stops.filter((s) => s.departedAt).length;
+                updatedTrip.completedStops = completedCount;
+                if (completedCount === updatedTrip.totalStops) {
+                  updatedTrip.status = 'Completed';
+                }
+
+                console.log(
+                  '✅ Driver - Attendance update applied with completedStops:',
+                  completedCount
+                );
+
+                // Force route recalculation by incrementing trigger
+                setRouteTrigger(prev => prev + 1);
+
+                return updatedTrip;
+              }
+
+              return currentTrip;
+            });
+          }
+        });
         console.log('✅ TripHub initialized for trip:', tripId);
       } catch (error) {
         console.error('❌ Error initializing TripHub:', error);
@@ -90,77 +221,17 @@ export default function TripDetailScreen() {
     };
 
     initializeTripHub();
-  }, [tripId]);
 
-  // Send location using clickedCoordinate (for testing)
-  React.useEffect(() => {
-    if (!tripId) return;
-
-    let isMounted = true;
-
-    // Clear any existing interval first
-    if (locationIntervalRef.current) {
-      clearInterval(locationIntervalRef.current);
-      locationIntervalRef.current = null;
-    }
-
-    // Function to send location from clickedCoordinate
-    const sendLocationUpdate = async () => {
-      try {
-        // Use clickedCoordinate instead of GPS location
-        if (!clickedCoordinate) {
-          console.log('⏳ Waiting for map click to set location...');
-          return;
-        }
-
-        if (!isMounted || !tripHubService.isConnected()) {
-          return;
-        }
-
-        // clickedCoordinate is [longitude, latitude]
-        const [longitude, latitude] = clickedCoordinate;
-
-        // For testing: use default values for speed, accuracy, isMoving
-        const speed = null;
-        const accuracy = null;
-        const isMoving = false;
-
-        await tripHubService.sendLocation(
-          tripId,
-          latitude,
-          longitude,
-          speed,
-          accuracy,
-          isMoving
-        );
-
-        console.log(`📍 Location sent from clickedCoordinate: (${latitude}, ${longitude})`);
-      } catch (error) {
-        console.error('❌ Error sending location:', error);
-      }
-    };
-
-    // Send location immediately when clickedCoordinate changes
-    if (clickedCoordinate) {
-      sendLocationUpdate();
-
-      // Set up interval to send location every 5 seconds
-      locationIntervalRef.current = setInterval(() => {
-        sendLocationUpdate();
-      }, 5000); // 5 seconds
-    }
-
-    // Cleanup function
+    // Cleanup
     return () => {
-      isMounted = false;
-
-      // Clear location interval
-      if (locationIntervalRef.current) {
-        clearInterval(locationIntervalRef.current);
-        locationIntervalRef.current = null;
+      tripHubService.off('AttendanceUpdated');
+      if (tripId) {
+        tripHubService.leaveTrip(tripId).catch((error) => {
+          console.error('❌ Error leaving trip:', error);
+        });
       }
     };
-  }, [tripId, clickedCoordinate]);
+  }, [tripId, trip?.id]);
 
   // Calculate routes between all stops in sequence
   React.useEffect(() => {
@@ -182,37 +253,112 @@ export default function TripDetailScreen() {
         const sortedStops = [...trip.stops].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
         const segments: [number, number][][] = [];
 
-        // Calculate route from vehicle to first pending stop (if vehicle location exists)
-        if (clickedCoordinate) {
-          const firstPendingStop = sortedStops.find((stop) => !stop.departedAt);
-          if (firstPendingStop) {
-            const [longitude, latitude] = clickedCoordinate;
-            const routeData = await getRoute(
-              { lat: latitude, lng: longitude },
-              { lat: firstPendingStop.latitude, lng: firstPendingStop.longitude },
-              apiKey
-            );
-            if (routeData && routeData.coordinates.length > 0) {
-              segments.push(routeData.coordinates);
-              console.log('✅ Route from vehicle to stop', firstPendingStop.sequenceOrder);
+        console.log('🗺️ calculateRoutes triggered, routeTrigger:', routeTrigger);
+        console.log('📍 All stops:', sortedStops.map(s => ({
+          seq: s.sequenceOrder,
+          name: s.stopPointName,
+          arrivedAt: s.arrivedAt,
+          departedAt: s.departedAt
+        })));
+
+        // Only keep stops that are not completed yet (no departedAt)
+        const activeStops = sortedStops.filter((stop) => !stop.departedAt);
+
+        console.log('✅ Active stops (no departedAt):', activeStops.map(s => ({
+          seq: s.sequenceOrder,
+          name: s.stopPointName,
+          arrivedAt: s.arrivedAt,
+          departedAt: s.departedAt
+        })));
+
+        // If there are no active stops, handle end-of-trip routing
+        if (activeStops.length === 0) {
+          console.log('ℹ️ No active stops (all have departedAt)');
+
+          // For departure trip, connect vehicle/last stop to school
+          if (trip.tripType === 1 && trip.schoolLocation) {
+            console.log('🏫 Departure trip - calculating route to school');
+
+            // Priority 1: Use vehicle location if available
+            if (clickedCoordinate) {
+              const [longitude, latitude] = clickedCoordinate;
+              const routeToSchool = await getRoute(
+                { lat: latitude, lng: longitude },
+                { lat: trip.schoolLocation.latitude, lng: trip.schoolLocation.longitude },
+                apiKey
+              );
+
+              if (routeToSchool && routeToSchool.coordinates.length > 0) {
+                segments.push(routeToSchool.coordinates);
+                console.log('✅ Route from vehicle to school added');
+              }
+            }
+            // Priority 2: Use last stop if no vehicle location
+            else if (sortedStops.length > 0) {
+              const lastStop = sortedStops[sortedStops.length - 1];
+              const routeToSchool = await getRoute(
+                { lat: lastStop.latitude, lng: lastStop.longitude },
+                { lat: trip.schoolLocation.latitude, lng: trip.schoolLocation.longitude },
+                apiKey
+              );
+
+              if (routeToSchool && routeToSchool.coordinates.length > 0) {
+                segments.push(routeToSchool.coordinates);
+                console.log('✅ Route from last stop to school added');
+              }
+            }
+          } else {
+            console.log('ℹ️ Return trip or no school location - clearing route segments');
+          }
+        } else {
+          // Calculate route from vehicle to first active stop (if vehicle location exists)
+          if (clickedCoordinate) {
+            const firstPendingStop = activeStops[0];
+            if (firstPendingStop) {
+              const [longitude, latitude] = clickedCoordinate;
+              const routeData = await getRoute(
+                { lat: latitude, lng: longitude },
+                { lat: firstPendingStop.latitude, lng: firstPendingStop.longitude },
+                apiKey
+              );
+              if (routeData && routeData.coordinates.length > 0) {
+                segments.push(routeData.coordinates);
+                console.log('✅ Route from vehicle to stop', firstPendingStop.sequenceOrder);
+              }
             }
           }
-        }
 
-        // Calculate routes between consecutive stops
-        for (let i = 0; i < sortedStops.length - 1; i++) {
-          const currentStop = sortedStops[i];
-          const nextStop = sortedStops[i + 1];
+          // Calculate routes between consecutive *active* stops
+          for (let i = 0; i < activeStops.length - 1; i++) {
+            const currentStop = activeStops[i];
+            const nextStop = activeStops[i + 1];
 
-          const routeData = await getRoute(
-            { lat: currentStop.latitude, lng: currentStop.longitude },
-            { lat: nextStop.latitude, lng: nextStop.longitude },
-            apiKey
-          );
+            const routeData = await getRoute(
+              { lat: currentStop.latitude, lng: currentStop.longitude },
+              { lat: nextStop.latitude, lng: nextStop.longitude },
+              apiKey
+            );
 
-          if (routeData && routeData.coordinates.length > 0) {
-            segments.push(routeData.coordinates);
-            console.log(`✅ Route from stop ${currentStop.sequenceOrder} to stop ${nextStop.sequenceOrder}`);
+            if (routeData && routeData.coordinates.length > 0) {
+              segments.push(routeData.coordinates);
+              console.log(`✅ Route from stop ${currentStop.sequenceOrder} to stop ${nextStop.sequenceOrder}`);
+            }
+          }
+
+          // For departure trip, connect last active stop to school location
+          if (trip.tripType === 1 && trip.schoolLocation && activeStops.length > 0) {
+            const lastActiveStop = activeStops[activeStops.length - 1];
+
+            const routeToSchool = await getRoute(
+              { lat: lastActiveStop.latitude, lng: lastActiveStop.longitude },
+              { lat: trip.schoolLocation.latitude, lng: trip.schoolLocation.longitude },
+              apiKey
+            );
+
+            if (routeToSchool && routeToSchool.coordinates.length > 0) {
+              segments.push(routeToSchool.coordinates);
+              console.log('✅ Route from last stop to school added');
+            }
           }
         }
 
@@ -225,14 +371,14 @@ export default function TripDetailScreen() {
     };
 
     calculateRoutes();
-  }, [trip, clickedCoordinate]);
+  }, [trip, clickedCoordinate, routeTrigger]);
 
   const handleArrive = async (stop: DriverTripStopDto) => {
     if (!trip) return;
 
     try {
       // Call API to notify parents
-      await confirmArrival(trip.id, stop.pickupPointId);
+      await confirmArrival(trip.id, stop.stopPointId);
 
       // Update local state
       const now = new Date().toISOString();
@@ -250,7 +396,7 @@ export default function TripDetailScreen() {
       };
 
       setTrip(updatedTrip);
-      console.log('Parents notified about arrival at:', stop.pickupPointName);
+      console.log('Parents notified about arrival at:', stop.stopPointName);
     } catch (error: any) {
       console.error('Error notifying arrival:', error);
       Alert.alert('Error', error.message || 'Failed to notify parents');
@@ -284,6 +430,50 @@ export default function TripDetailScreen() {
     setShowAttendanceModal(true);
   };
 
+  const handleEndTrip = async () => {
+    if (!trip) return;
+
+    // Show confirmation dialog
+    Alert.alert(
+      'Complete Trip',
+      'Are you sure you want to complete this trip?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Complete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await endTrip(trip.id);
+
+              // Refresh trip data to get updated status
+              await fetchTripDetail();
+
+              // Close modal
+              setShowStopsModal(false);
+
+              Alert.alert('Success', 'Trip completed successfully', [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    // Navigate back to dashboard
+                    router.replace('/(driver-tabs)/dashboard' as any);
+                  },
+                },
+              ]);
+            } catch (error: any) {
+              console.error('Error ending trip:', error);
+              Alert.alert('Error', error.message || 'Failed to complete trip');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const mapRef = useRef<MapViewRef>(null);
 
   const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || '';
@@ -300,7 +490,17 @@ export default function TripDetailScreen() {
       };
     }
 
-    const coordinates = trip.stops.map((stop) => [stop.longitude, stop.latitude] as [number, number]);
+    const coordinates: [number, number][] = trip.stops.map(
+      (stop) => [stop.longitude, stop.latitude] as [number, number]
+    );
+
+    // Include school location for departure trip only
+    if (trip.tripType === 1 && trip.schoolLocation) {
+      coordinates.push([
+        trip.schoolLocation.longitude,
+        trip.schoolLocation.latitude,
+      ]);
+    }
 
     // Calculate bounds
     const lngs = coordinates.map((c) => c[0]);
@@ -344,7 +544,7 @@ export default function TripDetailScreen() {
     return getMapBounds();
   }, [clickedCoordinate, getMapBounds]);
 
-  const handleMapPress = (feature: GeoJSON.Feature) => {
+  const handleMapPress = async (feature: GeoJSON.Feature) => {
     try {
       console.log('Map pressed, feature:', JSON.stringify(feature, null, 2));
 
@@ -381,6 +581,23 @@ export default function TripDetailScreen() {
       if (longitude !== null && latitude !== null && !isNaN(longitude) && !isNaN(latitude)) {
         setClickedCoordinate([longitude, latitude]);
         console.log('✅ Map clicked at:', latitude, longitude);
+
+        // Send location to server if trip is in progress
+        if (tripId && trip && trip.status === 'InProgress' && tripHubService.isConnected()) {
+          try {
+            await tripHubService.sendLocation(
+              tripId,
+              latitude,
+              longitude,
+              null, // speed
+              null, // accuracy
+              false // isMoving
+            );
+            console.log(`📍 Location sent to server: (${latitude}, ${longitude})`);
+          } catch (error) {
+            console.error('❌ Error sending location to server:', error);
+          }
+        }
       } else {
         console.warn('⚠️ Could not extract coordinates from feature:', feature);
       }
@@ -418,9 +635,13 @@ export default function TripDetailScreen() {
         <View style={{ width: 40 }} />
       </LinearGradient>
 
-      <ScrollView style={styles.content}
+      <ScrollView
+        style={styles.content}
         contentContainerStyle={{ paddingBottom: 80 }}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }>
         {/* Trip Info Card */}
         <View style={styles.tripInfoCard}>
           <View style={styles.tripInfoRow}>
@@ -433,6 +654,12 @@ export default function TripDetailScreen() {
             <Ionicons name="calendar" size={16} color="#6B7280" />
             <Text style={styles.tripSchedule}>{trip.scheduleName}</Text>
           </View>
+          {trip.supervisor && (
+            <View style={styles.tripInfoRow}>
+              <Ionicons name="person" size={16} color="#6B7280" />
+              <Text style={styles.tripSchedule}>Supervisor: {trip.supervisor.fullName}</Text>
+            </View>
+          )}
           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(trip.status) }]}>
             <Text style={styles.statusText}>{trip.status}</Text>
           </View>
@@ -512,6 +739,21 @@ export default function TripDetailScreen() {
                   </PointAnnotation>
                 );
               })}
+              {/* School marker - only for departure trip (tripType === 1) */}
+              {trip.tripType === 1 && trip.schoolLocation && (
+                <PointAnnotation
+                  id="school-location"
+                  coordinate={[
+                    trip.schoolLocation.longitude,
+                    trip.schoolLocation.latitude,
+                  ]}
+                  anchor={{ x: 0.5, y: 1 }}
+                >
+                  <View style={styles.schoolMarkerContainer}>
+                    <Ionicons name="school" size={32} color="#2563EB" />
+                  </View>
+                </PointAnnotation>
+              )}
               {clickedCoordinate && (
                 <PointAnnotation
                   id="clicked-pin"
@@ -544,9 +786,6 @@ export default function TripDetailScreen() {
         <View style={styles.floatingButtonIconContainer}>
           <Ionicons name="list" size={24} color="#FFFFFF" />
         </View>
-        <View style={styles.floatingButtonBadge}>
-          <Text style={styles.floatingButtonBadgeText}>{trip.totalStops}</Text>
-        </View>
       </TouchableOpacity>
 
       {/* Stops List Modal */}
@@ -570,7 +809,7 @@ export default function TripDetailScreen() {
             </View>
             <ScrollView
               style={styles.modalBody}
-              contentContainerStyle={{ paddingBottom: 32 }}
+              contentContainerStyle={{ paddingBottom: 48 }}
               showsVerticalScrollIndicator={false}
             >
               {trip.stops.map((stop) => {
@@ -586,7 +825,7 @@ export default function TripDetailScreen() {
                         <Text style={styles.stopNumberText}>{stop.sequenceOrder}</Text>
                       </View>
                       <View style={styles.stopItemInfo}>
-                        <Text style={styles.stopName}>{stop.pickupPointName}</Text>
+                        <Text style={styles.stopName}>{stop.stopPointName}</Text>
                         <View style={styles.stopChipsRow}>
                           <View style={styles.stopChip}>
                             <Ionicons name="people-outline" size={14} color="#6B7280" />
@@ -608,6 +847,14 @@ export default function TripDetailScreen() {
                   </TouchableOpacity >
                 );
               })}
+
+              <TouchableOpacity
+                style={styles.endTripModalButton}
+                activeOpacity={0.8}
+                onPress={handleEndTrip}
+              >
+                <Text style={styles.endTripModalButtonText}>Complete Trip</Text>
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -630,7 +877,7 @@ export default function TripDetailScreen() {
                 <Ionicons name="close" size={24} color="#374151" />
               </TouchableOpacity>
               <Text style={styles.attendanceModalTitle}>
-                {selectedStop?.pickupPointName || 'Attendance'}
+                {selectedStop?.stopPointName || 'Attendance'}
               </Text>
             </View>
             <ScrollView
@@ -647,20 +894,33 @@ export default function TripDetailScreen() {
                       </View>
                       <View style={styles.studentDetails}>
                         <Text style={styles.studentName}>{student.studentName}</Text>
-                        {student.boardedAt && (
-                          <Text style={styles.studentBoardedTime}>
-                            Boarded: {formatTime(student.boardedAt)}
-                          </Text>
-                        )}
+                        {/* Display both board and alight status */}
+                        <View style={{ flexDirection: 'column', gap: 4 }}>
+                          {student.boardStatus && (
+                            <View style={[
+                              styles.studentStateBadge,
+                              { backgroundColor: getStudentStateColor(student.boardStatus) }
+                            ]}>
+                              <Text style={styles.studentStateText}>
+                                Board: {student.boardStatus}
+                              </Text>
+                            </View>
+                          )}
+                          {student.alightStatus && (
+                            <View style={[
+                              styles.studentStateBadge,
+                              { backgroundColor: getStudentStateColor(student.alightStatus) }
+                            ]}>
+                              <Text style={styles.studentStateText}>
+                                Alight: {student.alightStatus}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
                     </View>
-                    <View style={[
-                      styles.studentStateBadge,
-                      { backgroundColor: getStudentStateColor(student.state) }
-                    ]}>
-                      <Text style={styles.studentStateText}>{student.state}</Text>
-                    </View>
                   </View>
+
                 ))
               ) : (
                 <View style={styles.emptyState}>
@@ -850,6 +1110,10 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   stopMarkerContainer: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  schoolMarkerContainer: {
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
@@ -1075,6 +1339,19 @@ const styles = StyleSheet.create({
   },
   notifyButtonTextDisabled: {
     color: '#D1D5DB',
+  },
+  endTripModalButton: {
+    marginTop: 16,
+    paddingVertical: 14,
+    borderRadius: 999,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endTripModalButtonText: {
+    fontFamily: 'RobotoSlab-Bold',
+    fontSize: 16,
+    color: '#FFFFFF',
   },
   studentItem: {
     flexDirection: 'row',

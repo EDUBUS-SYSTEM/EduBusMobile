@@ -1,3 +1,4 @@
+import { AttendanceUpdatedEvent } from '@/lib/signalr/signalr.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
 import type { ParentTripChild, ParentTripDto } from '@/lib/trip/parentTrip.types';
 import { getParentTripDetail } from '@/lib/trip/trip.api';
@@ -53,8 +54,8 @@ interface ApproachingStop {
 
 const formatTime = (iso: string) => {
   const date = new Date(iso);
-  const hours = date.getUTCHours().toString().padStart(2, '0');
-  const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
   return `${hours}:${minutes}`;
 };
 
@@ -96,23 +97,57 @@ type ChildStatusDisplay = {
   label: string;
   backgroundColor: string;
   textColor: string;
+  subtitle?: string;
 };
 
-const getChildStateDisplay = (state?: string): ChildStatusDisplay => {
-  switch (state) {
-    case 'Boarded':
-    case 'Present':
-      return { label: 'Boarded', backgroundColor: '#4CAF50', textColor: '#FFFFFF' };
-    case 'DroppedOff':
-      return { label: 'Dropped off', backgroundColor: '#2563EB', textColor: '#FFFFFF' };
-    case 'Absent':
-      return { label: 'Absent', backgroundColor: '#EF4444', textColor: '#FFFFFF' };
-    case 'Pending':
-    case 'Scheduled':
-      return { label: 'Waiting to board', backgroundColor: '#9CA3AF', textColor: '#FFFFFF' };
-    default:
-      return { label: state || 'Not updated', backgroundColor: '#9CA3AF', textColor: '#FFFFFF' };
+const getChildStateDisplay = (child: ParentTripChild, tripType?: TripType): ChildStatusDisplay => {
+  const state = child.state;
+
+  // Handle Absent state - distinguish between boarding and alighting
+  if (state === 'Absent') {
+    return {
+      label: 'Absent',
+      backgroundColor: '#EF4444',
+      textColor: '#FFFFFF',
+      subtitle: 'Marked as absent'
+    };
   }
+
+  // Handle Alighted state
+  if (state === 'Alighted') {
+    return {
+      label: 'Dropped off',
+      backgroundColor: '#2563EB',
+      textColor: '#FFFFFF',
+      subtitle: child.alightedAt ? `At ${formatTime(child.alightedAt)}` : 'Trip completed'
+    };
+  }
+
+  // Handle Boarded/Present state
+  if (state === 'Boarded' || state === 'Present') {
+    return {
+      label: 'Boarded',
+      backgroundColor: '#4CAF50',
+      textColor: '#FFFFFF',
+      subtitle: child.boardedAt ? `At ${formatTime(child.boardedAt)}` : undefined
+    };
+  }
+
+  // Handle Pending/Scheduled state
+  if (state === 'Pending' || state === 'Scheduled') {
+    return {
+      label: 'Waiting to board',
+      backgroundColor: '#9CA3AF',
+      textColor: '#FFFFFF'
+    };
+  }
+
+  // Default fallback
+  return {
+    label: state || 'Pending',
+    backgroundColor: '#9CA3AF',
+    textColor: '#FFFFFF'
+  };
 };
 
 const getStopStatus = (stop: ParentTripDto['pickupStop'] | ParentTripDto['dropoffStop']) => {
@@ -160,7 +195,7 @@ export default function ParentTripTrackingScreen() {
   const [centerOnBusTimestamp, setCenterOnBusTimestamp] = useState<number>(0);
   const [showDriverModal, setShowDriverModal] = useState(false);
   const [showChildModal, setShowChildModal] = useState(false);
-  const [selectedChild, setSelectedChild] = useState<ParentTripChild | null>(null);
+  const [selectedChildId, setSelectedChildId] = useState<Guid | null>(null);
   const mapRef = useRef<MapViewRef>(null);
   const hasRealtimeRef = useRef(false);
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][] | null>(null);
@@ -180,6 +215,18 @@ export default function ParentTripTrackingScreen() {
 
     return [];
   }, [trip?.children, trip?.childId, trip?.childName]);
+
+  // Currently selected child, resolved from latest trip.children for realtime updates
+  const selectedChild = useMemo<ParentTripChild | null>(() => {
+    if (!selectedChildId || !trip?.children) return null;
+    return trip.children.find((c) => c.id === selectedChildId) ?? null;
+  }, [selectedChildId, trip?.children]);
+
+  // Check if all children of this parent already have a boardStatus (attendance taken)
+  const hasAllChildrenBoardStatus = useMemo(() => {
+    if (!childStatusList || childStatusList.length === 0) return false;
+    return childStatusList.every(child => child.boardStatus != null);
+  }, [childStatusList]);
 
   // Load trip data - check Redux store first, then fetch from API if not found
   useEffect(() => {
@@ -225,6 +272,8 @@ export default function ParentTripTrackingScreen() {
     })();
   }, [tripId, tripsFromStore, dispatch]);
 
+
+
   // Seed bus location from API response before realtime hub connects
   useEffect(() => {
     if (
@@ -256,7 +305,6 @@ export default function ParentTripTrackingScreen() {
 
         // Join trip group to receive location updates
         await tripHubService.joinTrip(tripId);
-        console.log('✅ Joined trip group:', tripId);
 
         // Subscribe to location updates
         tripHubService.onLocationUpdate<LocationUpdate>((location) => {
@@ -335,7 +383,75 @@ export default function ParentTripTrackingScreen() {
             }
           }
         });
+        // Subscribe to attendance update events
+        tripHubService.on<AttendanceUpdatedEvent>('AttendanceUpdated', (data) => {
+          console.log('Attendance updated:', JSON.stringify(data, null, 2));
 
+          if (data.tripId === tripId && trip) {
+            const updatedTrip = { ...trip };
+            let wasUpdated = false;
+
+            // Update children array if exists
+            if (updatedTrip.children) {
+              const childIndex = updatedTrip.children.findIndex(
+                c => c.id === data.attendance.studentId
+              );
+
+              if (childIndex !== -1) {
+                updatedTrip.children = updatedTrip.children.map(child =>
+                  child.id === data.attendance.studentId
+                    ? {
+                      ...child,
+                      state: data.attendance.state,
+                      boardStatus: data.attendance.boardStatus,
+                      alightStatus: data.attendance.alightStatus,
+                      boardedAt: data.attendance.boardedAt,
+                      alightedAt: data.attendance.alightedAt,
+                    }
+                    : child
+                );
+                wasUpdated = true;
+                console.log('✅ Updated child attendance in children array');
+              }
+            }
+
+            // Update stops array attendance if exists (deep clone to avoid read-only errors)
+            if (updatedTrip.stops) {
+              updatedTrip.stops = updatedTrip.stops.map((stop) => {
+                if (stop.id !== data.stopId || !stop.attendance) {
+                  return stop; // Return unchanged
+                }
+
+                // Clone stop with updated attendance
+                return {
+                  ...stop,
+                  attendance: stop.attendance.map(att =>
+                    att.id === data.attendance.studentId
+                      ? {
+                        ...att,
+                        state: data.attendance.state,
+                        boardStatus: data.attendance.boardStatus,
+                        alightStatus: data.attendance.alightStatus,
+                        boardedAt: data.attendance.boardedAt,
+                        alightedAt: data.attendance.alightedAt,
+                      }
+                      : att
+                  )
+                };
+              });
+              wasUpdated = true;
+              console.log('✅ Updated attendance in stops array');
+            }
+
+
+            // Update local state and Redux store
+            if (wasUpdated) {
+              setTrip(updatedTrip);
+              dispatch(updateTrip(updatedTrip));
+              console.log('✅ Attendance update applied to state');
+            }
+          }
+        });
         console.log('✅ TripHub initialized for trip tracking:', tripId);
       } catch (error) {
         console.error('❌ Error initializing TripHub:', error);
@@ -348,6 +464,7 @@ export default function ParentTripTrackingScreen() {
     return () => {
       tripHubService.offLocationUpdate();
       tripHubService.off('StopArrivalConfirmed');
+      tripHubService.off('AttendanceUpdated');
       if (tripId) {
         tripHubService.leaveTrip(tripId).catch((error) => {
           console.error('❌ Error leaving trip:', error);
@@ -355,10 +472,6 @@ export default function ParentTripTrackingScreen() {
       }
     };
   }, [tripId, trip, dispatch]);
-
-  useEffect(() => {
-    console.log('🚌 Bus location:', busLocation);
-  }, [busLocation]);
 
   // Calculate current active stop and status
   const currentStop = useMemo(() => getCurrentActiveStop(trip?.stops), [trip?.stops]);
@@ -381,6 +494,13 @@ export default function ParentTripTrackingScreen() {
         !trip.stops ||
         trip.stops.length === 0
       ) {
+        setRouteCoordinates(null);
+        return;
+      }
+
+      // For departure trips: once all of this parent's children have a boarding status,
+      // stop drawing the route from the bus to the pickup point (parent's job is done).
+      if (trip.tripType === TripType.Departure && hasAllChildrenBoardStatus) {
         setRouteCoordinates(null);
         return;
       }
@@ -425,7 +545,7 @@ export default function ParentTripTrackingScreen() {
     };
 
     fetchRouteToPickup();
-  }, [busLocation, trip?.stops, trip?.status]);
+  }, [busLocation, trip?.stops, trip?.status, trip?.tripType, hasAllChildrenBoardStatus]);
 
   // Calculate approaching stops (within 2km) every 60 seconds
   useEffect(() => {
@@ -646,6 +766,29 @@ export default function ParentTripTrackingScreen() {
             <Text style={styles.tripSchedule}>{trip.scheduleName}</Text>
           </View>
 
+          {/* Driver & Vehicle Info */}
+          {(trip.driver || trip.vehicle) && (
+            <>
+              <View style={styles.tripInfoDivider} />
+              {trip.driver && (
+                <View style={styles.tripInfoRow}>
+                  <Ionicons name="person-outline" size={20} color="#6B7280" />
+                  <Text style={styles.tripSchedule}>
+                    Driver: {trip.driver.fullName}
+                  </Text>
+                </View>
+              )}
+              {trip.vehicle && (
+                <View style={styles.tripInfoRow}>
+                  <Ionicons name="car-outline" size={20} color="#6B7280" />
+                  <Text style={styles.tripSchedule}>
+                    {trip.vehicle.maskedPlate} · {trip.vehicle.capacity} seats
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+
           <View style={styles.tripInfoDivider} />
 
           {/* Child Info */}
@@ -664,20 +807,13 @@ export default function ParentTripTrackingScreen() {
               ) : (
                 <View style={styles.childStatusList}>
                   {childStatusList.map((child) => {
-                    const statusDisplay = getChildStateDisplay(child.state);
-                    const childSubtitle = child.boardedAt
-                      ? `Boarded at ${formatTime(child.boardedAt)}`
-                      : statusDisplay.label === 'Dropped off'
-                        ? 'Pickup and drop-off completed'
-                        : statusDisplay.label === 'Absent'
-                          ? 'Marked absent'
-                          : undefined;
+                    const statusDisplay = getChildStateDisplay(child, trip.tripType);
                     return (
                       <TouchableOpacity
                         key={child.id}
                         style={styles.childStatusRow}
                         onPress={() => {
-                          setSelectedChild(child);
+                          setSelectedChildId(child.id);
                           setShowChildModal(true);
                         }}
                         activeOpacity={0.7}>
@@ -686,7 +822,7 @@ export default function ParentTripTrackingScreen() {
                             <Ionicons name="person" size={20} color="#F59E0B" style={styles.childIcon} />
                             <Text style={styles.childName}>{child.name}</Text>
                           </View>
-                          {childSubtitle && <Text style={styles.childStatusTime}>{childSubtitle}</Text>}
+
                         </View>
                         <View style={[styles.childStatusBadge, { backgroundColor: statusDisplay.backgroundColor }]}>
                           <Text style={[styles.childStatusBadgeText, { color: statusDisplay.textColor }]}>
@@ -708,8 +844,8 @@ export default function ParentTripTrackingScreen() {
         {/* Bus Status Banner */}
         {trip.status === 'InProgress' && (
           <>
-            {/* Approaching Stops Banner - Only show if no stop has arrived yet */}
-            {approachingStops.length > 0 && currentStopStatus !== 'arrived' && (
+            {/* Approaching Stops Banner - Only show if no stop has arrived yet and attendance not completed */}
+            {!hasAllChildrenBoardStatus && approachingStops.length > 0 && currentStopStatus !== 'arrived' && (
               <View style={styles.statusBanner}>
                 <View style={styles.statusBannerIconContainer}>
                   <Ionicons name="bus" size={24} color="#FFFFFF" />
@@ -750,8 +886,19 @@ export default function ParentTripTrackingScreen() {
             {/* DEPARTURE Trip (TripType.Departure) */}
             {trip.tripType === TripType.Departure && (
               <>
+                {/* Case 0: All children of this parent already have boarding attendance */}
+                {hasAllChildrenBoardStatus && (
+                  <View style={styles.statusBanner}>
+                    <View style={styles.statusBannerContent}>
+                      <Text style={styles.statusBannerTitle}>
+                        The bus has completed pick-up for your child.
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
                 {/* Case 1: Trip started, heading to pickup point */}
-                {approachingStops.length === 0 && !allPickupsCompleted && currentStop && currentStopStatus === 'pending' && (
+                {!hasAllChildrenBoardStatus && approachingStops.length === 0 && !allPickupsCompleted && currentStop && currentStopStatus === 'pending' && (
                   <View style={styles.statusBanner}>
                     <View style={styles.statusBannerIconContainer}>
                       <Ionicons name="bus" size={24} color="#FFFFFF" />
@@ -765,7 +912,7 @@ export default function ParentTripTrackingScreen() {
                 )}
 
                 {/* Case 2: Bus arrived at pickup point */}
-                {!allPickupsCompleted && currentStop && currentStopStatus === 'arrived' && (
+                {!hasAllChildrenBoardStatus && !allPickupsCompleted && currentStop && currentStopStatus === 'arrived' && (
                   <View style={styles.statusBanner}>
                     <View style={styles.statusBannerIconContainer}>
                       <Ionicons name="bus" size={24} color="#FFFFFF" />
@@ -788,8 +935,19 @@ export default function ParentTripTrackingScreen() {
             {/* RETURN Trip (TripType.Return) */}
             {trip.tripType === TripType.Return && (
               <>
+                {/* Case 0: All children of this parent already have alight attendance (or boardStatus recorded for trip) */}
+                {hasAllChildrenBoardStatus && (
+                  <View style={styles.statusBanner}>
+                    <View style={styles.statusBannerContent}>
+                      <Text style={styles.statusBannerTitle}>
+                        The bus has completed drop-off for your child.
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
                 {/* Case 1: Trip started, heading to drop-off point */}
-                {approachingStops.length === 0 && !allPickupsCompleted && currentStop && currentStopStatus === 'pending' && (
+                {!hasAllChildrenBoardStatus && approachingStops.length === 0 && !allPickupsCompleted && currentStop && currentStopStatus === 'pending' && (
                   <View style={styles.statusBanner}>
                     <View style={styles.statusBannerIconContainer}>
                       <Ionicons name="bus" size={24} color="#FFFFFF" />
@@ -803,7 +961,7 @@ export default function ParentTripTrackingScreen() {
                 )}
 
                 {/* Case 2: Bus arrived at drop-off point */}
-                {!allPickupsCompleted && currentStop && currentStopStatus === 'arrived' && (
+                {!hasAllChildrenBoardStatus && !allPickupsCompleted && currentStop && currentStopStatus === 'arrived' && (
                   <View style={styles.statusBanner}>
                     <View style={styles.statusBannerIconContainer}>
                       <Ionicons name="bus" size={24} color="#FFFFFF" />
@@ -997,19 +1155,19 @@ export default function ParentTripTrackingScreen() {
 
       {/* Floating Buttons */}
       <View style={styles.floatingButtonsContainer}>
-        {/* Driver Info Button */}
-        {trip.driver && (
+        {/* Supervisor Info Button */}
+        {trip.supervisor && (
           <TouchableOpacity
             style={styles.floatingButton}
             onPress={() => setShowDriverModal(true)}
             activeOpacity={0.8}>
             <MaterialCommunityIcons name="account-tie" size={30} color="#FFFFFF" />
-            <Text style={styles.floatingButtonLabel}>Driver</Text>
+            <Text style={styles.floatingButtonLabel}>Supervisor</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Driver Info Modal */}
+      {/* Supervisor Info Modal */}
       <Modal
         visible={showDriverModal}
         transparent={true}
@@ -1023,7 +1181,7 @@ export default function ParentTripTrackingScreen() {
           />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Driver</Text>
+              <Text style={styles.modalTitle}>Supervisor</Text>
               <TouchableOpacity
                 onPress={() => setShowDriverModal(false)}
                 style={styles.modalCloseButton}>
@@ -1031,7 +1189,7 @@ export default function ParentTripTrackingScreen() {
               </TouchableOpacity>
             </View>
 
-            {trip.driver && (
+            {trip.supervisor && (
               <View style={styles.modalBody}>
                 <View style={styles.modalDriverAvatarContainer}>
                   <View style={[styles.modalDriverAvatar, styles.avatarPlaceholder]}>
@@ -1040,53 +1198,39 @@ export default function ParentTripTrackingScreen() {
                 </View>
 
                 <View style={styles.modalDriverInfo}>
-                  <Text style={styles.modalDriverName}>{trip.driver.fullName}</Text>
+                  <Text style={styles.modalDriverName}>{trip.supervisor.fullName}</Text>
 
-                  {/* Vehicle Info */}
-                  {trip.vehicle && (
-                    <View style={styles.vehicleInfoContainer}>
-                      <View style={styles.vehicleInfoItem}>
-                        <View style={styles.vehicleInfoIcon}>
-                          <Ionicons name="car" size={18} color="#6B7280" />
-                        </View>
-                        <View style={styles.vehicleInfoText}>
-                          <Text style={styles.vehicleInfoLabel}>Vehicle</Text>
-                          <Text style={styles.vehicleInfoValue}>
-                            {trip.vehicle.maskedPlate}
-                          </Text>
-                        </View>
+                  {/* Supervisor Phone Info */}
+                  <View style={styles.vehicleInfoContainer}>
+                    <View style={styles.vehicleInfoItem}>
+                      <View style={styles.vehicleInfoIcon}>
+                        <Ionicons name="call" size={18} color="#6B7280" />
                       </View>
-                      <View style={styles.vehicleInfoDivider} />
-                      <View style={styles.vehicleInfoItem}>
-                        <View style={styles.vehicleInfoIcon}>
-                          <Ionicons name="people" size={18} color="#6B7280" />
-                        </View>
-                        <View style={styles.vehicleInfoText}>
-                          <Text style={styles.vehicleInfoLabel}>Capacity</Text>
-                          <Text style={styles.vehicleInfoValue}>
-                            {trip.vehicle.capacity} seats
-                          </Text>
-                        </View>
+                      <View style={styles.vehicleInfoText}>
+                        <Text style={styles.vehicleInfoLabel}>Phone</Text>
+                        <Text style={styles.vehicleInfoValue}>
+                          {trip.supervisor.phone}
+                        </Text>
                       </View>
                     </View>
-                  )}
+                  </View>
 
                   <TouchableOpacity
                     style={styles.callButton}
                     onPress={() => {
                       // Handle call action
-                      Alert.alert('Call', `Do you want to call ${trip.driver?.fullName}?`, [
+                      Alert.alert('Call', `Do you want to call ${trip.supervisor?.fullName}?`, [
                         { text: 'Cancel', style: 'cancel' },
                         {
                           text: 'Call', onPress: () => {
-                            // Implement call functionality
-                            console.log('Calling:', trip.driver?.phone);
+                            // Implement call functionality (e.g., Linking.openURL)
+                            console.log('Calling supervisor:', trip.supervisor?.phone);
                           }
                         },
                       ]);
                     }}>
                     <Ionicons name="call" size={20} color="#FFFFFF" />
-                    <Text style={styles.callButtonText}>{trip.driver.phone}</Text>
+                    <Text style={styles.callButtonText}>{trip.supervisor.phone}</Text>
                   </TouchableOpacity>
                 </View>
               </View >
@@ -1097,85 +1241,130 @@ export default function ParentTripTrackingScreen() {
       </Modal >
 
       {/* Child Info Modal */}
-      < Modal
+      <Modal
         visible={showChildModal}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowChildModal(false)}>
+        onRequestClose={() => {
+          setShowChildModal(false);
+          setSelectedChildId(null);
+        }}>
         <View style={styles.modalOverlay}>
           <TouchableOpacity
             style={styles.modalBackdrop}
             activeOpacity={1}
-            onPress={() => setShowChildModal(false)}
+            onPress={() => {
+              setShowChildModal(false);
+              setSelectedChildId(null);
+            }}
           />
           <View style={styles.modalContent}>
-            {selectedChild && (
-              <>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>{selectedChild.name}</Text>
-                  <TouchableOpacity
-                    onPress={() => setShowChildModal(false)}
-                    style={styles.modalCloseButton}>
-                    <Ionicons name="close" size={24} color="#000000" />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.modalBody}>
-                  <View style={styles.modalDriverAvatarContainer}>
-                    <View style={[styles.modalDriverAvatar, styles.avatarPlaceholder]}>
-                      <Ionicons name="person" size={80} color="#6B7280" />
-                    </View>
+            {selectedChild && (() => {
+              const selectedChildStatus = getChildStateDisplay(selectedChild, trip.tripType);
+              return (
+                <>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>{selectedChild.name}</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowChildModal(false);
+                        setSelectedChildId(null);
+                      }}
+                      style={styles.modalCloseButton}>
+                      <Ionicons name="close" size={24} color="#000000" />
+                    </TouchableOpacity>
                   </View>
 
-                  <View style={styles.modalDriverInfo}>
-                    {/* Address Info */}
-                    {trip?.pickupStop?.address && (
-                      <View style={styles.vehicleInfoContainer}>
-                        <View style={styles.vehicleInfoItem}>
-                          <View style={styles.vehicleInfoIcon}>
-                            <Ionicons name="location" size={18} color="#6B7280" />
-                          </View>
-                          <View style={styles.vehicleInfoText}>
-                            <Text style={styles.vehicleInfoValue}>
-                              {trip.pickupStop.address}
-                            </Text>
-                          </View>
-                        </View>
+                  <View style={styles.modalBody}>
+                    <View style={styles.modalDriverAvatarContainer}>
+                      <View style={[styles.modalDriverAvatar, styles.avatarPlaceholder]}>
+                        <Ionicons name="person" size={80} color="#6B7280" />
                       </View>
-                    )}
+                    </View>
 
-                    {/* Status Info */}
-                    <View style={styles.vehicleInfoContainer}>
-                      <View style={styles.vehicleInfoItem}>
-                        <View style={styles.vehicleInfoIcon}>
-                          <Ionicons name="information-circle" size={18} color="#6B7280" />
-                        </View>
-                        <View style={styles.vehicleInfoText}>
-                          <View style={styles.childModalStatusContainer}>
-                            <View style={[
-                              styles.childModalStatusBadge,
-                              { backgroundColor: getChildStateDisplay(selectedChild.state).backgroundColor }
-                            ]}>
-                              <Text style={[
-                                styles.childModalStatusText,
-                                { color: getChildStateDisplay(selectedChild.state).textColor }
-                              ]}>
-                                {getChildStateDisplay(selectedChild.state).label}
+                    <View style={styles.modalDriverInfo}>
+                      {/* Address Info */}
+                      {trip?.pickupStop?.address && (
+                        <View style={styles.vehicleInfoContainer}>
+                          <View style={styles.vehicleInfoItem}>
+                            <View style={styles.vehicleInfoIcon}>
+                              <Ionicons name="location" size={18} color="#6B7280" />
+                            </View>
+                            <View style={styles.vehicleInfoText}>
+                              <Text style={styles.vehicleInfoValue}>
+                                {trip.pickupStop.address}
                               </Text>
                             </View>
                           </View>
-                          {selectedChild.boardedAt && (
-                            <Text style={styles.vehicleInfoSubtext}>
-                              Boarded at {formatTime(selectedChild.boardedAt)}
-                            </Text>
-                          )}
+                        </View>
+                      )}
+
+                      {/* Detailed Status Info (board / alight) */}
+                      <View style={styles.vehicleInfoContainer}>
+                        <View style={styles.vehicleInfoItem}>
+                          <View style={styles.vehicleInfoIcon}>
+                            <Ionicons name="information-circle" size={18} color="#6B7280" />
+                          </View>
+                          <View style={styles.vehicleInfoText}>
+                            <View style={{ marginTop: 4 }}>
+                              <View style={styles.childStatusInlineRow}>
+                                <View style={styles.childModalInlineGroup}>
+                                  <Text style={styles.childModalStatusLabel}>
+                                    Board
+                                  </Text>
+                                  <View
+                                    style={[
+                                      styles.childModalStatusPill,
+                                      (selectedChild.boardStatus || 'Pending') === 'Present' && styles.childModalStatusPillPresent,
+                                      (selectedChild.boardStatus || 'Pending') === 'Absent' && styles.childModalStatusPillAbsent,
+                                      (selectedChild.boardStatus || 'Pending') === 'Boarded' && styles.childModalStatusPillBoarded,
+                                    ]}
+                                  >
+                                    <Text style={styles.childModalStatusPillText}>
+                                      {selectedChild.boardStatus ?? 'Pending'}
+                                    </Text>
+                                  </View>
+                                </View>
+                                {selectedChild.boardedAt && (
+                                  <Text style={styles.vehicleInfoSubtext}>
+                                    {formatTime(selectedChild.boardedAt)}
+                                  </Text>
+                                )}
+                              </View>
+
+                              <View style={[styles.childStatusInlineRow, { marginTop: 4 }]}>
+                                <View style={styles.childModalInlineGroup}>
+                                  <Text style={styles.childModalStatusLabel}>
+                                    Alight
+                                  </Text>
+                                  <View
+                                    style={[
+                                      styles.childModalStatusPill,
+                                      (selectedChild.alightStatus || 'Pending') === 'Present' && styles.childModalStatusPillPresent,
+                                      (selectedChild.alightStatus || 'Pending') === 'Absent' && styles.childModalStatusPillAbsent,
+                                      (selectedChild.alightStatus || 'Pending') === 'Boarded' && styles.childModalStatusPillBoarded,
+                                    ]}
+                                  >
+                                    <Text style={styles.childModalStatusPillText}>
+                                      {selectedChild.alightStatus ?? 'Pending'}
+                                    </Text>
+                                  </View>
+                                </View>
+                                {selectedChild.alightedAt && (
+                                  <Text style={styles.vehicleInfoSubtext}>
+                                    {formatTime(selectedChild.alightedAt)}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                          </View>
                         </View>
                       </View>
                     </View>
                   </View>
-                </View>
-              </>
-            )}
+                </>
+              );
+            })()}
           </View>
         </View>
       </Modal >
@@ -1821,5 +2010,40 @@ const styles = StyleSheet.create({
   childModalStatusText: {
     fontSize: 14,
     fontFamily: 'RobotoSlab-Bold',
+  },
+  childStatusInlineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  childModalInlineGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  childModalStatusLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'RobotoSlab-Medium',
+  },
+  childModalStatusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+  },
+  childModalStatusPillPresent: {
+    backgroundColor: '#DCFCE7',
+  },
+  childModalStatusPillAbsent: {
+    backgroundColor: '#FEE2E2',
+  },
+  childModalStatusPillBoarded: {
+    backgroundColor: '#DBEAFE',
+  },
+  childModalStatusPillText: {
+    fontSize: 12,
+    fontFamily: 'RobotoSlab-Bold',
+    color: '#111827',
   },
 });

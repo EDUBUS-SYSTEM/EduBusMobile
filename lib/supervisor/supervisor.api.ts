@@ -26,23 +26,23 @@ export const getSupervisorTrips = async (
     if (status) params.status = status;
 
     const response = await apiService.get<SupervisorTripsResponse>('/supervisor/trips', params);
-    
+
     if (response.success && response.data) {
       return response.data;
     }
-    
+
     return [];
   } catch (error: any) {
     console.error('Error fetching supervisor trips:', error);
-    
+
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
-    
+
     if (error.response?.status === 404) {
       return [];
     }
-    
+
     throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to load trips. Please try again.');
   }
 };
@@ -54,23 +54,23 @@ export const getSupervisorTrips = async (
 export const getSupervisorTripsToday = async (): Promise<SupervisorTripListItemDto[]> => {
   try {
     const response = await apiService.get<SupervisorTripsResponse>('/supervisor/trips/today');
-    
+
     if (response.success && response.data) {
       return response.data;
     }
-    
+
     return [];
   } catch (error: any) {
     console.error('Error fetching today\'s supervisor trips:', error);
-    
+
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
-    
+
     if (error.response?.status === 404) {
       return [];
     }
-    
+
     throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to load today\'s trips. Please try again.');
   }
 };
@@ -83,7 +83,7 @@ export const getSupervisorTripsToday = async (): Promise<SupervisorTripListItemD
 export const getSupervisorTripsByDate = async (dateISO?: string | null): Promise<DriverTripDto[]> => {
   try {
     let trips: SupervisorTripListItemDto[];
-    
+
     if (dateISO) {
       // Get trips for specific date
       trips = await getSupervisorTrips(dateISO, dateISO);
@@ -91,7 +91,7 @@ export const getSupervisorTripsByDate = async (dateISO?: string | null): Promise
       // Get today's trips
       trips = await getSupervisorTripsToday();
     }
-    
+
     // Map SupervisorTripListItemDto to DriverTripDto for backward compatibility
     return trips.map(trip => ({
       id: trip.id,
@@ -127,27 +127,27 @@ export const getSupervisorTripsByDate = async (dateISO?: string | null): Promise
 export const getSupervisorTripDetail = async (tripId: string): Promise<SupervisorTripDetailDto> => {
   try {
     const response = await apiService.get<SupervisorTripDetailResponse>(`/supervisor/trips/${tripId}`);
-    
+
     if (response.success && response.data) {
       return response.data;
     }
-    
+
     throw new Error('Trip not found or you don\'t have access to this trip');
   } catch (error: any) {
     console.error('Error fetching supervisor trip detail:', error);
-    
+
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
-    
+
     if (error.response?.status === 403) {
       throw new Error('You don\'t have access to this trip');
     }
-    
+
     if (error.response?.status === 404) {
       throw new Error('Trip not found');
     }
-    
+
     throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to load trip detail');
   }
 };
@@ -160,10 +160,10 @@ export const getSupervisorTripDetail = async (tripId: string): Promise<Superviso
 export const getSupervisorTripDetailAsDriverTrip = async (tripId: string): Promise<DriverTripDto> => {
   try {
     const detail = await getSupervisorTripDetail(tripId);
-    
+
     // Calculate completed stops (stops with actualDeparture)
     const completedStops = detail.stops.filter(s => s.actualDeparture).length;
-    
+
     // Map SupervisorTripDetailDto to DriverTripDto
     const driverTrip: DriverTripDto = {
       id: detail.id,
@@ -183,12 +183,15 @@ export const getSupervisorTripDetailAsDriverTrip = async (tripId: string): Promi
           studentName: a.studentName,
           state: a.state,
           boardedAt: a.boardedAt ?? null,
+          alightedAt: a.alightedAt ?? null,
+          boardStatus: a.boardStatus ?? null,
+          alightStatus: a.alightStatus ?? null,
         }));
 
         return {
           sequenceOrder: stop.sequence,
-          pickupPointId: stop.id,
-          pickupPointName: stop.name,
+          stopPointId: stop.id,
+          stopPointName: stop.name,
           plannedAt: stop.plannedArrival,
           arrivedAt: stop.actualArrival || undefined,
           departedAt: stop.actualDeparture || undefined,
@@ -310,11 +313,11 @@ export const getSupervisorScheduleByRange = async (
     return await getSupervisorTrips(startDate, endDate);
   } catch (error: any) {
     console.error('Error fetching supervisor schedule by range:', error);
-    
+
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
-    
+
     // Return empty array on error
     return [];
   }
@@ -334,7 +337,7 @@ export const getSupervisorScheduleByRangeAsDriverTrip = async (
 ): Promise<DriverTripDto[]> => {
   try {
     const trips = await getSupervisorScheduleByRange(startDate, endDate);
-    
+
     // Map SupervisorTripListItemDto to DriverTripDto
     return trips.map(trip => ({
       id: trip.id,

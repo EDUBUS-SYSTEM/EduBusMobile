@@ -12,12 +12,15 @@ export interface DriverTripStopAttendanceDto {
   studentName: string;
   state: string;
   boardedAt: string | null;
+  alightedAt: string | null;
+  boardStatus: string | null;
+  alightStatus: string | null;
 }
 
 export interface DriverTripStopDto {
   sequenceOrder: number;
-  pickupPointId: Guid;
-  pickupPointName: string;
+  stopPointId: Guid;
+  stopPointName: string;
   plannedAt: string;
   arrivedAt?: string;
   departedAt?: string;
@@ -49,5 +52,19 @@ export interface DriverTripDto {
   overrideCreatedAt?: string;
   createdAt?: string;
   updatedAt?: string;
+  // Optional trip type: 1 = Departure, 2 = Return
+  tripType?: number;
+  // Optional school location (for displaying final destination on map)
+  schoolLocation?: {
+    latitude: number;
+    longitude: number;
+    address: string;
+  };
+  // Supervisor information
+  supervisor?: {
+    id: Guid;
+    fullName: string;
+    phone: string;
+  };
 }
 

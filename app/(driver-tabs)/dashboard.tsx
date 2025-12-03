@@ -1,12 +1,11 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
-import React from 'react';
-import { ScrollView, Text, View, TouchableOpacity } from 'react-native';
-import { router } from 'expo-router';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchDriverTripsToday } from '@/store/slices/driverTodaySlice';
-import { authApi } from '@/lib/auth/auth.api';
 import { getTodayISOString, toHourMinute } from '@/utils/date.utils';
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { router } from 'expo-router';
+import React from 'react';
+import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 
 const statusColor: Record<string, string> = {
@@ -27,6 +26,8 @@ const statusBg: Record<string, string> = {
 export default function DriverDashboardScreen() {
   const dispatch = useAppDispatch();
   const { trips, status } = useAppSelector((s) => s.driverToday);
+  const [refreshing, setRefreshing] = React.useState(false);
+
   const todayDisplay = React.useMemo(() => {
     const now = new Date();
     try {
@@ -41,13 +42,27 @@ export default function DriverDashboardScreen() {
     }
   }, []);
 
+  const loadTrips = React.useCallback(async () => {
+    try {
+      const isoDate = getTodayISOString();
+      await dispatch(fetchDriverTripsToday({ dateISO: isoDate })).unwrap();
+    } catch (error) {
+      console.error('Error loading trips:', error);
+    }
+  }, [dispatch]);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await loadTrips();
+    setRefreshing(false);
+  }, [loadTrips]);
+
   React.useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const isoDate = getTodayISOString();
         if (mounted) {
-          dispatch(fetchDriverTripsToday({ dateISO: isoDate }));
+          await loadTrips();
         }
       } catch {
       }
@@ -56,10 +71,15 @@ export default function DriverDashboardScreen() {
     return () => {
       mounted = false;
     };
-  }, [dispatch]);
+  }, [loadTrips]);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       {/* Header Section with Yellow Circles Background */}
       <View
         style={{
@@ -366,7 +386,7 @@ export default function DriverDashboardScreen() {
             </View>
           );
         })}
-      
+
 
         {/* Vehicle Status */}
         <View style={{ marginTop: 30 }}>

@@ -78,7 +78,8 @@ export default function TripsTodayScreen() {
   const loadTrips = React.useCallback(async () => {
     try {
       const today = new Date();
-      const isoDate = today.toISOString().split('T')[0];
+      //const isoDate = today.toISOString().split('T')[0];
+      const isoDate = "2025-12-04";
       console.log('Loading trips for date:', isoDate);
       await dispatch(fetchParentTripsToday({ dateISO: isoDate })).unwrap();
     } catch (error) {

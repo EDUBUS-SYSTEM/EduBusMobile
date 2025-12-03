@@ -93,8 +93,8 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
       completedStops: completedStops,
       stops: response.stops.map(stop => ({
         sequenceOrder: stop.sequence,
-        pickupPointId: stop.id,
-        pickupPointName: stop.name,
+        stopPointId: stop.id,
+        stopPointName: stop.name,
         plannedAt: stop.plannedArrival,
         arrivedAt: stop.actualArrival,
         departedAt: stop.actualDeparture,
@@ -109,6 +109,9 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
           studentName: att.studentName,
           state: att.state,
           boardedAt: att.boardedAt ?? null,
+          alightedAt: att.alightedAt ?? null,
+          boardStatus: att.boardStatus ?? null,
+          alightStatus: att.alightStatus ?? null,
         })) || [],
       })),
       isOverride: false, // Not in TripDto - may need backend update
@@ -117,6 +120,23 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
       overrideCreatedAt: undefined,
       createdAt: response.createdAt,
       updatedAt: response.updatedAt,
+      // Map trip type & school location for driver use
+      tripType: response.scheduleSnapshot?.tripType,
+      schoolLocation: response.schoolLocation
+        ? {
+            latitude: response.schoolLocation.latitude,
+            longitude: response.schoolLocation.longitude,
+            address: response.schoolLocation.address,
+          }
+        : undefined,
+      // Map supervisor information
+      supervisor: response.supervisor
+        ? {
+            id: response.supervisor.id,
+            fullName: response.supervisor.fullName,
+            phone: response.supervisor.phone,
+          }
+        : undefined,
     };
 
     return driverTrip;
@@ -169,6 +189,35 @@ export const startTrip = async (tripId: string): Promise<{ tripId: string; messa
 };
 
 /**
+ * End a trip
+ * @param tripId - Trip ID to end
+ * @returns Response with tripId, message, and endedAt
+ */
+export const endTrip = async (tripId: string): Promise<{ tripId: string; message: string; endedAt: string }> => {
+  try {
+    const response = await apiService.post<{ tripId: string; message: string; endedAt: string }>(
+      `/trip/${tripId}/end`
+    );
+    return response;
+  } catch (error: any) {
+    console.error('Error ending trip:', error);
+
+    // Handle 401 - Unauthorized
+    if (error.response?.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+
+    // Handle 400 - Bad Request (trip not found, wrong status, etc.)
+    if (error.response?.status === 400) {
+      throw new Error(error.response?.data?.message || 'Cannot end trip');
+    }
+
+    // Handle other errors
+    throw new Error(error.response?.data?.message || 'Failed to end trip. Please try again.');
+  }
+};
+
+/**
  * Parent Trip API Functions
  */
 
@@ -197,7 +246,6 @@ const extractChildrenFromStops = (stops: ParentTripDtoResponse['stops']): Parent
         boardedAt: student.boardedAt ?? null,
         boardStatus: student.boardStatus ?? null,
         alightStatus: student.alightStatus ?? null,
-        alightedAt: student.alightedAt ?? null,
       });
     }
   }
@@ -318,12 +366,21 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
         },
         totalStops: trip.stops.length,
         completedStops: completedStops,
-        driver: trip.driver ? {
-          id: trip.driver.id,
-          fullName: trip.driver.fullName,
-          phone: trip.driver.phone,
-          isPrimary: trip.driver.isPrimary,
-        } : undefined,
+        driver: trip.driver
+          ? {
+              id: trip.driver.id,
+              fullName: trip.driver.fullName,
+              phone: trip.driver.phone,
+              isPrimary: trip.driver.isPrimary,
+            }
+          : undefined,
+        supervisor: (trip as any).supervisor
+          ? {
+              id: (trip as any).supervisor.id,
+              fullName: (trip as any).supervisor.fullName,
+              phone: (trip as any).supervisor.phone,
+            }
+          : undefined,
         vehicle: trip.vehicle ? {
           id: trip.vehicle.id,
           maskedPlate: trip.vehicle.maskedPlate,
@@ -584,7 +641,6 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
           boardedAt: att.boardedAt ?? null,
           boardStatus: att.boardStatus ?? null,
           alightStatus: att.alightStatus ?? null,
-          alightedAt: att.alightedAt ?? null,
         })) || [],
       })),
       pickupStop: {
@@ -609,12 +665,21 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
       },
       totalStops: response.stops.length,
       completedStops: completedStops,
-      driver: response.driver ? {
-        id: response.driver.id,
-        fullName: response.driver.fullName,
-        phone: response.driver.phone,
-        isPrimary: response.driver.isPrimary,
-      } : undefined,
+      driver: response.driver
+        ? {
+            id: response.driver.id,
+            fullName: response.driver.fullName,
+            phone: response.driver.phone,
+            isPrimary: response.driver.isPrimary,
+          }
+        : undefined,
+      supervisor: response.supervisor
+        ? {
+            id: response.supervisor.id,
+            fullName: response.supervisor.fullName,
+            phone: response.supervisor.phone,
+          }
+        : undefined,
       vehicle: response.vehicle ? {
         id: response.vehicle.id,
         maskedPlate: response.vehicle.maskedPlate,
