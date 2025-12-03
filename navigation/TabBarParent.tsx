@@ -94,6 +94,12 @@ export default function TabBarParent() {
         }}
       />
       <Tabs.Screen
+        name="notifications"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
         name="payment-notification"
         options={{
           href: null, // Hide from tab bar

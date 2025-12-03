@@ -1,7 +1,7 @@
+import { authApi } from "@/lib/auth/auth.api";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { authApi } from "@/lib/auth/auth.api";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 export default function ParentAccountScreen() {
@@ -29,12 +29,6 @@ export default function ParentAccountScreen() {
       title: "Register history",
       icon: "home-outline",
       description: "Register history",
-    },
-    {
-      id: 5,
-      title: "Settings",
-      icon: "settings-outline",
-      description: "Settings",
     },
     {
       id: 6,
@@ -280,6 +274,14 @@ export default function ParentAccountScreen() {
               }
               if (item.id === 3) {
                 router.push("/application-comments" as any);
+                return;
+              }
+              if (item.id === 4) {
+                router.push("/register-history" as any);
+                return;
+              }
+              if (item.id === 6) {
+                router.push("/help" as any);
                 return;
               }
               if (item.id === 7) {

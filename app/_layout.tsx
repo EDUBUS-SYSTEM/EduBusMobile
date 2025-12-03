@@ -39,6 +39,8 @@ function RootLayoutContent() {
         <Stack.Screen name="(driver-vehicle)" options={{ headerShown: false }} />
         <Stack.Screen name="(driver-leave)" options={{ headerShown: false }} />
         <Stack.Screen name="account-profile" options={{ headerShown: false }} />
+        <Stack.Screen name="register-history" options={{ headerShown: false }} />
+        <Stack.Screen name="help" options={{ headerShown: false }} />
         <Stack.Screen name="service-registration" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
         <Stack.Screen name="index" redirect />
