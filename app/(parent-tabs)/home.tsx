@@ -268,7 +268,9 @@ export default function ParentHomeScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.quickActionCard}>
+          <TouchableOpacity
+            onPress={() => router.push('/(parent-tabs)/trips/calendar')}
+            style={styles.quickActionCard}>
             <Ionicons name="calendar" size={32} color="#01CBCA" />
             <Text style={{
               fontFamily: 'RobotoSlab-Medium',

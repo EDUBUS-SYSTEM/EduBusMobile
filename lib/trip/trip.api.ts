@@ -195,6 +195,9 @@ const extractChildrenFromStops = (stops: ParentTripDtoResponse['stops']): Parent
         name: student.studentName,
         state: student.state,
         boardedAt: student.boardedAt ?? null,
+        boardStatus: student.boardStatus ?? null,
+        alightStatus: student.alightStatus ?? null,
+        alightedAt: student.alightedAt ?? null,
       });
     }
   }
@@ -288,6 +291,9 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
             name: att.studentName,
             state: att.state,
             boardedAt: att.boardedAt ?? null,
+            boardStatus: att.boardStatus ?? null,
+            alightStatus: att.alightStatus ?? null,
+            alightedAt: att.alightedAt ?? null,
           })) || [],
         })),
         pickupStop: {
@@ -347,6 +353,164 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
 
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
+    }
+
+    if (error.response?.status === 404) {
+      return [];
+    }
+
+    throw new Error(error.response?.data?.message || 'Failed to load trips. Please try again.');
+  }
+};
+
+/**
+ * Get trips by date range for current parent
+ * @param startDate - ISO date string (YYYY-MM-DD)
+ * @param endDate - ISO date string (YYYY-MM-DD)
+ * @returns Array of ParentTripDto
+ */
+export const getParentTripsByDateRange = async (startDate: string, endDate: string): Promise<ParentTripDto[]> => {
+  try {
+    const response = await apiService.get<ParentTripDtoResponse[]>(`/trip/parent/date-range?startDate=${startDate}&endDate=${endDate}`);
+
+    if (!Array.isArray(response) || response.length === 0) {
+      return [];
+    }
+
+    const parentTrips: ParentTripDto[] = [];
+
+    for (const trip of response) {
+      if (!trip.stops || trip.stops.length === 0) {
+        continue;
+      }
+
+      const firstStop = trip.stops[0];
+      const lastStop = trip.stops[trip.stops.length - 1];
+
+      const children = extractChildrenFromStops(trip.stops);
+
+      let childId: Guid | undefined = children[0]?.id;
+      let childName: string | undefined = children[0]?.name;
+
+      if (!childId || !childName) {
+        try {
+          const userInfo = await authApi.getUserInfo();
+          if (userInfo.userId) {
+            const children = await childrenApi.getChildrenByParent(userInfo.userId);
+            if (children.length > 0) {
+              childId = children[0].id;
+              childName = `${children[0].firstName} ${children[0].lastName}`;
+            }
+          }
+        } catch (error) {
+          console.warn('Could not fetch parent children:', error);
+        }
+      }
+
+      if (!childId || !childName) {
+        continue;
+      }
+
+      const completedStops = trip.stops.filter(s => s.actualDeparture).length;
+
+      const parentTrip: ParentTripDto = {
+        id: trip.id,
+        routeId: trip.routeId,
+        serviceDate: trip.serviceDate,
+        plannedStartAt: trip.plannedStartAt,
+        plannedEndAt: trip.plannedEndAt,
+        startTime: trip.startTime,
+        endTime: trip.endTime,
+        status: trip.status as DriverTripStatus,
+        scheduleName: trip.scheduleSnapshot?.name || 'Unknown Schedule',
+        tripType: trip.scheduleSnapshot?.tripType,
+        childId: childId,
+        childName: childName,
+        childAvatar: undefined,
+        childClassName: undefined,
+        children,
+        stops: trip.stops.map(stop => ({
+          id: stop.id,
+          name: stop.name,
+          sequence: stop.sequence,
+          plannedArrival: stop.plannedArrival,
+          actualArrival: stop.actualArrival,
+          plannedDeparture: stop.plannedDeparture,
+          actualDeparture: stop.actualDeparture,
+          address: stop.location.address,
+          latitude: stop.location.latitude,
+          longitude: stop.location.longitude,
+          attendance: stop.attendance?.map(att => ({
+            id: att.studentId,
+            name: att.studentName,
+            state: att.state,
+            boardedAt: att.boardedAt ?? null,
+            boardStatus: att.boardStatus ?? null,
+            alightStatus: att.alightStatus ?? null,
+            alightedAt: att.alightedAt ?? null,
+          })) || [],
+        })),
+        pickupStop: {
+          sequenceOrder: firstStop.sequence,
+          pickupPointName: firstStop.name,
+          address: firstStop.location.address,
+          latitude: firstStop.location.latitude,
+          longitude: firstStop.location.longitude,
+          plannedAt: firstStop.plannedArrival,
+          arrivedAt: firstStop.actualArrival,
+          departedAt: firstStop.actualDeparture,
+        },
+        dropoffStop: {
+          sequenceOrder: lastStop.sequence,
+          pickupPointName: lastStop.name,
+          address: lastStop.location.address,
+          latitude: lastStop.location.latitude,
+          longitude: lastStop.location.longitude,
+          plannedAt: lastStop.plannedDeparture,
+          arrivedAt: lastStop.actualArrival,
+          departedAt: lastStop.actualDeparture,
+        },
+        totalStops: trip.stops.length,
+        completedStops: completedStops,
+        driver: trip.driver ? {
+          id: trip.driver.id,
+          fullName: trip.driver.fullName,
+          phone: trip.driver.phone,
+          isPrimary: trip.driver.isPrimary,
+        } : undefined,
+        vehicle: trip.vehicle ? {
+          id: trip.vehicle.id,
+          maskedPlate: trip.vehicle.maskedPlate,
+          capacity: trip.vehicle.capacity,
+          status: trip.vehicle.status,
+        } : undefined,
+        currentLocation: trip.currentLocation
+          ? {
+            latitude: trip.currentLocation.latitude,
+            longitude: trip.currentLocation.longitude,
+            recordedAt: trip.currentLocation.recordedAt,
+            speed: trip.currentLocation.speed,
+            accuracy: trip.currentLocation.accuracy,
+            isMoving: trip.currentLocation.isMoving,
+          }
+          : undefined,
+        createdAt: trip.createdAt,
+        updatedAt: trip.updatedAt,
+      };
+
+      parentTrips.push(parentTrip);
+    }
+
+    return parentTrips;
+  } catch (error: any) {
+    console.error('Error fetching parent trips by date range:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+
+    if (error.response?.status === 400) {
+      throw new Error(error.response?.data?.message || 'Invalid date range');
     }
 
     if (error.response?.status === 404) {
@@ -418,6 +582,9 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
           name: att.studentName,
           state: att.state,
           boardedAt: att.boardedAt ?? null,
+          boardStatus: att.boardStatus ?? null,
+          alightStatus: att.alightStatus ?? null,
+          alightedAt: att.alightedAt ?? null,
         })) || [],
       })),
       pickupStop: {

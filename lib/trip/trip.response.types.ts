@@ -118,7 +118,10 @@ export interface TripDto {
 export interface ParentAttendanceDto {
   studentId: Guid;
   studentName: string;
-  boardedAt?: string;
+  boardedAt?: string | null;
+  boardStatus?: string | null;
+  alightStatus?: string | null;
+  alightedAt?: string | null;
   state: string;
 }
 
@@ -171,4 +174,3 @@ export interface ParentTripDtoResponse {
   createdAt: string;
   updatedAt?: string;
 }
-

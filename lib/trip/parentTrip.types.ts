@@ -7,6 +7,9 @@ export interface ParentTripChild {
   name: string;
   state?: string;
   boardedAt?: string | null;
+  boardStatus?: string | null;
+  alightStatus?: string | null;
+  alightedAt?: string | null;
 }
 
 export interface ParentTripStop {
