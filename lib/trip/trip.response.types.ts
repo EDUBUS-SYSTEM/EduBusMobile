@@ -67,6 +67,9 @@ export interface TripStopDto {
     studentId: Guid;
     studentName: string;
     boardedAt?: string | null;
+    alightedAt?: string | null;
+    boardStatus?: string | null;
+    alightStatus?: string | null;
     state: string;
   }>;
 }
@@ -98,6 +101,12 @@ export interface TripDto {
     isPrimary: boolean;
     snapshottedAtUtc: string;
   };
+  supervisor?: {
+    id: Guid;
+    fullName: string;
+    phone: string;
+    snapshottedAtUtc: string;
+  };
   currentLocation?: TripCurrentLocationDto;
   scheduleSnapshot: {
     scheduleId: Guid;
@@ -107,6 +116,8 @@ export interface TripDto {
     rRule: string;
     tripType: TripType;
   };
+  // School location for this trip (used in driver map)
+  schoolLocation?: TripLocationDto;
   stops: TripStopDto[];
   createdAt: string;
   updatedAt?: string;
@@ -118,10 +129,9 @@ export interface TripDto {
 export interface ParentAttendanceDto {
   studentId: Guid;
   studentName: string;
-  boardedAt?: string | null;
+  boardedAt?: string;
   boardStatus?: string | null;
   alightStatus?: string | null;
-  alightedAt?: string | null;
   state: string;
 }
 
@@ -159,6 +169,12 @@ export interface ParentTripDtoResponse {
     fullName: string;
     phone: string;
     isPrimary: boolean;
+    snapshottedAtUtc: string;
+  };
+  supervisor?: {
+    id: Guid;
+    fullName: string;
+    phone: string;
     snapshottedAtUtc: string;
   };
   currentLocation?: TripCurrentLocationDto;

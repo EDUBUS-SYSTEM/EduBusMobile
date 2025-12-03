@@ -6,9 +6,9 @@ export interface ParentTripChild {
   id: Guid;
   name: string;
   state?: string;
-  boardedAt?: string | null;
   boardStatus?: string | null;
   alightStatus?: string | null;
+  boardedAt?: string | null;
   alightedAt?: string | null;
 }
 
@@ -75,6 +75,12 @@ export interface ParentTripDto {
     fullName: string;
     phone: string;
     isPrimary: boolean;
+  };
+  // Supervisor information
+  supervisor?: {
+    id: Guid;
+    fullName: string;
+    phone: string;
   };
   // Vehicle information
   vehicle?: {
