@@ -20,3 +20,15 @@ export interface AttendanceUpdatedEvent {
     timestamp?: string;
   };
 }
+
+export interface StopsReorderedEvent {
+  tripId: string;
+  stops: Array<{
+    pickupPointId: string;
+    sequenceOrder: number;
+    address?: string;
+    arrivedAt?: string | null;
+    departedAt?: string | null;
+  }>;
+  timestamp: string;
+}

@@ -1,4 +1,4 @@
-import { AttendanceUpdatedEvent } from '@/lib/signalr/signalr.types';
+import { AttendanceUpdatedEvent, StopsReorderedEvent } from '@/lib/signalr/signalr.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
 import type { ParentTripChild, ParentTripDto } from '@/lib/trip/parentTrip.types';
 import { getParentTripDetail } from '@/lib/trip/trip.api';
@@ -53,6 +53,13 @@ interface ApproachingStop {
 }
 
 const formatTime = (iso: string) => {
+  // Extract HH:mm directly from ISO string without timezone conversion
+  // Format: "2024-01-01T17:00:00" or "2024-01-01T17:00:00Z" or "2024-01-01T17:00:00+07:00"
+  const timeMatch = iso.match(/T(\d{2}):(\d{2})/);
+  if (timeMatch) {
+    return `${timeMatch[1]}:${timeMatch[2]}`;
+  }
+  // Fallback to Date parsing if format is different
   const date = new Date(iso);
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
@@ -290,6 +297,9 @@ export default function ParentTripTrackingScreen() {
   useEffect(() => {
     if (!tripId || !trip || trip.status !== 'InProgress') return;
 
+    // Only subscribe to StopsReordered if parent has more than 1 stop
+    const hasMultipleStops = (trip.stops?.length ?? 0) > 1;
+
     const initializeTripHub = async () => {
       try {
         const token = await AsyncStorage.getItem('accessToken');
@@ -452,6 +462,48 @@ export default function ParentTripTrackingScreen() {
             }
           }
         });
+
+        // Subscribe to stops reordered event (only if parent has multiple stops)
+        if (hasMultipleStops) {
+          tripHubService.on<StopsReorderedEvent>('StopsReordered', (data) => {
+            console.log('🔔 Parent - Stops reordered:', JSON.stringify(data, null, 2));
+
+            if (data.tripId === tripId && trip) {
+              // Update stops order based on new sequence
+              setTrip((currentTrip) => {
+                if (!currentTrip || !currentTrip.stops) return currentTrip;
+
+                // Create a map of pickupPointId to new sequence order
+                const sequenceMap = new Map<string, number>();
+                data.stops.forEach((stop) => {
+                  sequenceMap.set(stop.pickupPointId, stop.sequenceOrder);
+                });
+
+                // Update stops with new sequence order and sort by sequence
+                const updatedStops = currentTrip.stops
+                  .map((stop) => {
+                    const newSequence = sequenceMap.get(stop.id);
+                    if (newSequence !== undefined) {
+                      return { ...stop, sequence: newSequence };
+                    }
+                    return stop;
+                  })
+                  .sort((a, b) => a.sequence - b.sequence);
+
+                const updatedTrip = {
+                  ...currentTrip,
+                  stops: updatedStops,
+                };
+
+                // Update Redux store
+                dispatch(updateTrip(updatedTrip));
+
+                return updatedTrip;
+              });
+            }
+          });
+        }
+
         console.log('✅ TripHub initialized for trip tracking:', tripId);
       } catch (error) {
         console.error('❌ Error initializing TripHub:', error);
@@ -465,6 +517,9 @@ export default function ParentTripTrackingScreen() {
       tripHubService.offLocationUpdate();
       tripHubService.off('StopArrivalConfirmed');
       tripHubService.off('AttendanceUpdated');
+      if (hasMultipleStops) {
+        tripHubService.off('StopsReordered');
+      }
       if (tripId) {
         tripHubService.leaveTrip(tripId).catch((error) => {
           console.error('❌ Error leaving trip:', error);
@@ -774,7 +829,7 @@ export default function ParentTripTrackingScreen() {
                 <View style={styles.tripInfoRow}>
                   <Ionicons name="person-outline" size={20} color="#6B7280" />
                   <Text style={styles.tripSchedule}>
-                    Driver: {trip.driver.fullName}
+                    Driver: <Text style={styles.driverName}>{trip.driver.fullName}</Text>
                   </Text>
                 </View>
               )}
@@ -1632,6 +1687,10 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginLeft: 8,
     fontFamily: 'RobotoSlab-Medium',
+  },
+  driverName: {
+    fontFamily: 'RobotoSlab-Bold',
+    color: '#000000',
   },
   mapContainer: {
     height: 600,
