@@ -13,6 +13,12 @@ export default function ParentAccountScreen() {
       description: "Account profile",
     },
     {
+      id: 8,
+      title: "Change Password",
+      icon: "lock-closed-outline",
+      description: "Change your password",
+    },
+    {
       id: 2,
       title: "School information",
       icon: "information-circle-outline",
@@ -282,6 +288,10 @@ export default function ParentAccountScreen() {
               }
               if (item.id === 6) {
                 router.push("/help" as any);
+                return;
+              }
+              if (item.id === 8) {
+                router.push("/change-password" as any);
                 return;
               }
               if (item.id === 7) {

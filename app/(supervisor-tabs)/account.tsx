@@ -13,6 +13,12 @@ export default function SupervisorAccountScreen() {
       description: "Account profile",
     },
     {
+      id: 5,
+      title: "Change Password",
+      icon: "lock-closed-outline",
+      description: "Change your password",
+    },
+    {
       id: 2,
       title: "Settings",
       icon: "settings-outline",
@@ -254,6 +260,10 @@ export default function SupervisorAccountScreen() {
             onPress={async () => {
               if (item.id === 1) {
                 router.push("/account-profile" as any);
+                return;
+              }
+              if (item.id === 5) {
+                router.push("/change-password" as any);
                 return;
               }
               if (item.id === 4) {

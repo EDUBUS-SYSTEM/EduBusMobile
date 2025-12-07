@@ -13,6 +13,12 @@ export default function DriverAccountScreen() {
       description: 'Account profile'
     },
     {
+      id: 9,
+      title: 'Change Password',
+      icon: 'lock-closed-outline',
+      description: 'Change your password'
+    },
+    {
       id: 3,
       title: 'Route history',
       icon: 'map-outline',
@@ -61,7 +67,7 @@ export default function DriverAccountScreen() {
         minHeight: 200,
         backgroundColor: 'transparent'
       }}>
-        
+
         {/* Yellow Circles Background */}
         <View style={{
           position: 'absolute',
@@ -81,7 +87,7 @@ export default function DriverAccountScreen() {
             backgroundColor: '#FDE370',
             opacity: 1
           }} />
-          
+
           {/* Circle 2 - Top Right */}
           <View style={{
             position: 'absolute',
@@ -93,7 +99,7 @@ export default function DriverAccountScreen() {
             backgroundColor: '#FDE370',
             opacity: 1
           }} />
-          
+
           {/* Circle 3 - Bottom Left */}
           <View style={{
             position: 'absolute',
@@ -115,7 +121,7 @@ export default function DriverAccountScreen() {
             backgroundColor: '#FDE370',
             opacity: 1
           }} />
-          
+
           {/* Circle 4 - Bottom Right */}
           <View style={{
             position: 'absolute',
@@ -184,8 +190,8 @@ export default function DriverAccountScreen() {
       </View>
 
       {/* Profile Section */}
-      <View style={{ 
-        alignItems: 'center', 
+      <View style={{
+        alignItems: 'center',
         marginTop: -45,
         marginBottom: 20
       }}>
@@ -206,7 +212,7 @@ export default function DriverAccountScreen() {
         }}>
           <Ionicons name="person" size={35} color="#01CBCA" />
         </View>
-        
+
         {/* Driver Account Text */}
         <Text style={{
           fontFamily: 'RobotoSlab-Bold',
@@ -247,6 +253,10 @@ export default function DriverAccountScreen() {
               }
               if (item.id === 4) {
                 router.push('/(driver-leave)' as any);
+                return;
+              }
+              if (item.id === 9) {
+                router.push('/change-password' as any);
                 return;
               }
               if (item.id === 8) {
