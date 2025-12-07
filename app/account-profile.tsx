@@ -1,19 +1,11 @@
-import { apiService } from "@/lib/api";
-import { API_CONFIG } from "@/constants/ApiConfig";
+import { AuthenticatedImage } from "@/components/AuthenticatedImage";
+import { userAccountApi, UserResponse } from "@/lib/userAccount/userAccount.api";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
-
-type UserResponse = {
-  id: string;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  dateOfBirth?: string;
-};
+import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 function decodeJwtPayload<T = any>(token: string): T | null {
   try {
@@ -35,54 +27,125 @@ function decodeJwtPayload<T = any>(token: string): T | null {
 export default function AccountProfileScreen() {
   const [profile, setProfile] = useState<UserResponse | null>(null);
   const [fullName, setFullName] = useState<string>("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const loadProfile = async () => {
+    try {
+      setLoading(true);
+      const [token, cachedFullName] = await AsyncStorage.multiGet([
+        "accessToken",
+        "userFullName",
+      ]);
+      if (cachedFullName[1]) setFullName(cachedFullName[1]);
+
+      const accessToken = token[1];
+      if (!accessToken) return;
+
+      const payload: any = decodeJwtPayload(accessToken);
+      const userId: string | undefined =
+        payload?.nameid ||
+        payload?.sub ||
+        payload?.[
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
+        ];
+      if (!userId) return;
+
+      const userData = await userAccountApi.getUserById(userId);
+      setProfile(userData);
+
+      const name = [userData.firstName, userData.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      if (name) setFullName(name);
+
+      // Load avatar if exists
+      if (userData.userPhotoFileId) {
+        setAvatarUrl(userAccountApi.getAvatarUrl(userId));
+      } else {
+        setAvatarUrl(null);
+      }
+    } catch (error) {
+      console.error("Error loading profile:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const [token, cachedFullName] = await AsyncStorage.multiGet([
-          "accessToken",
-          "userFullName",
-        ]);
-        if (cachedFullName[1]) setFullName(cachedFullName[1]);
-
-        const accessToken = token[1];
-        if (!accessToken) return;
-
-        const payload: any = decodeJwtPayload(accessToken);
-        const userId: string | undefined =
-          payload?.nameid ||
-          payload?.sub ||
-          payload?.[
-            "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
-          ];
-        if (!userId) return;
-
-        const raw = await apiService.get<any>(
-          `${API_CONFIG.ENDPOINTS.USER.PROFILE}/${userId}`
-        );
-
-        const normalized: UserResponse = {
-          id: raw.Id || raw.id,
-          email: raw.Email || raw.email,
-          firstName: raw.FirstName || raw.firstName,
-          lastName: raw.LastName || raw.lastName,
-          phoneNumber: raw.PhoneNumber || raw.phoneNumber,
-          dateOfBirth: raw.DateOfBirth || raw.dateOfBirth,
-        };
-
-        setProfile(normalized);
-        const name = [normalized.firstName, normalized.lastName]
-          .filter(Boolean)
-          .join(" ")
-          .trim();
-        if (name) setFullName(name);
-      } catch {
-        // noop
-      }
-    };
-
     loadProfile();
   }, []);
+
+  const handlePickImage = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "We need camera roll permissions to upload your avatar.");
+        return;
+      }
+
+      // Pick image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await uploadAvatar(result.assets[0]);
+      }
+    } catch (error) {
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to pick image. Please try again.");
+    }
+  };
+
+  const uploadAvatar = async (imageAsset: ImagePicker.ImagePickerAsset) => {
+    try {
+      setUploading(true);
+      const token = await AsyncStorage.getItem("accessToken");
+      if (!token) {
+        Alert.alert("Error", "Please login again.");
+        return;
+      }
+
+      const payload: any = decodeJwtPayload(token);
+      const userId: string | undefined =
+        payload?.nameid ||
+        payload?.sub ||
+        payload?.[
+        "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"
+        ];
+      if (!userId) {
+        Alert.alert("Error", "User ID not found.");
+        return;
+      }
+
+      // Get file extension
+      const uri = imageAsset.uri;
+      const extension = uri.split(".").pop() || "jpg";
+      const mimeType = `image/${extension === "jpg" || extension === "jpeg" ? "jpeg" : extension}`;
+
+      await userAccountApi.uploadAvatar(userId, {
+        uri,
+        type: mimeType,
+        name: `avatar.${extension}`,
+      });
+
+      // Reload profile to get updated avatar
+      await loadProfile();
+      Alert.alert("Success", "Avatar updated successfully!");
+    } catch (error: any) {
+      console.error("Error uploading avatar:", error);
+      Alert.alert("Error", error.response?.data?.message || "Failed to upload avatar. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
 
   return (
@@ -148,59 +211,78 @@ export default function AccountProfileScreen() {
         <View
           style={{ alignItems: "center", marginBottom: 20, marginTop: -20 }}
         >
-          {/* Yellow Rings Background */}
-          <View
-            style={{
-              width: 120,
-              height: 120,
-              borderRadius: 60,
-              backgroundColor: "#FFD700",
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: 15,
-            }}
-          >
-            {/* Middle Ring */}
-            <View
+          {/* Avatar Container */}
+          <View style={{ position: "relative", marginBottom: 15 }}>
+            <TouchableOpacity
+              onPress={handlePickImage}
+              disabled={uploading || loading}
               style={{
-                width: 95,
-                height: 95,
-                borderRadius: 47.5,
-                backgroundColor: "#FFEB3B",
+                width: 120,
+                height: 120,
+                borderRadius: 60,
+                backgroundColor: "#E0F7FA",
                 alignItems: "center",
                 justifyContent: "center",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 8,
+                elevation: 5,
+                overflow: "hidden",
               }}
             >
-              {/* Inner Ring */}
-              <View
-                style={{
-                  width: 70,
-                  height: 70,
-                  borderRadius: 35,
-                  backgroundColor: "#FFF59D",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {/* Avatar */}
-                <View
+              {uploading ? (
+                <ActivityIndicator size="large" color="#01CBCA" />
+              ) : avatarUrl ? (
+                <AuthenticatedImage
+                  uri={avatarUrl}
+                  size={120}
+                  style={{ width: 120, height: 120, borderRadius: 60 }}
+                  contentFit="cover"
+                />
+              ) : (
+                <Text
                   style={{
-                    width: 55,
-                    height: 55,
-                    borderRadius: 27.5,
-                    backgroundColor: "#E0F7FA",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 8,
-                    elevation: 5,
+                    fontFamily: "RobotoSlab-Bold",
+                    fontSize: 48,
+                    color: "#01CBCA",
                   }}
                 >
-                  <Ionicons name="person" size={28} color="#01CBCA" />
-                </View>
-              </View>
+                  {fullName
+                    ? fullName
+                      .split(" ")
+                      .filter(Boolean)
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase()
+                      .substring(0, 2)
+                    : "U"}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Edit Icon Badge */}
+            <View
+              style={{
+                position: "absolute",
+                bottom: 0,
+                right: 0,
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: "#01CBCA",
+                alignItems: "center",
+                justifyContent: "center",
+                borderWidth: 3,
+                borderColor: "#FFFFFF",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.2,
+                shadowRadius: 4,
+                elevation: 5,
+              }}
+            >
+              <Ionicons name="pencil" size={18} color="#FFFFFF" />
             </View>
           </View>
           <Text
@@ -213,6 +295,22 @@ export default function AccountProfileScreen() {
           >
             {fullName || "Account"}
           </Text>
+          <TouchableOpacity
+            onPress={handlePickImage}
+            disabled={uploading || loading}
+            style={{ marginTop: 8 }}
+          >
+            <Text
+              style={{
+                fontFamily: "RobotoSlab-Medium",
+                fontSize: 14,
+                color: "#01CBCA",
+                textDecorationLine: "underline",
+              }}
+            >
+
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Profile Information Cards */}

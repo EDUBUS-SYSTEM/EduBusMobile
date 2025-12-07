@@ -1,6 +1,9 @@
+import { StudentAvatar } from '@/components/StudentAvatar';
+import { UserAvatar } from '@/components/UserAvatar';
 import type { ParentTripChild, ParentTripDto } from '@/lib/trip/parentTrip.types';
 import { getParentTripDetail } from '@/lib/trip/trip.api';
 import type { Guid } from '@/lib/types';
+import { userAccountApi } from '@/lib/userAccount/userAccount.api';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -21,6 +24,8 @@ export default function ParentTripDetailScreen() {
   const { tripId, childId } = useLocalSearchParams<Params>();
   const [trip, setTrip] = useState<ParentTripDto | null>(null);
   const [loading, setLoading] = useState(true);
+  const [driverAvatarUrl, setDriverAvatarUrl] = useState<string | null>(null);
+  const [supervisorAvatarUrl, setSupervisorAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tripId) {
@@ -31,7 +36,21 @@ export default function ParentTripDetailScreen() {
     (async () => {
       try {
         const data = await getParentTripDetail(tripId);
+        if (!data) {
+          setLoading(false);
+          return;
+        }
+
         setTrip(data);
+
+        // Load driver avatar URL directly (UserAvatar component will handle authentication and fallback)
+        if (data.driver?.id) {
+          setDriverAvatarUrl(userAccountApi.getAvatarUrl(data.driver.id));
+        }
+        // Load supervisor avatar URL
+        if (data.supervisor?.id) {
+          setSupervisorAvatarUrl(userAccountApi.getAvatarUrl(data.supervisor.id));
+        }
       } finally {
         setLoading(false);
       }
@@ -49,6 +68,14 @@ export default function ParentTripDetailScreen() {
     if (!trip) return null;
 
     const targetChildId = (childId as string) || trip.childId;
+    
+    // First, try to find from trip.children
+    if (trip.children && trip.children.length > 0) {
+      const matchFromChildren = trip.children.find(c => c.id === targetChildId);
+      if (matchFromChildren) return matchFromChildren;
+    }
+    
+    // Fallback to attendance from stops
     const allAttendance =
       trip.stops?.flatMap(stop => stop.attendance || []) || [];
     const match = allAttendance.find(a => a.id === targetChildId);
@@ -123,6 +150,7 @@ export default function ParentTripDetailScreen() {
   }
 
   const driver = trip.driver;
+  const supervisor = trip.supervisor;
   const vehicle = trip.vehicle;
   const activeStudentName = studentAttendance?.name ?? trip.childName;
 
@@ -154,21 +182,44 @@ export default function ParentTripDetailScreen() {
             <Text style={styles.sectionTitle}>Driver Information</Text>
             <View style={styles.infoCard}>
               <View style={styles.driverRow}>
-                <View style={styles.driverAvatar}>
-                  <Text style={styles.driverAvatarInitials}>
-                    {driver.fullName
-                      .split(' ')
-                      .filter(Boolean)
-                      .slice(-2)
-                      .map(p => p[0])
-                      .join('')
-                      .toUpperCase()}
-                  </Text>
+                <View style={{ marginRight: 12 }}>
+                  <UserAvatar
+                    avatarUrl={driverAvatarUrl}
+                    userId={trip.driver?.id}
+                    userName={trip.driver?.fullName}
+                    size={64}
+                    showBorder={false}
+                  />
                 </View>
                 <View style={styles.driverInfo}>
                   <Text style={styles.driverName}>{driver.fullName}</Text>
                   <Text style={styles.driverText}>Phone: {driver.phone}</Text>
                   <Text style={styles.driverText}>Role: Driver</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Supervisor Information */}
+        {supervisor && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Supervisor Information</Text>
+            <View style={styles.infoCard}>
+              <View style={styles.driverRow}>
+                <View style={{ marginRight: 12 }}>
+                  <UserAvatar
+                    avatarUrl={supervisorAvatarUrl}
+                    userId={trip.supervisor?.id}
+                    userName={trip.supervisor?.fullName}
+                    size={64}
+                    showBorder={false}
+                  />
+                </View>
+                <View style={styles.driverInfo}>
+                  <Text style={styles.driverName}>{supervisor.fullName}</Text>
+                  <Text style={styles.driverText}>Phone: {supervisor.phone}</Text>
+                  <Text style={styles.driverText}>Role: Supervisor</Text>
                 </View>
               </View>
             </View>
@@ -203,9 +254,18 @@ export default function ParentTripDetailScreen() {
               <Text style={styles.statusHeaderText}>Status: {getStatusText(trip.status)}</Text>
             </View>
             <View style={styles.statusBody}>
-              <Text style={styles.studentLabel}>
-                Student Name: {activeStudentName}
-              </Text>
+              <View style={styles.studentInfoRow}>
+                <StudentAvatar
+                  studentId={studentAttendance?.id || trip.childId}
+                  studentName={activeStudentName}
+                  size={48}
+                  showBorder={false}
+                  style={styles.studentAvatar}
+                />
+                <Text style={styles.studentLabel}>
+                  {activeStudentName}
+                </Text>
+              </View>
 
               <View style={styles.detailRow}>
                 <Ionicons name="time-outline" size={18} color="#6B7280" />
@@ -353,20 +413,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  driverAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FBBF24',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  driverAvatarInitials: {
-    fontSize: 20,
-    fontFamily: 'RobotoSlab-Bold',
-    color: '#FFFFFF',
-  },
   driverInfo: {
     flex: 1,
   },
@@ -432,11 +478,22 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: '#FFF8CF',
   },
+  studentInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 12,
+  },
+  studentAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
   studentLabel: {
     fontSize: 14,
     fontFamily: 'RobotoSlab-Bold',
     color: '#000000',
-    marginBottom: 10,
+    flex: 1,
   },
   detailRow: {
     flexDirection: 'row',

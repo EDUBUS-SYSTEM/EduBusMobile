@@ -1,17 +1,17 @@
+import { StudentAvatar } from '@/components/StudentAvatar';
 import { useChild } from "@/hooks/useChildren";
 import { childrenApi } from "@/lib/parent/children.api";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React from "react";
 import {
-  Image,
   SafeAreaView,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
-  ScrollView,
+  View
 } from "react-native";
 
 export default function ChildrenProfileScreen() {
@@ -60,6 +60,7 @@ function ChildrenProfileContent() {
     lastName: "Hieu",
     avatarUrl:
       "https://cdn.vietnam.vn/wp-content/uploads/2024/08/HIEUTHUHAI-khien-ca-Hieu-thu-nhat-cung-noi-tieng.jpg",
+    studentImageId: null,
     parentId: "",
     className: "1B",
     schoolName: "FPT School",
@@ -148,8 +149,12 @@ function ChildrenProfileContent() {
             <View style={styles.ringOuter}>
               <View style={styles.ringMiddle}>
                 <View style={styles.ringInner}>
-                  <Image
-                    source={childData.avatar}
+                  <StudentAvatar
+                    studentId={childData.studentId}
+                    studentName={childData.name}
+                    studentImageId={childData.studentImageId}
+                    size={130}
+                    showBorder={false}
                     style={styles.profileImage}
                   />
                 </View>

@@ -1,7 +1,7 @@
+import { StudentAvatarsRow } from '@/components/StudentAvatarsRow';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchParentTripsToday } from '@/store/slices/parentTodaySlice';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect } from 'react';
@@ -78,9 +78,7 @@ export default function TripsTodayScreen() {
   const loadTrips = React.useCallback(async () => {
     try {
       const today = new Date();
-      //const isoDate = today.toISOString().split('T')[0];
-      const isoDate = "2025-12-04";
-      console.log('Loading trips for date:', isoDate);
+      const isoDate = today.toISOString().split('T')[0];
       await dispatch(fetchParentTripsToday({ dateISO: isoDate })).unwrap();
     } catch (error) {
       console.error('Error loading trips:', error);
@@ -179,16 +177,27 @@ export default function TripsTodayScreen() {
             activeOpacity={0.7}>
             {/* Child Info */}
             <View style={styles.childInfoRow}>
-              {trip.childAvatar ? (
-                <Image
-                  source={{ uri: trip.childAvatar }}
+              {trip.children && trip.children.length > 0 ? (
+                <StudentAvatarsRow
+                  students={trip.children.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                  }))}
+                  size={36}
+                  maxVisible={4}
+                  showBorder={false}
                   style={styles.childAvatar}
-                  contentFit="cover"
                 />
               ) : (
-                <View style={[styles.childAvatar, styles.avatarPlaceholder]}>
-                  <Ionicons name="person" size={24} color="#9E9E9E" />
-                </View>
+                <StudentAvatarsRow
+                  students={[{
+                    id: trip.childId,
+                    name: trip.childName,
+                  }]}
+                  size={36}
+                  showBorder={false}
+                  style={styles.childAvatar}
+                />
               )}
               <View style={styles.childInfo}>
                 {trip.children && trip.children.length > 0 ? (
@@ -365,9 +374,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   childAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
     marginRight: 12,
   },
   avatarPlaceholder: {
