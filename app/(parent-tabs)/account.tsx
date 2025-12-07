@@ -1,10 +1,24 @@
+import { UserAvatar } from "@/components/UserAvatar";
+import { useUserAvatar } from "@/hooks/useUserAvatar";
 import { authApi } from "@/lib/auth/auth.api";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
+import React from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 export default function ParentAccountScreen() {
+  const { avatarUrl, loading: avatarLoading } = useUserAvatar();
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log('[ParentAccountScreen] Avatar state:', {
+      hasUrl: !!avatarUrl,
+      url: avatarUrl?.substring(0, 50) + '...',
+      loading: avatarLoading,
+    });
+  }, [avatarUrl, avatarLoading]);
+
   const menuItems = [
     {
       id: 1,
@@ -209,23 +223,20 @@ export default function ParentAccountScreen() {
         }}
       >
         {/* Avatar */}
-        <View
-          style={{
-            width: 70,
-            height: 70,
-            borderRadius: 35,
-            backgroundColor: "#E0F7FA",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 12,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 5,
-          }}
-        >
-          <Ionicons name="person" size={35} color="#01CBCA" />
+        <View style={{ marginBottom: 12 }}>
+          {!avatarLoading && <UserAvatar avatarUrl={avatarUrl} size={120} />}
+          {avatarLoading && (
+            <View style={{
+              width: 120,
+              height: 120,
+              borderRadius: 60,
+              backgroundColor: "#E0F7FA",
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
+              <Ionicons name="person" size={60} color="#01CBCA" />
+            </View>
+          )}
         </View>
 
         {/* Parent Account Text */}

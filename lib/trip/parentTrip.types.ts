@@ -5,6 +5,7 @@ import type { TripCurrentLocationDto } from './trip.response.types';
 export interface ParentTripChild {
   id: Guid;
   name: string;
+  studentImageId?: Guid | null;
   state?: string;
   boardStatus?: string | null;
   alightStatus?: string | null;

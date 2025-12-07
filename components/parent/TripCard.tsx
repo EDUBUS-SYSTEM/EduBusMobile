@@ -1,6 +1,6 @@
+import { StudentAvatar } from '@/components/StudentAvatar';
 import type { ParentTripDto } from '@/lib/trip/parentTrip.types';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -15,14 +15,6 @@ export function TripCard({ trip, onPress }: TripCardProps) {
     const hours = date.getUTCHours().toString().padStart(2, '0');
     const minutes = date.getUTCMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
-  };
-
-  const getInitials = (name?: string) => {
-    if (!name) return '?';
-    const parts = name.trim().split(/\s+/);
-    const first = parts[0]?.[0] ?? '';
-    const last = parts.length > 1 ? parts[parts.length - 1][0] ?? '' : '';
-    return (first + last).toUpperCase();
   };
 
   const getStatusInfo = (status: string) => {
@@ -84,19 +76,21 @@ export function TripCard({ trip, onPress }: TripCardProps) {
 
         {/* Child & shuttle info */}
         <View style={styles.childInfoRow}>
-          {trip.childAvatar ? (
-            <Image
-              source={{ uri: trip.childAvatar }}
-              style={styles.avatar}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitials}>
-                {getInitials(trip.childName)}
-              </Text>
-            </View>
-          )}
+          {/* Find the selected student from children array or use trip.childId */}
+          {(() => {
+            const selectedStudent = trip.children?.find(c => c.id === trip.childId) || 
+              (trip.children && trip.children.length > 0 ? trip.children[0] : null);
+            
+            return (
+              <StudentAvatar
+                studentId={selectedStudent?.id || trip.childId}
+                studentName={selectedStudent?.name || trip.childName}
+                size={60}
+                showBorder={false}
+                style={styles.avatar}
+              />
+            );
+          })()}
 
           <View style={styles.childDetails}>
             <Text style={styles.childName} numberOfLines={1}>
