@@ -1,6 +1,6 @@
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchDriverTripsToday } from '@/store/slices/driverTodaySlice';
-import { getTodayISOString, toHourMinute } from '@/utils/date.utils';
+import { formatDateWithWeekday, getTodayISOString, toHourMinute } from '@/utils/date.utils';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -30,16 +30,7 @@ export default function DriverDashboardScreen() {
 
   const todayDisplay = React.useMemo(() => {
     const now = new Date();
-    try {
-      return now.toLocaleDateString('en-US', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      });
-    } catch {
-      return now.toDateString();
-    }
+    return formatDateWithWeekday(now);
   }, []);
 
   const loadTrips = React.useCallback(async () => {

@@ -1,4 +1,5 @@
 // Transaction Status Enum - matches backend exactly
+import { formatDateTime } from '@/utils/date.utils';
 export enum TransactionStatus {
   Notyet = 0,
   Paid = 1,
@@ -152,13 +153,8 @@ export const formatCurrency = (amount: number): string => {
 };
 
 export const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const formatted = formatDateTime(dateString);
+  return formatted === 'N/A' || formatted === 'Invalid Date' ? '--' : formatted;
 };
 
 

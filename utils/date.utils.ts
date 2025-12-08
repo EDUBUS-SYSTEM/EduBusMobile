@@ -9,6 +9,77 @@ export const toHourMinute = (iso: string): string => {
     const minutes = date.getUTCMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
 };
+
+const toDate = (value: string | Date | undefined | null): Date | null => {
+    if (!value) return null;
+    const date = typeof value === 'string' ? new Date(value) : value;
+    return isNaN(date.getTime()) ? null : date;
+};
+
+/**
+ * Align mobile date formatting with web: "Dec 2, 2025"
+ */
+export const formatDate = (value: string | Date | undefined | null): string => {
+    if (!value) return 'N/A';
+    const date = toDate(value);
+    if (!date) return typeof value === 'string' ? value : 'Invalid Date';
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+    });
+};
+
+/**
+ * Align mobile date-time formatting with web: "Dec 2, 2025, 1:23 PM"
+ */
+export const formatDateTime = (value: string | Date | undefined | null): string => {
+    if (!value) return 'N/A';
+    const date = toDate(value);
+    if (!date) return typeof value === 'string' ? value : 'Invalid Date';
+    return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+    });
+};
+
+/**
+ * Time-only formatting aligned with web: "1:23 PM"
+ */
+export const formatTime = (value: string | Date | undefined | null): string => {
+    if (!value) return 'N/A';
+    const date = toDate(value);
+    if (!date) return typeof value === 'string' ? value : 'Invalid Date';
+    return date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+    });
+};
+
+export const formatMonthYear = (value: string | Date | undefined | null): string => {
+    const date = toDate(value);
+    if (!date) return '';
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+    });
+};
+
+export const formatDateWithWeekday = (value: string | Date | undefined | null): string => {
+    const date = toDate(value);
+    if (!date) return 'N/A';
+    return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+};
 /**
  * Get today's date in ISO format (YYYY-MM-DD) using local timezone
  * This ensures correct date regardless of UTC offset
