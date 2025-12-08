@@ -1,10 +1,9 @@
 export interface AttendanceUpdatedEvent {
   tripId: string;
   stopId: string;
-  // Optional stop-level timing info from backend
   arrivedAt?: string | null;
   departedAt?: string | null;
-  timestamp?: string; // overall event timestamp
+  timestamp?: string; 
   attendance: {
     tripId: string;
     stopId: string;
@@ -14,8 +13,8 @@ export interface AttendanceUpdatedEvent {
     alightStatus?: string | null;
     boardedAt?: string | null;
     alightedAt?: string | null;
-    arrivedAt?: string | null;  // Stop-level timing in attendance object
-    departedAt?: string | null; // Stop-level timing in attendance object
+    arrivedAt?: string | null;  
+    departedAt?: string | null; 
     state?: string;
     timestamp?: string;
   };
@@ -30,5 +29,13 @@ export interface StopsReorderedEvent {
     arrivedAt?: string | null;
     departedAt?: string | null;
   }>;
+  timestamp: string;
+}
+
+export interface TripStatusChangedEvent {
+  tripId: string;
+  status: string;
+  startTime?: string;
+  endTime?: string;
   timestamp: string;
 }

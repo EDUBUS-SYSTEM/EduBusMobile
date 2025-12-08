@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { ViewStyle } from 'react-native';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -12,6 +12,19 @@ export default function ParentHomeScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const unreadCount = useAppSelector((state) => state.notifications.unreadCount);
+  const todayDisplay = useMemo(() => {
+    const now = new Date();
+    try {
+      return now.toLocaleDateString('en-US', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+    } catch {
+      return now.toDateString();
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -193,6 +206,16 @@ export default function ParentHomeScreen() {
           }}
         >
           Welcome Parents!
+        </Text>
+        <Text
+          style={{
+            fontFamily: "RobotoSlab-Medium",
+            fontSize: 14,
+            color: "#1F2937",
+            textAlign: "center",
+          }}
+        >
+          {todayDisplay}
         </Text>
       </View>
 

@@ -25,11 +25,9 @@ export const getTripsByDate = async (dateISO?: string | null): Promise<DriverTri
     const params = dateISO ? { date: dateISO } : undefined;
     const response = await apiService.get<GetTripsByDateResponse>('/trip/by-date', params);
 
-    // Map SimpleTripDto to DriverTripDto
-    // Note: SimpleTripDto doesn't have all fields, so we use defaults for missing fields
     const trips: DriverTripDto[] = response.trips.map((trip, index) => ({
-      id: trip.id || `temp-${index}`, // ID, will be replaced when fetching full details
-      routeId: '', // Not available in SimpleTripDto
+      id: trip.id || `temp-${index}`,
+      routeId: '',
       serviceDate: response.date,
       plannedStartAt: trip.plannedStartAt,
       plannedEndAt: trip.plannedEndAt,
@@ -40,8 +38,8 @@ export const getTripsByDate = async (dateISO?: string | null): Promise<DriverTri
       totalStops: trip.totalStops,
       completedStops: trip.completedStops,
       stops: [],
-      isOverride: false, // Not available in SimpleTripDto
-      overrideReason: '', // Not available in SimpleTripDto
+      isOverride: false,
+      overrideReason: '',
       overrideCreatedBy: undefined,
       overrideCreatedAt: undefined,
       createdAt: undefined,
@@ -50,18 +48,14 @@ export const getTripsByDate = async (dateISO?: string | null): Promise<DriverTri
     return trips;
   } catch (error: any) {
     console.error('Error fetching trips by date:', error);
-
-    // Handle 401 - Unauthorized
     if (error.response?.status === 401) {
       throw new Error('UNAUTHORIZED');
     }
 
-    // Handle 404 - No trips found
     if (error.response?.status === 404) {
       return [];
     }
 
-    // Handle other errors
     throw new Error(error.response?.data?.message || 'Failed to load trips. Please try again.');
   }
 };
@@ -92,7 +86,7 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
       totalStops: response.stops.length,
       completedStops: completedStops,
       stops: response.stops.map(stop => ({
-        sequenceOrder: stop.sequence + 1, // Convert from 0-based (backend) to 1-based (frontend)
+        sequenceOrder: stop.sequence, // Convert from 0-based (backend) to 1-based (frontend)
         stopPointId: stop.id,
         stopPointName: stop.name,
         plannedAt: stop.plannedArrival,
@@ -124,18 +118,18 @@ export const getTripDetail = async (tripId: string): Promise<DriverTripDto> => {
       tripType: response.scheduleSnapshot?.tripType,
       schoolLocation: response.schoolLocation
         ? {
-            latitude: response.schoolLocation.latitude,
-            longitude: response.schoolLocation.longitude,
-            address: response.schoolLocation.address,
-          }
+          latitude: response.schoolLocation.latitude,
+          longitude: response.schoolLocation.longitude,
+          address: response.schoolLocation.address,
+        }
         : undefined,
       // Map supervisor information
       supervisor: response.supervisor
         ? {
-            id: response.supervisor.id,
-            fullName: response.supervisor.fullName,
-            phone: response.supervisor.phone,
-          }
+          id: response.supervisor.id,
+          fullName: response.supervisor.fullName,
+          phone: response.supervisor.phone,
+        }
         : undefined,
     };
 
@@ -185,6 +179,35 @@ export const startTrip = async (tripId: string): Promise<{ tripId: string; messa
 
     // Handle other errors
     throw new Error(error.response?.data?.message || 'Failed to start trip. Please try again.');
+  }
+};
+
+/**
+ * End a trip
+ * @param tripId - Trip ID to end
+ * @returns Response with tripId, message, and endedAt
+ */
+export const endTrip = async (tripId: string): Promise<{ tripId: string; message: string; endedAt: string }> => {
+  try {
+    const response = await apiService.post<{ tripId: string; message: string; endedAt: string }>(
+      `/trip/${tripId}/end`
+    );
+    return response;
+  } catch (error: any) {
+    console.error('Error ending trip:', error);
+
+    // Handle 401 - Unauthorized
+    if (error.response?.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+
+    // Handle 400 - Bad Request (trip not found, wrong status, incomplete attendance, etc.)
+    if (error.response?.status === 400) {
+      throw new Error(error.response?.data?.message || 'Cannot end trip');
+    }
+
+    // Handle other errors
+    throw new Error(error.response?.data?.message || 'Failed to end trip. Please try again.');
   }
 };
 
@@ -244,18 +267,11 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
         continue;
       }
 
-      // API đã filter sẵn chỉ trả về stops của parent
-      // Pickup = stop đầu tiên, Dropoff = stop cuối cùng
-      const firstStop = trip.stops[0];
-      const lastStop = trip.stops[trip.stops.length - 1];
-
       const children = extractChildrenFromStops(trip.stops);
 
-      // Lấy child info từ attendance (nếu có)
       let childId: Guid | undefined = children[0]?.id;
       let childName: string | undefined = children[0]?.name;
 
-      // Fallback: nếu không có attendance, lấy từ children API
       if (!childId || !childName) {
         try {
           const userInfo = await authApi.getUserInfo();
@@ -271,7 +287,6 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
         }
       }
 
-      // Nếu vẫn không có child info, skip trip này
       if (!childId || !childName) {
         continue;
       }
@@ -293,6 +308,13 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
         childName: childName,
         childAvatar: undefined,
         childClassName: undefined,
+        schoolLocation: trip.schoolLocation
+          ? {
+            latitude: trip.schoolLocation.latitude,
+            longitude: trip.schoolLocation.longitude,
+            address: trip.schoolLocation.address,
+          }
+          : undefined,
         children,
         stops: trip.stops.map(stop => ({
           id: stop.id,
@@ -312,42 +334,22 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
             boardedAt: att.boardedAt ?? null,
           })) || [],
         })),
-        pickupStop: {
-          sequenceOrder: firstStop.sequence + 1, // Convert from 0-based (backend) to 1-based (frontend)
-          pickupPointName: firstStop.name,
-          address: firstStop.location.address,
-          latitude: firstStop.location.latitude,
-          longitude: firstStop.location.longitude,
-          plannedAt: firstStop.plannedArrival,
-          arrivedAt: firstStop.actualArrival,
-          departedAt: firstStop.actualDeparture,
-        },
-        dropoffStop: {
-          sequenceOrder: lastStop.sequence + 1, // Convert from 0-based (backend) to 1-based (frontend)
-          pickupPointName: lastStop.name,
-          address: lastStop.location.address,
-          latitude: lastStop.location.latitude,
-          longitude: lastStop.location.longitude,
-          plannedAt: lastStop.plannedDeparture,
-          arrivedAt: lastStop.actualArrival,
-          departedAt: lastStop.actualDeparture,
-        },
         totalStops: trip.stops.length,
         completedStops: completedStops,
         driver: trip.driver
           ? {
-              id: trip.driver.id,
-              fullName: trip.driver.fullName,
-              phone: trip.driver.phone,
-              isPrimary: trip.driver.isPrimary,
-            }
+            id: trip.driver.id,
+            fullName: trip.driver.fullName,
+            phone: trip.driver.phone,
+            isPrimary: trip.driver.isPrimary,
+          }
           : undefined,
         supervisor: (trip as any).supervisor
           ? {
-              id: (trip as any).supervisor.id,
-              fullName: (trip as any).supervisor.fullName,
-              phone: (trip as any).supervisor.phone,
-            }
+            id: (trip as any).supervisor.id,
+            fullName: (trip as any).supervisor.fullName,
+            phone: (trip as any).supervisor.phone,
+          }
           : undefined,
         vehicle: trip.vehicle ? {
           id: trip.vehicle.id,
@@ -399,12 +401,6 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
     if (!response.stops || response.stops.length === 0) {
       return null;
     }
-
-    // API đã filter sẵn chỉ trả về stops của parent
-    // Pickup = stop đầu tiên, Dropoff = stop cuối cùng
-    const firstStop = response.stops[0];
-    const lastStop = response.stops[response.stops.length - 1];
-
     const children = extractChildrenFromStops(response.stops);
 
     // Lấy child info từ attendance (nếu có)
@@ -432,6 +428,13 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
       childName: childName,
       childAvatar: undefined,
       childClassName: undefined,
+      schoolLocation: response.schoolLocation
+        ? {
+          latitude: response.schoolLocation.latitude,
+          longitude: response.schoolLocation.longitude,
+          address: response.schoolLocation.address,
+        }
+        : undefined,
       children,
       stops: response.stops.map(stop => ({
         id: stop.id,
@@ -453,42 +456,22 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
           alightStatus: att.alightStatus ?? null,
         })) || [],
       })),
-      pickupStop: {
-        sequenceOrder: firstStop.sequence,
-        pickupPointName: firstStop.name,
-        address: firstStop.location.address,
-        latitude: firstStop.location.latitude,
-        longitude: firstStop.location.longitude,
-        plannedAt: firstStop.plannedArrival,
-        arrivedAt: firstStop.actualArrival,
-        departedAt: firstStop.actualDeparture,
-      },
-      dropoffStop: {
-        sequenceOrder: lastStop.sequence,
-        pickupPointName: lastStop.name,
-        address: lastStop.location.address,
-        latitude: lastStop.location.latitude,
-        longitude: lastStop.location.longitude,
-        plannedAt: lastStop.plannedDeparture,
-        arrivedAt: lastStop.actualArrival,
-        departedAt: lastStop.actualDeparture,
-      },
       totalStops: response.stops.length,
       completedStops: completedStops,
       driver: response.driver
         ? {
-            id: response.driver.id,
-            fullName: response.driver.fullName,
-            phone: response.driver.phone,
-            isPrimary: response.driver.isPrimary,
-          }
+          id: response.driver.id,
+          fullName: response.driver.fullName,
+          phone: response.driver.phone,
+          isPrimary: response.driver.isPrimary,
+        }
         : undefined,
       supervisor: response.supervisor
         ? {
-            id: response.supervisor.id,
-            fullName: response.supervisor.fullName,
-            phone: response.supervisor.phone,
-          }
+          id: response.supervisor.id,
+          fullName: response.supervisor.fullName,
+          phone: response.supervisor.phone,
+        }
         : undefined,
       vehicle: response.vehicle ? {
         id: response.vehicle.id,
@@ -612,4 +595,7 @@ export const updateMultipleStopsSequence = async (
 
     throw new Error(error.response?.data?.message || 'Failed to update stops sequence. Please try again.');
   }
+
 };
+
+

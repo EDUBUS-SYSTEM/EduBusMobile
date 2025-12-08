@@ -45,26 +45,29 @@ export interface ParentTripDto {
   children?: ParentTripChild[];
   // All stops for this parent
   stops?: ParentTripStop[];
-  // Child pickup/drop-off point information
+  // Pickup stop info (flattened for convenience)
   pickupStop?: {
-    sequenceOrder: number;
-    pickupPointName: string;
-    address: string;
+    sequenceOrder?: number;
+    pickupPointName?: string;
+    address?: string;
     latitude?: number;
     longitude?: number;
-    plannedAt: string;
     arrivedAt?: string;
     departedAt?: string;
+    actualArrival?: string;
+    actualDeparture?: string;
   };
+  // Dropoff stop info (flattened for convenience)
   dropoffStop?: {
-    sequenceOrder: number;
-    pickupPointName: string;
-    address: string;
+    sequenceOrder?: number;
+    pickupPointName?: string;
+    address?: string;
     latitude?: number;
     longitude?: number;
-    plannedAt: string;
     arrivedAt?: string;
     departedAt?: string;
+    actualArrival?: string;
+    actualDeparture?: string;
   };
   // Total number of stops
   totalStops: number;
@@ -90,6 +93,12 @@ export interface ParentTripDto {
     status: string;
   };
   currentLocation?: TripCurrentLocationDto;
+  // School location for this trip (backend TripController now returns SchoolLocation)
+  schoolLocation?: {
+    latitude: number;
+    longitude: number;
+    address?: string;
+  };
   createdAt?: string;
   updatedAt?: string;
 }

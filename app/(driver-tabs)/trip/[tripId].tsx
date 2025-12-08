@@ -1,7 +1,7 @@
 import { AttendanceUpdatedEvent } from '@/lib/signalr/signalr.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
 import { DriverTripDto, DriverTripStopDto } from '@/lib/trip/driverTrip.types';
-import { confirmArrival, getTripDetail, updateMultipleStopsSequence } from '@/lib/trip/trip.api';
+import { confirmArrival, endTrip, getTripDetail, updateMultipleStopsSequence } from '@/lib/trip/trip.api';
 import type { Guid } from '@/lib/types';
 import { getRoute } from '@/lib/vietmap/vietmap.service';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,7 +45,7 @@ export default function TripDetailScreen() {
   // Helper to load trip data (used on mount and pull-to-refresh)
   const fetchTripDetail = React.useCallback(async () => {
     if (!tripId) {
-      Alert.alert('Error', 'Trip ID is missing', [
+      Alert.alert('Warning', 'Trip ID is missing', [
         { text: 'OK', onPress: () => router.back() },
       ]);
       return;
@@ -59,7 +59,7 @@ export default function TripDetailScreen() {
       const errorMessage = error.message === 'UNAUTHORIZED'
         ? 'You are not authorized to view this trip'
         : error.message || 'Failed to load trip';
-      Alert.alert('Error', errorMessage, [
+      Alert.alert('Warning', errorMessage, [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } finally {
@@ -124,25 +124,24 @@ export default function TripDetailScreen() {
                     attendance: stop.attendance.map((student) =>
                       student.studentId === data.attendance.studentId
                         ? {
-                            ...student,
-                            state: data.attendance.state || student.state,
-                            boardStatus: data.attendance.boardStatus ?? null,
-                            alightStatus: data.attendance.alightStatus ?? null,
-                            boardedAt: data.attendance.boardedAt ?? null,
-                            alightedAt: data.attendance.alightedAt ?? null,
-                          }
+                          ...student,
+                          state: data.attendance.state || student.state,
+                          boardStatus: data.attendance.boardStatus ?? null,
+                          alightStatus: data.attendance.alightStatus ?? null,
+                          boardedAt: data.attendance.boardedAt ?? null,
+                          alightedAt: data.attendance.alightedAt ?? null,
+                        }
                         : student
                     ),
                   };
 
                   // If backend sends departedAt for this stop, update to complete the stop
-                  if (data.departedAt) {
-                    updatedStop.departedAt = data.departedAt;
+                  if (data.attendance.departedAt) {
+                    updatedStop.departedAt = data.attendance.departedAt;
                   }
 
-                  // If backend sends arrivedAt, sync it back
-                  if (data.arrivedAt) {
-                    updatedStop.arrivedAt = data.arrivedAt;
+                  if (data.attendance.arrivedAt) {
+                    updatedStop.arrivedAt = data.attendance.arrivedAt;
                   }
 
                   wasUpdated = true;
@@ -156,10 +155,7 @@ export default function TripDetailScreen() {
                 // Recalculate completedStops based on departedAt
                 const completedCount = updatedTrip.stops.filter((s) => s.departedAt).length;
                 updatedTrip.completedStops = completedCount;
-                if (completedCount === updatedTrip.totalStops) {
-                  updatedTrip.status = 'Completed';
-                }
-
+                // Do NOT auto-complete trip here; completion is handled via endTrip flow
                 console.log(
                   '✅ Driver - Attendance update applied with completedStops:',
                   completedCount
@@ -213,10 +209,26 @@ export default function TripDetailScreen() {
         // Only keep stops that are not completed yet (no departedAt)
         const activeStops = sortedStops.filter((stop) => !stop.departedAt);
 
-        // If there are no active stops, clear routes
+        // If there are no active stops, check if we need route to school
         if (activeStops.length === 0) {
-          setRouteSegments([]);
-          console.log('ℹ️ No active stops (all have departedAt), clearing route segments');
+          // For departure trip, still show route from vehicle to school
+          if (trip.tripType === 1 && trip.schoolLocation && clickedCoordinate) {
+            const [longitude, latitude] = clickedCoordinate;
+            const routeToSchool = await getRoute(
+              { lat: latitude, lng: longitude },
+              { lat: trip.schoolLocation.latitude, lng: trip.schoolLocation.longitude },
+              apiKey
+            );
+            
+            if (routeToSchool && routeToSchool.coordinates.length > 0) {
+              segments.push(routeToSchool.coordinates);
+              console.log('✅ Route from vehicle to school (all stops completed)');
+            }
+          } else {
+            setRouteSegments([]);
+            console.log('ℹ️ No active stops, clearing route segments');
+            return;
+          }
         } else {
           // Calculate route from vehicle to first active stop (if vehicle location exists)
           if (clickedCoordinate) {
@@ -332,6 +344,45 @@ export default function TripDetailScreen() {
     setTrip(updatedTrip);
   };
 
+  const handleEndTrip = async () => {
+    if (!trip || !tripId) {
+      Alert.alert('Warning', 'Trip information is missing');
+      return;
+    }
+
+    if (trip.status !== 'InProgress') {
+      Alert.alert('Warning', 'Trip must be in progress to end it');
+      return;
+    }
+
+    Alert.alert(
+      'Complete Trip',
+      'Are you sure you want to complete this trip?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Complete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await endTrip(tripId);
+              await fetchTripDetail();
+              Alert.alert('Success', 'Trip completed successfully', [
+                { text: 'OK', onPress: () => router.replace('/(driver-tabs)/dashboard') },
+              ]);
+            } catch (error: any) {
+              console.error('Error ending trip:', error);
+              Alert.alert('Warning', error.message || 'Failed to complete trip. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleViewAttendance = (stop: DriverTripStopDto) => {
     setSelectedStop(stop);
     setShowAttendanceModal(true);
@@ -352,10 +403,10 @@ export default function TripDetailScreen() {
       // Check if any arrived stops changed position
       const arrivedStopsChanged = data.some((stop, newIndex) => {
         if (!stop.arrivedAt) return false; // Skip non-arrived stops
-        
+
         const original = originalStopMap.get(stop.stopPointId);
         if (!original) return false;
-        
+
         // Check if the arrived stop's position changed
         return original.originalIndex !== newIndex;
       });
@@ -402,7 +453,7 @@ export default function TripDetailScreen() {
       }
     } catch (error: any) {
       console.error('Error updating stops sequence:', error);
-      Alert.alert('Error', error.message || 'Failed to update stops sequence');
+      Alert.alert('Warning', error.message || 'Failed to update stops sequence');
       // Revert to original order by refetching
       await fetchTripDetail();
     }
@@ -478,7 +529,7 @@ export default function TripDetailScreen() {
     return getMapBounds();
   }, [clickedCoordinate, getMapBounds]);
 
-  const handleMapPress = (feature: GeoJSON.Feature) => {
+  const handleMapPress = async (feature: GeoJSON.Feature) => {
     try {
       console.log('Map pressed, feature:', JSON.stringify(feature, null, 2));
 
@@ -515,6 +566,21 @@ export default function TripDetailScreen() {
       if (longitude !== null && latitude !== null && !isNaN(longitude) && !isNaN(latitude)) {
         setClickedCoordinate([longitude, latitude]);
         console.log('✅ Map clicked at:', latitude, longitude);
+        if (trip && tripId) {
+          try {
+            await tripHubService.sendLocation(
+              tripId,
+              latitude,
+              longitude,
+              null,
+              null,
+              false
+            );
+            console.log('✅ Location sent via SignalR');
+          } catch (error: any) {
+            console.error('❌ Failed to send location:', error);
+          }
+        }
       } else {
         console.warn('⚠️ Could not extract coordinates from feature:', feature);
       }
@@ -548,7 +614,7 @@ export default function TripDetailScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Trip Details</Text>
+        <Text style={styles.headerTitle}>Trip Progress</Text>
         <View style={{ width: 40 }} />
       </LinearGradient>
 
@@ -746,7 +812,7 @@ export default function TripDetailScreen() {
                       const status = getStopStatus(item);
                       const isArrived = status === 'arrived' || status === 'completed';
                       const canDrag = !isArrived && trip.status !== 'Completed';
-                      
+
                       return (
                         <ScaleDecorator>
                           <TouchableOpacity
@@ -800,6 +866,7 @@ export default function TripDetailScreen() {
                 <TouchableOpacity
                   style={styles.endTripModalButton}
                   activeOpacity={0.8}
+                  onPress={handleEndTrip}
                 >
                   <Text style={styles.endTripModalButtonText}>Complete Trip</Text>
                 </TouchableOpacity>
