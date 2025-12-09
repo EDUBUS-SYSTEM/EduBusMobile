@@ -9,6 +9,7 @@ export interface SupervisorAttendanceDto {
   studentId: Guid;
   studentName: string;
   className: string;
+  studentImageId?: Guid | null;
   boardedAt?: string | null;
   alightedAt?: string | null;
   state: string;

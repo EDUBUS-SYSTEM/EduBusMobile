@@ -1,8 +1,8 @@
+import { StudentAvatarsRow } from '@/components/StudentAvatarsRow';
 import { TripType } from '@/lib/trip/trip.response.types';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchParentTripsToday } from '@/store/slices/parentTodaySlice';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect } from 'react';
@@ -80,7 +80,6 @@ export default function TripsTodayScreen() {
     try {
       const today = new Date();
       const isoDate = today.toISOString().split('T')[0];
-      console.log('Loading trips for date:', isoDate);
       await dispatch(fetchParentTripsToday({ dateISO: isoDate })).unwrap();
     } catch (error) {
       console.error('Error loading trips:', error);
@@ -170,150 +169,158 @@ export default function TripsTodayScreen() {
             <Text style={styles.emptyText}>No trips today</Text>
           </View>
         )}
-        {sortedTrips.length > 0 && sortedTrips.map((trip) => {
-          return (
-            <TouchableOpacity
-              key={`${trip.id}-${trip.childId}`}
-              style={styles.tripCard}
-              disabled={trip.status !== 'InProgress'}
-              onPress={trip.status === 'InProgress' ? () => handleTripPress(trip.id) : undefined}
-              activeOpacity={0.7}>
-              {/* Child Info */}
-              <View style={styles.childInfoRow}>
-                {trip.childAvatar ? (
-                  <Image
-                    source={{ uri: trip.childAvatar }}
-                    style={styles.childAvatar}
-                    contentFit="cover"
-                  />
+        {sortedTrips.length > 0 && sortedTrips.map((trip) => (
+          <TouchableOpacity
+            key={`${trip.id}-${trip.childId}`}
+            style={styles.tripCard}
+            disabled={trip.status !== 'InProgress'}
+            onPress={trip.status === 'InProgress' ? () => handleTripPress(trip.id) : undefined}
+            activeOpacity={0.7}>
+            {/* Child Info */}
+            <View style={styles.childInfoRow}>
+              {trip.children && trip.children.length > 0 ? (
+                <StudentAvatarsRow
+                  students={trip.children.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                  }))}
+                  size={36}
+                  maxVisible={4}
+                  showBorder={false}
+                  style={styles.childAvatar}
+                />
+              ) : (
+                <StudentAvatarsRow
+                  students={[{
+                    id: trip.childId,
+                    name: trip.childName,
+                  }]}
+                  size={36}
+                  showBorder={false}
+                  style={styles.childAvatar}
+                />
+              )}
+              <View style={styles.childInfo}>
+                {trip.children && trip.children.length > 0 ? (
+                  <>
+                    <Text style={styles.childName}>
+                      {trip.children.map(c => c.name).join(', ')}
+                    </Text>
+                    {trip.childClassName && (
+                      <Text style={styles.childClass}>{trip.childClassName}</Text>
+                    )}
+                  </>
                 ) : (
-                  <View style={[styles.childAvatar, styles.avatarPlaceholder]}>
-                    <Ionicons name="person" size={24} color="#9E9E9E" />
+                  <>
+                    <Text style={styles.childName}>{trip.childName}</Text>
+                    {trip.childClassName && (
+                      <Text style={styles.childClass}>{trip.childClassName}</Text>
+                    )}
+                  </>
+                )}
+              </View>
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: getStatusColor(trip.status) },
+                ]}>
+                <Text style={styles.statusText}>
+                  {getStatusText(trip.status)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Time Info */}
+            <View style={styles.timeRow}>
+              <View style={styles.timeItem}>
+                <Ionicons name="time-outline" size={16} color="#6B7280" />
+                <Text style={styles.timeText}>
+                  {formatTime(trip.plannedStartAt)} -{' '}
+                  {formatTime(trip.plannedEndAt)}
+                </Text>
+              </View>
+              <View style={styles.timeItem}>
+                <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                <Text style={styles.scheduleText}>{trip.scheduleName}</Text>
+              </View>
+            </View>
+
+            {/* Pickup/Dropoff Info */}
+            {trip.tripType === TripType.Departure ? (
+              <>
+                {/* Departure: Pickup = all stops, Dropoff = school */}
+                {trip.stops && trip.stops.length > 0 && (
+                  <View style={styles.stopInfo}>
+                    <View style={styles.stopRow}>
+                      <Ionicons name="location" size={16} color="#4CAF50" />
+                      <Text style={styles.stopLabel}>Pickup Point</Text>
+                    </View>
+                    {trip.stops.map((stop, index) => (
+                      <View key={stop.id || index} style={styles.stopItemRow}>
+                        <Ionicons name="location-outline" size={14} color="#6B7280" />
+                        <Text style={styles.stopAddress}>{stop.address}</Text>
+                      </View>
+                    ))}
                   </View>
                 )}
-                <View style={styles.childInfo}>
-                  {trip.children && trip.children.length > 0 ? (
-                    <>
-                      <Text style={styles.childName}>
-                        {trip.children.map(c => c.name).join(', ')}
-                      </Text>
-                      {trip.childClassName && (
-                        <Text style={styles.childClass}>{trip.childClassName}</Text>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <Text style={styles.childName}>{trip.childName}</Text>
-                      {trip.childClassName && (
-                        <Text style={styles.childClass}>{trip.childClassName}</Text>
-                      )}
-                    </>
-                  )}
-                </View>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    { backgroundColor: getStatusColor(trip.status) },
-                  ]}>
-                  <Text style={styles.statusText}>
-                    {getStatusText(trip.status)}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Time Info */}
-              <View style={styles.timeRow}>
-                <View style={styles.timeItem}>
-                  <Ionicons name="time-outline" size={16} color="#6B7280" />
-                  <Text style={styles.timeText}>
-                    {formatTime(trip.plannedStartAt)} -{' '}
-                    {formatTime(trip.plannedEndAt)}
-                  </Text>
-                </View>
-                <View style={styles.timeItem}>
-                  <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-                  <Text style={styles.scheduleText}>{trip.scheduleName}</Text>
-                </View>
-              </View>
-
-              {/* Pickup/Dropoff Info */}
-              {trip.tripType === TripType.Departure ? (
-                <>
-                  {/* Departure: Pickup = all stops, Dropoff = school */}
-                  {trip.stops && trip.stops.length > 0 && (
-                    <View style={styles.stopInfo}>
-                      <View style={styles.stopRow}>
-                        <Ionicons name="location" size={16} color="#4CAF50" />
-                        <Text style={styles.stopLabel}>Pickup Point</Text>
-                      </View>
-                      {trip.stops.map((stop, index) => (
-                        <View key={stop.id || index} style={styles.stopItemRow}>
-                          <Ionicons name="location-outline" size={14} color="#6B7280" />
-                          <Text style={styles.stopAddress}>{stop.address}</Text>
-                        </View>
-                      ))}
+                {trip.schoolLocation?.address && (
+                  <View style={styles.stopInfo}>
+                    <View style={styles.stopRow}>
+                      <Ionicons name="location" size={16} color="#2196F3" />
+                      <Text style={styles.stopLabel}>Drop-off Point</Text>
                     </View>
-                  )}
-                  {trip.schoolLocation?.address && (
-                    <View style={styles.stopInfo}>
-                      <View style={styles.stopRow}>
-                        <Ionicons name="location" size={16} color="#2196F3" />
-                        <Text style={styles.stopLabel}>Drop-off Point</Text>
-                      </View>
-                      <View style={styles.stopItemRow}>
-                        <Ionicons name="school" size={14} color="#6B7280" />
-                        <Text style={styles.stopAddress}>{trip.schoolLocation.address}</Text>
-                      </View>
+                    <View style={styles.stopItemRow}>
+                      <Ionicons name="school" size={14} color="#6B7280" />
+                      <Text style={styles.stopAddress}>{trip.schoolLocation.address}</Text>
                     </View>
-                  )}
-                </>
-              ) : (
-                <>
-                  {/* Return: Pickup = school, Dropoff = all stops */}
-                  {trip.schoolLocation?.address && (
-                    <View style={styles.stopInfo}>
-                      <View style={styles.stopRow}>
-                        <Ionicons name="location" size={16} color="#4CAF50" />
-                        <Text style={styles.stopLabel}>Pickup Point</Text>
-                      </View>
-                      <View style={styles.stopItemRow}>
-                        <Ionicons name="school" size={14} color="#6B7280" />
-                        <Text style={styles.stopAddress}>{trip.schoolLocation.address}</Text>
-                      </View>
-                    </View>
-                  )}
-                  {trip.stops && trip.stops.length > 0 && (
-                    <View style={styles.stopInfo}>
-                      <View style={styles.stopRow}>
-                        <Ionicons name="location" size={16} color="#2196F3" />
-                        <Text style={styles.stopLabel}>Drop-off Point</Text>
-                      </View>
-                      {trip.stops.map((stop, index) => (
-                        <View key={stop.id || index} style={styles.stopItemRow}>
-                          <Ionicons name="location-outline" size={14} color="#6B7280" />
-                          <Text style={styles.stopAddress}>{stop.address}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </>
-              )}
-
-              {/* Progress Info */}
-              <View style={styles.progressRow}>
-                {trip.status === 'InProgress' && (
-                  <TouchableOpacity
-                    style={styles.trackButton}
-                    onPress={() => handleTripPress(trip.id)}>
-                    <Ionicons name="navigate" size={16} color="#FFFFFF" />
-                    <Text style={styles.trackButtonText}>Track Now</Text>
-                  </TouchableOpacity>
+                  </View>
                 )}
-              </View>
-            </TouchableOpacity>
-          );
-        })
-        }
+              </>
+            ) : (
+              <>
+                {/* Return: Pickup = school, Dropoff = all stops */}
+                {trip.schoolLocation?.address && (
+                  <View style={styles.stopInfo}>
+                    <View style={styles.stopRow}>
+                      <Ionicons name="location" size={16} color="#4CAF50" />
+                      <Text style={styles.stopLabel}>Pickup Point</Text>
+                    </View>
+                    <View style={styles.stopItemRow}>
+                      <Ionicons name="school" size={14} color="#6B7280" />
+                      <Text style={styles.stopAddress}>{trip.schoolLocation.address}</Text>
+                    </View>
+                  </View>
+                )}
+                {trip.stops && trip.stops.length > 0 && (
+                  <View style={styles.stopInfo}>
+                    <View style={styles.stopRow}>
+                      <Ionicons name="location" size={16} color="#2196F3" />
+                      <Text style={styles.stopLabel}>Drop-off Point</Text>
+                    </View>
+                    {trip.stops.map((stop, index) => (
+                      <View key={stop.id || index} style={styles.stopItemRow}>
+                        <Ionicons name="location-outline" size={14} color="#6B7280" />
+                        <Text style={styles.stopAddress}>{stop.address}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* Progress Info */}
+            <View style={styles.progressRow}>
+              {trip.status === 'InProgress' && (
+                <TouchableOpacity
+                  style={styles.trackButton}
+                  onPress={() => handleTripPress(trip.id)}>
+                  <Ionicons name="navigate" size={16} color="#FFFFFF" />
+                  <Text style={styles.trackButtonText}>Track Now</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </TouchableOpacity>
+        ))}
       </ScrollView >
     </SafeAreaView >
   );
@@ -405,9 +412,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   childAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
     marginRight: 12,
   },
   avatarPlaceholder: {

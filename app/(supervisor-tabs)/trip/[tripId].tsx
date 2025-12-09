@@ -1,8 +1,11 @@
 import { StopsReorderedEvent } from '@/lib/signalr/signalr.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
+import { StudentAvatar } from '@/components/StudentAvatar';
+import { UserAvatar } from '@/components/UserAvatar';
 import { getSupervisorTripDetail, submitManualAttendance } from '@/lib/supervisor/supervisor.api';
 import { SupervisorTripDetailDto } from '@/lib/supervisor/supervisor.types';
 import type { Guid } from '@/lib/types';
+import { userAccountApi } from '@/lib/userAccount/userAccount.api';
 import { toHourMinute } from '@/utils/date.utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -88,6 +91,7 @@ export default function SupervisorTripDetailScreen() {
   const [loading, setLoading] = React.useState(true);
   const [boardingStatus, setBoardingStatus] = React.useState<Record<string, 'Present' | 'Absent' | null>>({});
   const [alightingStatus, setAlightingStatus] = React.useState<Record<string, 'Present' | 'Absent' | null>>({});
+  const [driverAvatarUrl, setDriverAvatarUrl] = React.useState<string | null>(null);
   const [showBoardingDropdown, setShowBoardingDropdown] = React.useState<{ studentId: string; stopSequence: number; position: { x: number; y: number; width: number } } | null>(null);
   const [showAlightingDropdown, setShowAlightingDropdown] = React.useState<{ studentId: string; stopSequence: number; position: { x: number; y: number; width: number } } | null>(null);
   const insets = useSafeAreaInsets();
@@ -101,6 +105,12 @@ export default function SupervisorTripDetailScreen() {
       const tripData = await getSupervisorTripDetail(tripId);
 
       setTrip(tripData);
+
+      // Load driver avatar URL directly (UserAvatar component will handle authentication and fallback)
+      if (tripData.driver?.id) {
+        // Directly use getAvatarUrl - UserAvatar component will handle the case when no avatar exists
+        setDriverAvatarUrl(userAccountApi.getAvatarUrl(tripData.driver.id));
+      }
 
       // Initialize boarding and alighting status for all students from stops
       const initialBoarding: Record<string, 'Present' | 'Absent' | null> = {};
@@ -385,9 +395,13 @@ export default function SupervisorTripDetailScreen() {
           <View style={styles.card}>
             {trip.driver ? (
               <View style={styles.driverRow}>
-                <View style={styles.driverAvatar}>
-                  <Ionicons name="person" size={20} color="#6B7280" />
-                </View>
+                <UserAvatar 
+                  avatarUrl={driverAvatarUrl} 
+                  userId={trip.driver.id}
+                  userName={trip.driver.fullName}
+                  size={48} 
+                  showBorder={false} 
+                />
                 <View style={styles.driverInfo}>
                   <Text style={styles.driverName}>{trip.driver.fullName}</Text>
                   <Text style={styles.driverPhone}>{trip.driver.phone}</Text>
@@ -486,9 +500,13 @@ export default function SupervisorTripDetailScreen() {
                         ]}
                       >
                         <View style={styles.studentHeader}>
-                          <View style={styles.studentAvatar}>
-                            <Text style={styles.studentAvatarText}>{getInitials(student.studentName)}</Text>
-                          </View>
+                          <StudentAvatar
+                            studentId={student.studentId}
+                            studentName={student.studentName}
+                            studentImageId={student.studentImageId}
+                            size={48}
+                            showBorder={false}
+                          />
                           <View style={styles.studentInfo}>
                             <Text style={styles.studentName} numberOfLines={1}>
                               {student.studentName}
@@ -1035,19 +1053,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  studentAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFF3D4',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  studentAvatarText: {
-    fontFamily: 'RobotoSlab-Bold',
-    fontSize: 16,
-    color: '#C47F00',
   },
   studentInfo: {
     flex: 1,

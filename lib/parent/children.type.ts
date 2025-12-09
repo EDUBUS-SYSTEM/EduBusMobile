@@ -3,7 +3,8 @@ export interface Child {
   id: string;
   firstName: string;
   lastName: string;
-  avatarUrl?: string;
+  avatarUrl?: string;  
+  studentImageId?: string | null;  // NEW: File ID for student photo
   parentId: string;
   classId?: string;
   className?: string;

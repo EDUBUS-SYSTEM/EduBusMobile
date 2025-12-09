@@ -1,3 +1,4 @@
+import { UserAvatar } from '@/components/UserAvatar';
 import { AttendanceUpdatedEvent, StopsReorderedEvent, TripStatusChangedEvent } from '@/lib/signalr/signalr.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
 import { DriverTripStatus } from '@/lib/trip/driverTrip.types';
@@ -5,6 +6,7 @@ import type { ParentTripChild, ParentTripDto } from '@/lib/trip/parentTrip.types
 import { getParentTripDetail } from '@/lib/trip/trip.api';
 import { TripType } from '@/lib/trip/trip.response.types';
 import type { Guid } from '@/lib/types';
+import { userAccountApi } from '@/lib/userAccount/userAccount.api';
 import { getRoute } from '@/lib/vietmap/vietmap.service';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { updateTrip } from '@/store/slices/parentTodaySlice';
@@ -182,7 +184,7 @@ const getStopStatus = (stop: ParentTripDto['pickupStop'] | ParentTripDto['dropof
 };
 
 // Helper: Find current active stop (not yet completed) with lowest sequence
-const getCurrentActiveStop = (stops?: Array<{ id: string; name: string; sequence: number; actualDeparture?: string; attendance?: ParentTripChild[]; address: string }>) => {
+const getCurrentActiveStop = (stops?: { id: string; name: string; sequence: number; actualDeparture?: string; attendance?: ParentTripChild[]; address: string }[]) => {
   if (!stops || stops.length === 0) return null;
 
   // Find first stop without actualDeparture (not yet departed)
@@ -191,7 +193,7 @@ const getCurrentActiveStop = (stops?: Array<{ id: string; name: string; sequence
 };
 
 // Helper: Check if all pickup stops are completed
-const areAllPickupsCompleted = (stops?: Array<{ actualDeparture?: string }>) => {
+const areAllPickupsCompleted = (stops?: { actualDeparture?: string }[]) => {
   if (!stops || stops.length === 0) return false;
 
   // All stops must have actualDeparture
@@ -243,6 +245,7 @@ export default function ParentTripTrackingScreen() {
   const [showChildModal, setShowChildModal] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<Guid | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [supervisorAvatarUrl, setSupervisorAvatarUrl] = useState<string | null>(null);
   const mapRef = useRef<MapViewRef>(null);
   const hasRealtimeRef = useRef(false);
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][] | null>(null);
@@ -311,6 +314,12 @@ export default function ParentTripTrackingScreen() {
 
       if (tripData) {
         setTrip(tripData);
+        
+        // Load supervisor avatar URL directly (UserAvatar component will handle authentication and fallback)
+        if (tripData.supervisor?.id) {
+          // Directly use getAvatarUrl - UserAvatar component will handle the case when no avatar exists
+          setSupervisorAvatarUrl(userAccountApi.getAvatarUrl(tripData.supervisor.id));
+        }
       } else {
         Alert.alert('Error', 'Trip not found', [
           { text: 'OK', onPress: () => router.replace('/(parent-tabs)/trips/today') },
@@ -1470,9 +1479,13 @@ export default function ParentTripTrackingScreen() {
             {trip.supervisor && (
               <View style={styles.modalBody}>
                 <View style={styles.modalDriverAvatarContainer}>
-                  <View style={[styles.modalDriverAvatar, styles.avatarPlaceholder]}>
-                    <MaterialCommunityIcons name="account-tie" size={80} color="#6B7280" />
-                  </View>
+                  <UserAvatar 
+                    avatarUrl={supervisorAvatarUrl} 
+                    userId={trip.supervisor?.id}
+                    userName={trip.supervisor?.fullName}
+                    size={120} 
+                    showBorder={false} 
+                  />
                 </View>
 
                 <View style={styles.modalDriverInfo}>

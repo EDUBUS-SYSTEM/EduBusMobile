@@ -1,19 +1,19 @@
+import TermsModal from "@/components/FaceRegistration/TermsModal";
+import { StudentAvatar } from "@/components/StudentAvatar";
 import { useChildrenList } from "@/hooks/useChildren";
 import { childrenApi } from "@/lib/parent/children.api";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  Alert,
   Image,
   SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
-import TermsModal from "@/components/FaceRegistration/TermsModal";
 
 export default function ChildrenListScreen() {
   const router = useRouter();
@@ -29,43 +29,46 @@ export default function ChildrenListScreen() {
     apiChildren.length > 0
       ? apiChildren.map((child) => childrenApi.formatChildForUI(child))
       : [
-          {
-            id: "1",
-            name: "Tran Minh Hieu",
-            avatar: {
-              uri: "https://cdn.vietnam.vn/wp-content/uploads/2024/08/HIEUTHUHAI-khien-ca-Hieu-thu-nhat-cung-noi-tieng.jpg",
-            },
-            studentId: "HS001",
-            className: "1B",
-            schoolName: "FPT School",
-            address: "105 Xuan Dieu",
-            status: "Being on the bus",
+        {
+          id: "1",
+          name: "Tran Minh Hieu",
+          avatar: {
+            uri: "https://cdn.vietnam.vn/wp-content/uploads/2024/08/HIEUTHUHAI-khien-ca-Hieu-thu-nhat-cung-noi-tieng.jpg",
           },
-          {
-            id: "2",
-            name: "Tran Quang Huy",
-            avatar: {
-              uri: "https://www.elle.vn/wp-content/uploads/2024/01/21/567142/HIEUTHUHAI-3-scaled.jpg",
-            },
-            studentId: "HS002",
-            className: "2A",
-            schoolName: "FPT School",
-            address: "105 Xuan Dieu",
-            status: "At school",
+          studentId: "HS001",
+          studentImageId: null,
+          className: "1B",
+          schoolName: "FPT School",
+          address: "105 Xuan Dieu",
+          status: "Being on the bus",
+        },
+        {
+          id: "2",
+          name: "Tran Quang Huy",
+          avatar: {
+            uri: "https://www.elle.vn/wp-content/uploads/2024/01/21/567142/HIEUTHUHAI-3-scaled.jpg",
           },
-          {
-            id: "3",
-            name: "HIEUTHUHAI",
-            avatar: {
-              uri: "https://www.elle.vn/wp-content/uploads/2024/01/21/567142/HIEUTHUHAI-3-scaled.jpg",
-            },
-            studentId: "HS003",
-            className: "3C",
-            schoolName: "FPT School",
-            address: "105 Xuan Dieu",
-            status: "At home",
+          studentId: "HS002",
+          studentImageId: null,
+          className: "2A",
+          schoolName: "FPT School",
+          address: "105 Xuan Dieu",
+          status: "At school",
+        },
+        {
+          id: "3",
+          name: "HIEUTHUHAI",
+          avatar: {
+            uri: "https://www.elle.vn/wp-content/uploads/2024/01/21/567142/HIEUTHUHAI-3-scaled.jpg",
           },
-        ];
+          studentId: "HS003",
+          studentImageId: null,
+          className: "3C",
+          schoolName: "FPT School",
+          address: "105 Xuan Dieu",
+          status: "At home",
+        },
+      ];
 
   const handlePrev = () => {
     setCurrentIndex((prev) =>
@@ -272,7 +275,14 @@ export default function ChildrenListScreen() {
             activeOpacity={0.8}
             style={{ alignItems: "center", width: "80%" }}
           >
-            <Image source={currentChild.avatar} style={styles.childImage} />
+            <StudentAvatar
+              studentId={currentChild.studentId}
+              studentName={currentChild.name}
+              studentImageId={currentChild.studentImageId}
+              size={240}
+              showBorder={false}
+              style={styles.childImage}
+            />
             <Text style={styles.childName}>{currentChild.name}</Text>
           </TouchableOpacity>
 

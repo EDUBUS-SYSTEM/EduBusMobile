@@ -1,4 +1,5 @@
 import { apiService } from '../api';
+import { studentApi } from '../student/student.api';
 import type { Child, CreateChildRequest, UpdateChildRequest } from './children.type';
 
 export const childrenApi = {
@@ -23,20 +24,24 @@ export const childrenApi = {
   },
 
   formatChildForUI: (child: Child) => {
+    // Generate avatar URL from studentImageId if available
+    const avatarUrl = child.studentImageId
+      ? studentApi.getPhotoUrl(child.id)
+      : null;
+
     return {
       id: child.id,
       name: `${child.firstName} ${child.lastName}`,
-      avatar: {
-        uri: child.avatarUrl || "https://cdn.voh.com.vn/voh/Image/2022/09/20/hieu-thu-hai-tieu-su-019.jpg"
-      },
+      avatar: avatarUrl ? { uri: avatarUrl } : null,  // null instead of mock URL
       studentId: child.id,
+      studentImageId: child.studentImageId,  // Pass through for StudentAvatar component
       className: child.className || "N/A",
       schoolName: child.schoolName || "FPT School",
       address: child.address || "N/A",
-      status: "Being on bus", 
+      status: "Being on bus",
       firstName: child.firstName,
       lastName: child.lastName,
-      avatarUrl: child.avatarUrl,
+      avatarUrl: avatarUrl,
     };
   }
 };

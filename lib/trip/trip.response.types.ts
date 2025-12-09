@@ -130,6 +130,7 @@ export interface ParentAttendanceDto {
   studentId: Guid;
   studentName: string;
   boardedAt?: string;
+  alightedAt?: string;
   boardStatus?: string | null;
   alightStatus?: string | null;
   state: string;
