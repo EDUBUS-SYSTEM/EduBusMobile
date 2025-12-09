@@ -130,7 +130,7 @@ export default function TabBarParent() {
         }}
       />
       <Tabs.Screen
-        name="notifications"
+        name="trip-report"
         options={{
           href: null, // Hide from tab bar
         }}

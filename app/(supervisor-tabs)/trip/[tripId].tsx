@@ -31,32 +31,6 @@ const formatTime = (iso: string) => {
   }
 };
 
-// Format time for planned times (no timezone conversion)
-const formatPlannedTime = (iso: string) => {
-  if (!iso) return '--:--';
-  try {
-    const date = new Date(iso);
-    const timeString = date.toLocaleString('en-US', { 
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-    return timeString;
-  } catch {
-    return '--:--';
-  }
-};
-
-const getInitials = (name?: string) => {
-  if (!name) return '?';
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  if (!parts.length) return '?';
-  const letters = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() || '');
-  return letters.join('');
-};
 
 const getStatusColor = (status: string): string => {
   const normalizedStatus = status?.toLowerCase() || '';
@@ -91,6 +65,7 @@ export default function SupervisorTripDetailScreen() {
   const [driverAvatarUrl, setDriverAvatarUrl] = React.useState<string | null>(null);
   const [showBoardingDropdown, setShowBoardingDropdown] = React.useState<{ studentId: string; stopSequence: number; position: { x: number; y: number; width: number } } | null>(null);
   const [showAlightingDropdown, setShowAlightingDropdown] = React.useState<{ studentId: string; stopSequence: number; position: { x: number; y: number; width: number } } | null>(null);
+  const scrollRef = React.useRef<ScrollView | null>(null);
   const insets = useSafeAreaInsets();
 
   const loadTripData = React.useCallback(async () => {
@@ -175,8 +150,29 @@ export default function SupervisorTripDetailScreen() {
     setShowBoardingDropdown(null);
 
     try {
-      await submitManualAttendance(tripId, stopSequence, studentId, status, null);
-      await loadTripData();
+      const result = await submitManualAttendance(tripId, stopSequence, studentId, status, null);
+
+      setTrip((prev) => {
+        if (!prev) return prev;
+        const newStops = prev.stops.map((stop) => {
+          if (stop.sequence !== stopSequence) {
+            return stop;
+          }
+          const updatedAttendance = stop.attendance.map((a) => {
+            if (a.studentId !== studentId) return a;
+            return {
+              ...a,
+              boardStatus: status,
+              boardedAt: result.timestamp,
+            };
+          });
+          return {
+            ...stop,
+            attendance: updatedAttendance,
+          };
+        });
+        return { ...prev, stops: newStops };
+      });
     } catch (error: any) {
       console.error('Error updating boarding:', error);
       setBoardingStatus(prev => ({
@@ -200,8 +196,29 @@ export default function SupervisorTripDetailScreen() {
     setShowAlightingDropdown(null);
 
     try {
-      await submitManualAttendance(tripId, stopSequence, studentId, null, status);
-      await loadTripData();
+      const result = await submitManualAttendance(tripId, stopSequence, studentId, null, status);
+
+      setTrip((prev) => {
+        if (!prev) return prev;
+        const newStops = prev.stops.map((stop) => {
+          if (stop.sequence !== stopSequence) {
+            return stop;
+          }
+          const updatedAttendance = stop.attendance.map((a) => {
+            if (a.studentId !== studentId) return a;
+            return {
+              ...a,
+              alightStatus: status,
+              alightedAt: result.timestamp,
+            };
+          });
+          return {
+            ...stop,
+            attendance: updatedAttendance,
+          };
+        });
+        return { ...prev, stops: newStops };
+      });
     } catch (error: any) {
       console.error('Error updating alighting:', error);
       setAlightingStatus(prev => ({
@@ -298,11 +315,11 @@ export default function SupervisorTripDetailScreen() {
       </LinearGradient>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20, paddingTop: 20 }}
         showsVerticalScrollIndicator={false}
         onScrollBeginDrag={() => {
-          // Close dropdowns when scrolling
           setShowBoardingDropdown(null);
           setShowAlightingDropdown(null);
         }}
