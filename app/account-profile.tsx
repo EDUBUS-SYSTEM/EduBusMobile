@@ -67,8 +67,7 @@ export default function AccountProfileScreen() {
       } else {
         setAvatarUrl(null);
       }
-    } catch (error) {
-      console.error("Error loading profile:", error);
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -98,8 +97,7 @@ export default function AccountProfileScreen() {
       if (!result.canceled && result.assets[0]) {
         await uploadAvatar(result.assets[0]);
       }
-    } catch (error) {
-      console.error("Error picking image:", error);
+    } catch {
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
@@ -140,7 +138,6 @@ export default function AccountProfileScreen() {
       await loadProfile();
       Alert.alert("Success", "Avatar updated successfully!");
     } catch (error: any) {
-      console.error("Error uploading avatar:", error);
       Alert.alert("Error", error.response?.data?.message || "Failed to upload avatar. Please try again.");
     } finally {
       setUploading(false);

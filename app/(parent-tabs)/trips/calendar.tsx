@@ -21,6 +21,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 
@@ -55,9 +56,26 @@ export default function ParentTripCalendarScreen() {
 
       setSemesters(sortedSemesters);
 
-      // Auto-select first semester if available
+      // Auto-select semester currently in progress; fallback to nearest upcoming; then first.
       if (sortedSemesters.length > 0 && !selectedSemester) {
-        setSelectedSemester(sortedSemesters[0]);
+        const now = new Date();
+        const current = sortedSemesters.find((s) => {
+          const start = new Date(s.startDate);
+          const end = new Date(s.endDate || s.startDate);
+          return start <= now && now <= end;
+        });
+        if (current) {
+          setSelectedSemester(current);
+          setCurrentDate(now);
+          setSelectedDate(now);
+        } else {
+          const upcoming = [...sortedSemesters].reverse().find((s) => new Date(s.startDate) >= now);
+          const pick = upcoming || sortedSemesters[0];
+          setSelectedSemester(pick);
+          const start = new Date(pick.startDate);
+          setCurrentDate(start);
+          setSelectedDate(start);
+        }
       }
     } catch (err) {
       console.error('Error loading semesters:', err);
@@ -164,9 +182,12 @@ export default function ParentTripCalendarScreen() {
       tripsCacheRef.current = {};
       setVisibleTrips([]);
 
-      const semesterStart = new Date(selectedSemester.startDate);
-      setCurrentDate(semesterStart);
-      setSelectedDate(semesterStart);
+      const now = new Date();
+      const start = new Date(selectedSemester.startDate);
+      const end = new Date(selectedSemester.endDate || selectedSemester.startDate);
+      const target = start <= now && now <= end ? now : start;
+      setCurrentDate(target);
+      setSelectedDate(target);
     };
 
     loadSemesterData();
@@ -304,6 +325,11 @@ export default function ParentTripCalendarScreen() {
       {/* Header Section */}
       <View style={styles.header}>
         <BackgroundIcons />
+        <View style={styles.backRow}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={20} color="#111827" />
+          </TouchableOpacity>
+        </View>
         <View style={styles.logoContainer}>
           <Image
             source={require('@/assets/images/edubus_logo.png')}
@@ -429,6 +455,25 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     position: 'relative',
     overflow: 'hidden',
+  },
+  backRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 4,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   backgroundIcons: {
     position: 'absolute',
