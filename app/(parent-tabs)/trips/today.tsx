@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect } from 'react';
+import { formatDateWithWeekday } from '@/utils/date.utils';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -27,14 +28,7 @@ const formatTime = (iso: string) => {
 };
 
 const formatTodayLabel = () => {
-  const now = new Date();
-  const formatted = now.toLocaleDateString('en-US', {
-    weekday: 'long',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-  return `${formatted}`;
+  return formatDateWithWeekday(new Date());
 };
 
 const getStatusColor = (status: string) => {

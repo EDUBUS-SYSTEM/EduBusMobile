@@ -19,6 +19,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { formatDate } from '@/utils/date.utils';
 
 export default function SupervisorVehicleScreen() {
   const [vehicleData, setVehicleData] = useState<VehicleData | null>(null);
@@ -54,15 +55,8 @@ export default function SupervisorVehicleScreen() {
 
   const formatAssignmentDate = (date?: string | null) => {
     if (!date) return '--';
-    try {
-      return new Date(date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch {
-      return '--';
-    }
+    const formatted = formatDate(date);
+    return formatted === 'N/A' || formatted === 'Invalid Date' ? '--' : formatted;
   };
 
   useEffect(() => {

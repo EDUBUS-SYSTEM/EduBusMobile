@@ -19,6 +19,7 @@ import {
   DriverVehicleStatusLabels,
   type VehicleData 
 } from '@/lib/driverVehicle/driverVehicle.types';
+import { formatDate } from '@/utils/date.utils';
 
 export default function VehicleOverviewScreen() {
   const [vehicleData, setVehicleData] = useState<VehicleData | null>(null);
@@ -291,11 +292,7 @@ export default function VehicleOverviewScreen() {
                   fontSize: 16, 
                   color: '#000000'
                 }}>
-                  {new Date(vehicleData.assignmentStartTime).toLocaleDateString('vi-VN', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                  {formatDate(vehicleData.assignmentStartTime)}
                 </Text>
               </View>
             </View>
@@ -333,11 +330,7 @@ export default function VehicleOverviewScreen() {
                       fontSize: 16, 
                       color: '#000000'
                     }}>
-                      {new Date(vehicleData.assignmentEndTime).toLocaleDateString('vi-VN', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
+                      {formatDate(vehicleData.assignmentEndTime)}
                     </Text>
                   </View>
                 </View>

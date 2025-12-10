@@ -1,19 +1,76 @@
-/**
- * Format ISO date string to time string (HH:mm) in local timezone (Vietnam)
- * @param iso - ISO date string
- * @returns Formatted time string (HH:mm)
- */
+
 export const toHourMinute = (iso: string): string => {
     const date = new Date(iso);
     const hours = date.getUTCHours().toString().padStart(2, '0');
     const minutes = date.getUTCMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
 };
-/**
- * Get today's date in ISO format (YYYY-MM-DD) using local timezone
- * This ensures correct date regardless of UTC offset
- * @returns Today's date string in format YYYY-MM-DD
- */
+
+const toDate = (value: string | Date | undefined | null): Date | null => {
+    if (!value) return null;
+    const date = typeof value === 'string' ? new Date(value) : value;
+    return isNaN(date.getTime()) ? null : date;
+};
+
+
+export const formatDate = (value: string | Date | undefined | null): string => {
+    if (!value) return 'N/A';
+    const date = toDate(value);
+    if (!date) return typeof value === 'string' ? value : 'Invalid Date';
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+    });
+};
+
+
+export const formatDateTime = (value: string | Date | undefined | null): string => {
+    if (!value) return 'N/A';
+    const date = toDate(value);
+    if (!date) return typeof value === 'string' ? value : 'Invalid Date';
+    return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+    });
+};
+
+
+export const formatTime = (value: string | Date | undefined | null): string => {
+    if (!value) return 'N/A';
+    const date = toDate(value);
+    if (!date) return typeof value === 'string' ? value : 'Invalid Date';
+    return date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+    });
+};
+
+export const formatMonthYear = (value: string | Date | undefined | null): string => {
+    const date = toDate(value);
+    if (!date) return '';
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+    });
+};
+
+export const formatDateWithWeekday = (value: string | Date | undefined | null): string => {
+    const date = toDate(value);
+    if (!date) return 'N/A';
+    return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+};
+
 export const getTodayISOString = (): string => {
     const today = new Date();
     const year = today.getFullYear();
@@ -22,11 +79,7 @@ export const getTodayISOString = (): string => {
     return `${year}-${month}-${day}`;
 };
 
-/**
- * Formats a date string into a relative time (e.g., "5m ago", "2d ago")
- * Falls back to a locale date string for differences >= 7 days
- * @param dateString - ISO date string
- */
+
 export const formatRelativeDate = (dateString: string): string => {
     const date = new Date(dateString);
     const now = new Date();
