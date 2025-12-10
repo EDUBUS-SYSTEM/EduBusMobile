@@ -1,8 +1,4 @@
-/**
- * Format ISO date string to time string (HH:mm) in local timezone (Vietnam)
- * @param iso - ISO date string
- * @returns Formatted time string (HH:mm)
- */
+
 export const toHourMinute = (iso: string): string => {
     const date = new Date(iso);
     const hours = date.getUTCHours().toString().padStart(2, '0');
@@ -16,9 +12,7 @@ const toDate = (value: string | Date | undefined | null): Date | null => {
     return isNaN(date.getTime()) ? null : date;
 };
 
-/**
- * Align mobile date formatting with web: "Dec 2, 2025"
- */
+
 export const formatDate = (value: string | Date | undefined | null): string => {
     if (!value) return 'N/A';
     const date = toDate(value);
@@ -30,9 +24,7 @@ export const formatDate = (value: string | Date | undefined | null): string => {
     });
 };
 
-/**
- * Align mobile date-time formatting with web: "Dec 2, 2025, 1:23 PM"
- */
+
 export const formatDateTime = (value: string | Date | undefined | null): string => {
     if (!value) return 'N/A';
     const date = toDate(value);
@@ -47,9 +39,7 @@ export const formatDateTime = (value: string | Date | undefined | null): string 
     });
 };
 
-/**
- * Time-only formatting aligned with web: "1:23 PM"
- */
+
 export const formatTime = (value: string | Date | undefined | null): string => {
     if (!value) return 'N/A';
     const date = toDate(value);
@@ -80,11 +70,7 @@ export const formatDateWithWeekday = (value: string | Date | undefined | null): 
         year: 'numeric',
     });
 };
-/**
- * Get today's date in ISO format (YYYY-MM-DD) using local timezone
- * This ensures correct date regardless of UTC offset
- * @returns Today's date string in format YYYY-MM-DD
- */
+
 export const getTodayISOString = (): string => {
     const today = new Date();
     const year = today.getFullYear();
@@ -93,11 +79,7 @@ export const getTodayISOString = (): string => {
     return `${year}-${month}-${day}`;
 };
 
-/**
- * Formats a date string into a relative time (e.g., "5m ago", "2d ago")
- * Falls back to a locale date string for differences >= 7 days
- * @param dateString - ISO date string
- */
+
 export const formatRelativeDate = (dateString: string): string => {
     const date = new Date(dateString);
     const now = new Date();
