@@ -129,6 +129,24 @@ export default function TabBarParent() {
           href: null, // Hide from tab bar
         }}
       />
+      <Tabs.Screen
+        name="relocation-requests"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="relocation-request/[requestId]"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="relocation-request/create"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
     </Tabs>
   );
 }
