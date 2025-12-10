@@ -1,4 +1,5 @@
 import { StudentAvatarsRow } from '@/components/StudentAvatarsRow';
+import { TripType } from '@/lib/trip/trip.response.types';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchParentTripsToday } from '@/store/slices/parentTodaySlice';
 import { Ionicons } from '@expo/vector-icons';
@@ -100,12 +101,12 @@ export default function TripsTodayScreen() {
   const sortedTrips = React.useMemo(() => {
     return [...trips].sort((a, b) => {
       if (a.status === 'InProgress' && b.status !== 'InProgress') {
-        return -1; // a comes first
+        return -1;
       }
       if (a.status !== 'InProgress' && b.status === 'InProgress') {
-        return 1; // b comes first
+        return 1;
       }
-      return 0; // keep original order for others
+      return 0;
     });
   }, [trips]);
 
@@ -245,28 +246,66 @@ export default function TripsTodayScreen() {
             </View>
 
             {/* Pickup/Dropoff Info */}
-            {trip.pickupStop && (
-              <View style={styles.stopInfo}>
-                <View style={styles.stopRow}>
-                  <Ionicons name="location" size={16} color="#4CAF50" />
-                  <Text style={styles.stopLabel}>Pickup Point</Text>
-                </View>
-                <Text style={styles.stopAddress}>
-                  {trip.pickupStop.address}
-                </Text>
-              </View>
-            )}
-
-            {trip.dropoffStop && (
-              <View style={styles.stopInfo}>
-                <View style={styles.stopRow}>
-                  <Ionicons name="location" size={16} color="#2196F3" />
-                  <Text style={styles.stopLabel}>Drop-off Point</Text>
-                </View>
-                <Text style={styles.stopAddress}>
-                  FPT Primary School Da Nang
-                </Text>
-              </View>
+            {trip.tripType === TripType.Departure ? (
+              <>
+                {/* Departure: Pickup = all stops, Dropoff = school */}
+                {trip.stops && trip.stops.length > 0 && (
+                  <View style={styles.stopInfo}>
+                    <View style={styles.stopRow}>
+                      <Ionicons name="location" size={16} color="#4CAF50" />
+                      <Text style={styles.stopLabel}>Pickup Point</Text>
+                    </View>
+                    {trip.stops.map((stop, index) => (
+                      <View key={stop.id || index} style={styles.stopItemRow}>
+                        <Ionicons name="location-outline" size={14} color="#6B7280" />
+                        <Text style={styles.stopAddress}>{stop.address}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {trip.schoolLocation?.address && (
+                  <View style={styles.stopInfo}>
+                    <View style={styles.stopRow}>
+                      <Ionicons name="location" size={16} color="#2196F3" />
+                      <Text style={styles.stopLabel}>Drop-off Point</Text>
+                    </View>
+                    <View style={styles.stopItemRow}>
+                      <Ionicons name="school" size={14} color="#6B7280" />
+                      <Text style={styles.stopAddress}>{trip.schoolLocation.address}</Text>
+                    </View>
+                  </View>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Return: Pickup = school, Dropoff = all stops */}
+                {trip.schoolLocation?.address && (
+                  <View style={styles.stopInfo}>
+                    <View style={styles.stopRow}>
+                      <Ionicons name="location" size={16} color="#4CAF50" />
+                      <Text style={styles.stopLabel}>Pickup Point</Text>
+                    </View>
+                    <View style={styles.stopItemRow}>
+                      <Ionicons name="school" size={14} color="#6B7280" />
+                      <Text style={styles.stopAddress}>{trip.schoolLocation.address}</Text>
+                    </View>
+                  </View>
+                )}
+                {trip.stops && trip.stops.length > 0 && (
+                  <View style={styles.stopInfo}>
+                    <View style={styles.stopRow}>
+                      <Ionicons name="location" size={16} color="#2196F3" />
+                      <Text style={styles.stopLabel}>Drop-off Point</Text>
+                    </View>
+                    {trip.stops.map((stop, index) => (
+                      <View key={stop.id || index} style={styles.stopItemRow}>
+                        <Ionicons name="location-outline" size={14} color="#6B7280" />
+                        <Text style={styles.stopAddress}>{stop.address}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
             )}
 
             {/* Progress Info */}
@@ -281,8 +320,7 @@ export default function TripsTodayScreen() {
               )}
             </View>
           </TouchableOpacity>
-        ))
-        }
+        ))}
       </ScrollView >
     </SafeAreaView >
   );
@@ -454,8 +492,21 @@ const styles = StyleSheet.create({
   stopAddress: {
     fontSize: 12,
     color: '#6B7280',
-    marginLeft: 22,
+    marginLeft: 6,
     marginBottom: 4,
+    flex: 1,
+  },
+  stopItemRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginLeft: 22,
+    marginTop: 4,
+  },
+  stopBullet: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginRight: 6,
+    lineHeight: 16,
   },
   stopTime: {
     fontSize: 12,

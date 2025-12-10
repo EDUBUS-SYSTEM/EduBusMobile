@@ -63,6 +63,7 @@ export const useNotificationAlert = () => {
           message: notification.message,
           title: notification.title,
           notificationType: notification.notificationType?.toString(),
+          createdAt: notification.timeStamp,
         }));
       }
       else {

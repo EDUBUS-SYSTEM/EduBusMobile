@@ -1,7 +1,7 @@
 import { AttendanceUpdatedEvent } from '@/lib/signalr/signalr.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
 import { DriverTripDto, DriverTripStopDto } from '@/lib/trip/driverTrip.types';
-import { confirmArrival, endTrip, getTripDetail } from '@/lib/trip/trip.api';
+import { confirmArrival, endTrip, getTripDetail, updateMultipleStopsSequence } from '@/lib/trip/trip.api';
 import type { Guid } from '@/lib/types';
 import { getRoute } from '@/lib/vietmap/vietmap.service';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Alert, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 type Params = { tripId?: Guid };
 
@@ -37,13 +39,13 @@ export default function TripDetailScreen() {
   const [selectedStop, setSelectedStop] = useState<DriverTripStopDto | null>(null);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [routeSegments, setRouteSegments] = useState<[number, number][][]>([]);
-  const [routeTrigger, setRouteTrigger] = useState(0); // Trigger for route recalculation
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [listKey, setListKey] = useState(0); // Key to force re-render DraggableFlatList
 
   // Helper to load trip data (used on mount and pull-to-refresh)
   const fetchTripDetail = React.useCallback(async () => {
     if (!tripId) {
-      Alert.alert('Error', 'Trip ID is missing', [
+      Alert.alert('Warning', 'Trip ID is missing', [
         { text: 'OK', onPress: () => router.back() },
       ]);
       return;
@@ -57,7 +59,7 @@ export default function TripDetailScreen() {
       const errorMessage = error.message === 'UNAUTHORIZED'
         ? 'You are not authorized to view this trip'
         : error.message || 'Failed to load trip';
-      Alert.alert('Error', errorMessage, [
+      Alert.alert('Warning', errorMessage, [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } finally {
@@ -101,17 +103,7 @@ export default function TripDetailScreen() {
 
         // Subscribe to attendance update events
         tripHubService.on<AttendanceUpdatedEvent>('AttendanceUpdated', (data) => {
-          console.log('🔔 ===============================================');
-          console.log('🔔 Driver - AttendanceUpdated Event Received');
-          console.log('🔔 ===============================================');
-          console.log('📦 Event Data:');
-          console.log('  - tripId:', data.tripId);
-          console.log('  - stopId:', data.stopId);
-          console.log('  - arrivedAt (top):', data.arrivedAt);
-          console.log('  - departedAt (top):', data.departedAt);
-          console.log('  - attendance.arrivedAt:', data.attendance?.arrivedAt);
-          console.log('  - attendance.departedAt:', data.attendance?.departedAt);
-          console.log('  - Full JSON:', JSON.stringify(data, null, 2));
+          console.log('🔔 Driver - Attendance updated:', JSON.stringify(data, null, 2));
 
           if (data.tripId === tripId) {
             // Use functional state update to avoid stale closure
@@ -123,90 +115,51 @@ export default function TripDetailScreen() {
 
               if (updatedTrip.stops) {
                 updatedTrip.stops = updatedTrip.stops.map((stop) => {
-                  // FIX: Cập nhật departedAt/arrivedAt độc lập với attendance
-                  // Nếu stopId match, cập nhật timing ngay cả khi không có attendance
-                  if (stop.stopPointId === data.stopId) {
-                    console.log('  ✅ Found matching stop:', stop.stopPointName);
-                    console.log('     Current state:');
-                    console.log('       - arrivedAt:', stop.arrivedAt);
-                    console.log('       - departedAt:', stop.departedAt);
-
-                    const updatedStop: DriverTripStopDto = { ...stop };
-                    let stopWasUpdated = false;
-
-                    // FIX: Backend gửi arrivedAt/departedAt trong attendance object, không phải top-level
-                    const eventArrivedAt = data.arrivedAt || data.attendance?.arrivedAt;
-                    const eventDepartedAt = data.departedAt || data.attendance?.departedAt;
-
-                    console.log('     Event values:');
-                    console.log('       - eventArrivedAt:', eventArrivedAt);
-                    console.log('       - eventDepartedAt:', eventDepartedAt);
-
-                    // Cập nhật arrivedAt/departedAt nếu có (không phụ thuộc vào attendance)
-                    if (eventArrivedAt && stop.arrivedAt !== eventArrivedAt) {
-                      updatedStop.arrivedAt = eventArrivedAt;
-                      stopWasUpdated = true;
-                      console.log('     🔄 Updating arrivedAt:', eventArrivedAt);
-                    }
-                    if (eventDepartedAt && stop.departedAt !== eventDepartedAt) {
-                      updatedStop.departedAt = eventDepartedAt;
-                      stopWasUpdated = true;
-                      console.log('     🔄 Updating departedAt:', eventDepartedAt);
-                    }
-
-                    // Cập nhật attendance nếu có
-                    if (stop.attendance) {
-                      const hasAttendanceUpdate = stop.attendance.some(
-                        (student) => student.studentId === data.attendance.studentId
-                      );
-
-                      if (hasAttendanceUpdate) {
-                        updatedStop.attendance = stop.attendance.map((student) =>
-                          student.studentId === data.attendance.studentId
-                            ? {
-                              ...student,
-                              state: data.attendance.state || student.state,
-                              boardStatus: data.attendance.boardStatus ?? null,
-                              alightStatus: data.attendance.alightStatus ?? null,
-                              boardedAt: data.attendance.boardedAt ?? null,
-                              alightedAt: data.attendance.alightedAt ?? null,
-                            }
-                            : student
-                        );
-                        stopWasUpdated = true;
-                      }
-                    }
-
-                    if (stopWasUpdated) {
-                      wasUpdated = true;
-                      return updatedStop;
-                    }
+                  if (stop.stopPointId !== data.stopId || !stop.attendance) {
+                    return stop; // Return unchanged
                   }
 
-                  return stop; // Return unchanged
+                  const updatedStop: DriverTripStopDto = {
+                    ...stop,
+                    attendance: stop.attendance.map((student) =>
+                      student.studentId === data.attendance.studentId
+                        ? {
+                          ...student,
+                          state: data.attendance.state || student.state,
+                          boardStatus: data.attendance.boardStatus ?? null,
+                          alightStatus: data.attendance.alightStatus ?? null,
+                          boardedAt: data.attendance.boardedAt ?? null,
+                          alightedAt: data.attendance.alightedAt ?? null,
+                        }
+                        : student
+                    ),
+                  };
+
+                  // If backend sends departedAt for this stop, update to complete the stop
+                  if (data.attendance.departedAt) {
+                    updatedStop.departedAt = data.attendance.departedAt;
+                  }
+
+                  if (data.attendance.arrivedAt) {
+                    updatedStop.arrivedAt = data.attendance.arrivedAt;
+                  }
+
+                  wasUpdated = true;
+                  return updatedStop;
                 });
 
-                if (wasUpdated) {
-                  console.log('✅ Driver - Updated stop timing and/or attendance in stops array');
-                }
+                console.log('✅ Driver - Updated attendance (and stop timing) in stops array');
               }
 
               if (wasUpdated) {
                 // Recalculate completedStops based on departedAt
                 const completedCount = updatedTrip.stops.filter((s) => s.departedAt).length;
                 updatedTrip.completedStops = completedCount;
-                if (completedCount === updatedTrip.totalStops) {
-                  updatedTrip.status = 'Completed';
-                }
-
+                // Do NOT auto-complete trip here; completion is handled via endTrip flow
                 console.log(
                   '✅ Driver - Attendance update applied with completedStops:',
                   completedCount
                 );
-
-                // Force route recalculation by incrementing trigger
-                setRouteTrigger(prev => prev + 1);
-
                 return updatedTrip;
               }
 
@@ -253,62 +206,28 @@ export default function TripDetailScreen() {
         const sortedStops = [...trip.stops].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
         const segments: [number, number][][] = [];
 
-        console.log('🗺️ calculateRoutes triggered, routeTrigger:', routeTrigger);
-        console.log('📍 All stops:', sortedStops.map(s => ({
-          seq: s.sequenceOrder,
-          name: s.stopPointName,
-          arrivedAt: s.arrivedAt,
-          departedAt: s.departedAt
-        })));
-
         // Only keep stops that are not completed yet (no departedAt)
         const activeStops = sortedStops.filter((stop) => !stop.departedAt);
 
-        console.log('✅ Active stops (no departedAt):', activeStops.map(s => ({
-          seq: s.sequenceOrder,
-          name: s.stopPointName,
-          arrivedAt: s.arrivedAt,
-          departedAt: s.departedAt
-        })));
-
-        // If there are no active stops, handle end-of-trip routing
+        // If there are no active stops, check if we need route to school
         if (activeStops.length === 0) {
-          console.log('ℹ️ No active stops (all have departedAt)');
-
-          // For departure trip, connect vehicle/last stop to school
-          if (trip.tripType === 1 && trip.schoolLocation) {
-            console.log('🏫 Departure trip - calculating route to school');
-
-            // Priority 1: Use vehicle location if available
-            if (clickedCoordinate) {
-              const [longitude, latitude] = clickedCoordinate;
-              const routeToSchool = await getRoute(
-                { lat: latitude, lng: longitude },
-                { lat: trip.schoolLocation.latitude, lng: trip.schoolLocation.longitude },
-                apiKey
-              );
-
-              if (routeToSchool && routeToSchool.coordinates.length > 0) {
-                segments.push(routeToSchool.coordinates);
-                console.log('✅ Route from vehicle to school added');
-              }
-            }
-            // Priority 2: Use last stop if no vehicle location
-            else if (sortedStops.length > 0) {
-              const lastStop = sortedStops[sortedStops.length - 1];
-              const routeToSchool = await getRoute(
-                { lat: lastStop.latitude, lng: lastStop.longitude },
-                { lat: trip.schoolLocation.latitude, lng: trip.schoolLocation.longitude },
-                apiKey
-              );
-
-              if (routeToSchool && routeToSchool.coordinates.length > 0) {
-                segments.push(routeToSchool.coordinates);
-                console.log('✅ Route from last stop to school added');
-              }
+          // For departure trip, still show route from vehicle to school
+          if (trip.tripType === 1 && trip.schoolLocation && clickedCoordinate) {
+            const [longitude, latitude] = clickedCoordinate;
+            const routeToSchool = await getRoute(
+              { lat: latitude, lng: longitude },
+              { lat: trip.schoolLocation.latitude, lng: trip.schoolLocation.longitude },
+              apiKey
+            );
+            
+            if (routeToSchool && routeToSchool.coordinates.length > 0) {
+              segments.push(routeToSchool.coordinates);
+              console.log('✅ Route from vehicle to school (all stops completed)');
             }
           } else {
-            console.log('ℹ️ Return trip or no school location - clearing route segments');
+            setRouteSegments([]);
+            console.log('ℹ️ No active stops, clearing route segments');
+            return;
           }
         } else {
           // Calculate route from vehicle to first active stop (if vehicle location exists)
@@ -371,7 +290,7 @@ export default function TripDetailScreen() {
     };
 
     calculateRoutes();
-  }, [trip, clickedCoordinate, routeTrigger]);
+  }, [trip, clickedCoordinate]);
 
   const handleArrive = async (stop: DriverTripStopDto) => {
     if (!trip) return;
@@ -399,7 +318,7 @@ export default function TripDetailScreen() {
       console.log('Parents notified about arrival at:', stop.stopPointName);
     } catch (error: any) {
       console.error('Error notifying arrival:', error);
-      Alert.alert('Error', error.message || 'Failed to notify parents');
+      Alert.alert('Warning', error.message || 'Failed to notify parents');
     }
   };
 
@@ -425,15 +344,17 @@ export default function TripDetailScreen() {
     setTrip(updatedTrip);
   };
 
-  const handleViewAttendance = (stop: DriverTripStopDto) => {
-    setSelectedStop(stop);
-    setShowAttendanceModal(true);
-  };
-
   const handleEndTrip = async () => {
-    if (!trip) return;
+    if (!trip || !tripId) {
+      Alert.alert('Warning', 'Trip information is missing');
+      return;
+    }
 
-    // Show confirmation dialog
+    if (trip.status !== 'InProgress') {
+      Alert.alert('Warning', 'Trip must be in progress to end it');
+      return;
+    }
+
     Alert.alert(
       'Complete Trip',
       'Are you sure you want to complete this trip?',
@@ -447,31 +368,95 @@ export default function TripDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await endTrip(trip.id);
-
-              // Refresh trip data to get updated status
+              await endTrip(tripId);
               await fetchTripDetail();
-
-              // Close modal
-              setShowStopsModal(false);
-
               Alert.alert('Success', 'Trip completed successfully', [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    // Navigate back to dashboard
-                    router.replace('/(driver-tabs)/dashboard' as any);
-                  },
-                },
+                { text: 'OK', onPress: () => router.replace('/(driver-tabs)/dashboard') },
               ]);
             } catch (error: any) {
               console.error('Error ending trip:', error);
-              Alert.alert('Error', error.message || 'Failed to complete trip');
+              Alert.alert('Warning', error.message || 'Failed to complete trip. Please try again.');
             }
           },
         },
       ]
     );
+  };
+
+  const handleViewAttendance = (stop: DriverTripStopDto) => {
+    setSelectedStop(stop);
+    setShowAttendanceModal(true);
+  };
+
+  const handleDragEnd = async ({ data }: { data: DriverTripStopDto[] }) => {
+    if (!trip) return;
+
+    // Save original order to revert if needed
+    const originalStops = [...trip.stops].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+
+    try {
+      // Create a map of original stop positions by stopPointId
+      const originalStopMap = new Map(
+        trip.stops.map((stop, index) => [stop.stopPointId, { stop, originalIndex: index }])
+      );
+
+      // Check if any arrived stops changed position
+      const arrivedStopsChanged = data.some((stop, newIndex) => {
+        if (!stop.arrivedAt) return false; // Skip non-arrived stops
+
+        const original = originalStopMap.get(stop.stopPointId);
+        if (!original) return false;
+
+        // Check if the arrived stop's position changed
+        return original.originalIndex !== newIndex;
+      });
+
+      if (arrivedStopsChanged) {
+        // Revert state back to original to force re-render DraggableFlatList
+        setTrip({
+          ...trip,
+          stops: originalStops,
+        });
+        // Force re-render DraggableFlatList by changing key
+        setListKey(prev => prev + 1);
+        Alert.alert('Warning', 'Cannot reorder stops that have already been visited.');
+        return;
+      }
+
+      // Update sequenceOrder for all stops based on new order
+      const updatedStops = data.map((stop, index) => ({
+        ...stop,
+        sequenceOrder: index + 1, // sequenceOrder is 1-based
+      }));
+
+      // Prepare API request - only include non-arrived stops
+      const stopsForAPI = updatedStops
+        .filter(stop => !stop.arrivedAt)
+        .map(stop => ({
+          pickupPointId: stop.stopPointId,
+          sequenceOrder: stop.sequenceOrder - 1, // Backend uses 0-based index
+        }));
+
+      // Only call API if there are stops to update
+      if (stopsForAPI.length > 0) {
+        // Call API to update sequence
+        await updateMultipleStopsSequence(trip.id, stopsForAPI);
+
+        // Update local state
+        const updatedTrip: DriverTripDto = {
+          ...trip,
+          stops: updatedStops,
+        };
+
+        setTrip(updatedTrip);
+        console.log('✅ Stops sequence updated successfully');
+      }
+    } catch (error: any) {
+      console.error('Error updating stops sequence:', error);
+      Alert.alert('Warning', error.message || 'Failed to update stops sequence');
+      // Revert to original order by refetching
+      await fetchTripDetail();
+    }
   };
 
   const mapRef = useRef<MapViewRef>(null);
@@ -485,7 +470,7 @@ export default function TripDetailScreen() {
   const getMapBounds = React.useCallback(() => {
     if (!trip || !trip.stops || trip.stops.length === 0) {
       return {
-        centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Đà Nẵng
+        centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Da Nang
         zoomLevel: 12,
       };
     }
@@ -581,21 +566,19 @@ export default function TripDetailScreen() {
       if (longitude !== null && latitude !== null && !isNaN(longitude) && !isNaN(latitude)) {
         setClickedCoordinate([longitude, latitude]);
         console.log('✅ Map clicked at:', latitude, longitude);
-
-        // Send location to server if trip is in progress
-        if (tripId && trip && trip.status === 'InProgress' && tripHubService.isConnected()) {
+        if (trip && tripId) {
           try {
             await tripHubService.sendLocation(
               tripId,
               latitude,
               longitude,
-              null, // speed
-              null, // accuracy
-              false // isMoving
+              null,
+              null,
+              false
             );
-            console.log(`📍 Location sent to server: (${latitude}, ${longitude})`);
-          } catch (error) {
-            console.error('❌ Error sending location to server:', error);
+            console.log('✅ Location sent via SignalR');
+          } catch (error: any) {
+            console.error('❌ Failed to send location:', error);
           }
         }
       } else {
@@ -631,7 +614,7 @@ export default function TripDetailScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Trip Details</Text>
+        <Text style={styles.headerTitle}>Trip Progress</Text>
         <View style={{ width: 40 }} />
       </LinearGradient>
 
@@ -692,7 +675,7 @@ export default function TripDetailScreen() {
             >
               <Camera
                 defaultSettings={{
-                  centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Đà Nẵng
+                  centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Da Nang
                   zoomLevel: 12,
                   animationDuration: 0,
                 }}
@@ -795,69 +778,102 @@ export default function TripDetailScreen() {
         transparent={true}
         onRequestClose={() => setShowStopsModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Stops</Text>
-              <TouchableOpacity
-                onPress={() => setShowStopsModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <Ionicons name="close" size={24} color="#374151" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              style={styles.modalBody}
-              contentContainerStyle={{ paddingBottom: 48 }}
-              showsVerticalScrollIndicator={false}
-            >
-              {trip.stops.map((stop) => {
-                const status = getStopStatus(stop);
-                const isArrived = status === 'arrived' || status === 'completed';
-                return (
-                  <TouchableOpacity key={stop.sequenceOrder}
-                    style={styles.stopItem}
-                    onPress={() => handleViewAttendance(stop)}
-                    activeOpacity={0.7}>
-                    <View style={styles.stopItemLeft}>
-                      <View style={[styles.stopNumberBadge, { backgroundColor: getStopStatusColor(status) }]}>
-                        <Text style={styles.stopNumberText}>{stop.sequenceOrder}</Text>
-                      </View>
-                      <View style={styles.stopItemInfo}>
-                        <Text style={styles.stopName}>{stop.stopPointName}</Text>
-                        <View style={styles.stopChipsRow}>
-                          <View style={styles.stopChip}>
-                            <Ionicons name="people-outline" size={14} color="#6B7280" />
-                            <Text style={styles.stopChipText}>{stop.totalStudents} student{stop.totalStudents !== 1 ? 's' : ''}</Text>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-                    <View style={styles.stopItemRight}>
-                      <TouchableOpacity
-                        style={[styles.notifyButton, isArrived && styles.notifyButtonDisabled]}
-                        //disabled={isArrived}
-                        activeOpacity={0.7}
-                        onPress={() => handleArrive(stop)}
-                      >
-                        <Ionicons name="notifications" size={18} color={isArrived ? '#D1D5DB' : '#000000'} />
-                      </TouchableOpacity>
-                    </View>
-                  </TouchableOpacity >
-                );
-              })}
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHandle} />
+              <View style={styles.modalHeader}>
+                <View style={styles.modalTitleContainer}>
+                  <Text style={styles.modalTitle}>Stops</Text>
+                  {trip && (
+                    <Text style={styles.modalStudentCount}>
+                      {trip.stops.reduce((sum, stop) => sum + (stop.totalStudents || 0), 0)} students
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={() => setShowStopsModal(false)}
+                  style={styles.modalCloseButton}
+                >
+                  <Ionicons name="close" size={24} color="#374151" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.modalBody}>
+                <View style={styles.draggableListContainer}>
+                  <DraggableFlatList
+                    key={listKey}
+                    data={[...trip.stops].sort((a, b) => a.sequenceOrder - b.sequenceOrder)}
+                    onDragEnd={handleDragEnd}
+                    keyExtractor={(item) => item.stopPointId}
+                    activationDistance={10}
+                    autoscrollSpeed={50}
+                    autoscrollThreshold={50}
+                    renderItem={({ item, drag, isActive }: RenderItemParams<DriverTripStopDto>) => {
+                      const status = getStopStatus(item);
+                      const isArrived = status === 'arrived' || status === 'completed';
+                      const canDrag = !isArrived && trip.status !== 'Completed';
 
-              <TouchableOpacity
-                style={styles.endTripModalButton}
-                activeOpacity={0.8}
-                onPress={handleEndTrip}
-              >
-                <Text style={styles.endTripModalButtonText}>Complete Trip</Text>
-              </TouchableOpacity>
-            </ScrollView>
+                      return (
+                        <ScaleDecorator>
+                          <TouchableOpacity
+                            style={[
+                              styles.stopItem,
+                              isActive && styles.stopItemActive,
+                            ]}
+                            onPress={() => {
+                              // Only open attendance if not dragging
+                              if (!isActive) {
+                                handleViewAttendance(item);
+                              }
+                            }}
+                            onLongPress={canDrag ? drag : undefined}
+                            delayLongPress={300}
+                            activeOpacity={0.7}
+                            disabled={isActive}
+                          >
+                            <View style={styles.stopItemLeft}>
+                              <View style={[styles.stopNumberBadge, { backgroundColor: getStopStatusColor(status) }]}>
+                                <Text style={styles.stopNumberText}>{item.sequenceOrder}</Text>
+                              </View>
+                              <View style={styles.stopItemInfo}>
+                                <Text style={styles.stopName}>{item.stopPointName}</Text>
+                                <View style={styles.stopChipsRow}>
+                                  <View style={styles.stopChip}>
+                                    <Ionicons name="people-outline" size={14} color="#6B7280" />
+                                    <Text style={styles.stopChipText}>{item.totalStudents} student{item.totalStudents !== 1 ? 's' : ''}</Text>
+                                  </View>
+                                </View>
+                              </View>
+                            </View>
+                            <View style={styles.stopItemRight}>
+                              <TouchableOpacity
+                                style={[styles.notifyButton, isArrived && styles.notifyButtonDisabled]}
+                                activeOpacity={0.7}
+                                onPress={() => handleArrive(item)}
+                              >
+                                <Ionicons name="notifications" size={18} color={isArrived ? '#D1D5DB' : '#000000'} />
+                              </TouchableOpacity>
+                            </View>
+                          </TouchableOpacity>
+                        </ScaleDecorator>
+                      );
+                    }}
+                    contentContainerStyle={{ paddingBottom: 16 }}
+                    showsVerticalScrollIndicator={false}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={styles.endTripModalButton}
+                  activeOpacity={0.8}
+                  onPress={handleEndTrip}
+                >
+                  <Text style={styles.endTripModalButtonText}>Complete Trip</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-        </View>
+        </GestureHandlerRootView>
       </Modal>
       {/* Attendance Modal */}
       <Modal
@@ -881,9 +897,9 @@ export default function TripDetailScreen() {
               </Text>
             </View>
             <ScrollView
-              style={styles.modalBody}
-              contentContainerStyle={{ paddingBottom: 32 }}
-              showsVerticalScrollIndicator={false}
+              style={styles.attendanceModalBody}
+              contentContainerStyle={styles.attendanceModalBodyContent}
+              showsVerticalScrollIndicator={true}
             >
               {selectedStop?.attendance && selectedStop.attendance.length > 0 ? (
                 selectedStop.attendance.map((student, index) => (
@@ -1197,6 +1213,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '80%',
+    height: '80%',
+    flexDirection: 'column',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,
@@ -1219,10 +1237,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
+  modalTitleContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
+    flex: 1,
+  },
   modalTitle: {
     fontFamily: 'RobotoSlab-Bold',
     fontSize: 20,
     color: '#111827',
+  },
+  modalStudentCount: {
+    fontFamily: 'RobotoSlab-Regular',
+    fontSize: 14,
+    color: '#6B7280',
   },
   modalCloseButton: {
     width: 32,
@@ -1233,7 +1262,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalBody: {
+    flex: 1,
     padding: 20,
+    minHeight: 0, // Important for flex children to shrink
+  },
+  draggableListContainer: {
+    flex: 1,
+    minHeight: 0, // Important for flex children to shrink
+    marginBottom: 16,
   },
   stopItem: {
     flexDirection: 'row',
@@ -1250,6 +1286,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
+  },
+  stopItemActive: {
+    opacity: 0.8,
+    transform: [{ scale: 1.02 }],
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  stopItemDisabled: {
+    opacity: 0.6,
+  },
+  dragHandle: {
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   stopItemLeft: {
     flexDirection: 'row',
@@ -1435,7 +1486,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     width: '100%',
-    maxHeight: '80%',
+    maxHeight: '70%',
+    flexDirection: 'column',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -1449,6 +1501,14 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+  },
+  attendanceModalBody: {
+    flexShrink: 1,
+    minHeight: 0,
+  },
+  attendanceModalBodyContent: {
+    padding: 20,
+    paddingBottom: 32,
   },
   attendanceCloseButton: {
     width: 32,
