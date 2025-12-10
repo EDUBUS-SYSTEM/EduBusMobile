@@ -4,6 +4,7 @@ import { authApi } from '@/lib/auth/auth.api';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import React from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function DriverAccountScreen() {

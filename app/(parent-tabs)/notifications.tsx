@@ -6,7 +6,7 @@ import {
 } from '@/lib/notification/notification.type';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchNotifications, markAllNotificationsAsRead } from '@/store/slices/notificationsSlice';
-import { formatRelativeDate } from '@/utils/date.utils';
+import { formatDateTime, formatRelativeDate } from '@/utils/date.utils';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,15 +24,7 @@ import {
 } from 'react-native';
 
 const formatFullDate = (dateString: string): string => {
-  const date = new Date(dateString);
-  return date.toLocaleString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+  return formatDateTime(dateString);
 };
 
 const isToday = (dateString: string) => {

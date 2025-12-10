@@ -48,21 +48,13 @@ export function useUserAvatar() {
         }
 
         const userData = await userAccountApi.getUserById(userId);
-        console.log('[useUserAvatar] User data:', {
-          userId,
-          hasPhotoFileId: !!userData?.userPhotoFileId,
-          photoFileId: userData?.userPhotoFileId,
-        });
         if (userData?.userPhotoFileId) {
           const avatarUrl = userAccountApi.getAvatarUrl(userId);
-          console.log('[useUserAvatar] Avatar URL:', avatarUrl);
           setAvatarUrl(avatarUrl);
         } else {
-          console.log('[useUserAvatar] No avatar file ID, showing icon');
           setAvatarUrl(null);
         }
-      } catch (error) {
-        console.error('Error loading avatar:', error);
+      } catch {
         setAvatarUrl(null);
       } finally {
         setLoading(false);
@@ -77,37 +69,6 @@ export function useUserAvatar() {
     return () => clearTimeout(timer);
   }, []);
 
-  const refreshAvatar = async () => {
-    try {
-      const token = await AsyncStorage.getItem('accessToken');
-      if (!token) {
-        setAvatarUrl(null);
-        return;
-      }
-
-      const payload: any = decodeJwtPayload(token);
-      const userId: string | undefined =
-        payload?.nameid ||
-        payload?.sub ||
-        payload?.[
-          'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'
-        ];
-      if (!userId) {
-        setAvatarUrl(null);
-        return;
-      }
-
-      const userData = await userAccountApi.getUserById(userId);
-      if (userData.userPhotoFileId) {
-        setAvatarUrl(userAccountApi.getAvatarUrl(userId));
-      } else {
-        setAvatarUrl(null);
-      }
-    } catch (error) {
-      console.error('Error refreshing avatar:', error);
-    }
-  };
-
-  return { avatarUrl, loading, refreshAvatar };
+  return { avatarUrl, loading };
 }
 

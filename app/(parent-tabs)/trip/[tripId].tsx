@@ -1,6 +1,7 @@
 import { UserAvatar } from '@/components/UserAvatar';
-import { AttendanceUpdatedEvent } from '@/lib/signalr/signalr.types';
+import { AttendanceUpdatedEvent, StopsReorderedEvent, TripStatusChangedEvent } from '@/lib/signalr/signalr.types';
 import { tripHubService } from '@/lib/signalr/tripHub.service';
+import { DriverTripStatus } from '@/lib/trip/driverTrip.types';
 import type { ParentTripChild, ParentTripDto } from '@/lib/trip/parentTrip.types';
 import { getParentTripDetail } from '@/lib/trip/trip.api';
 import { TripType } from '@/lib/trip/trip.response.types';
@@ -14,11 +15,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Modal,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -50,31 +52,53 @@ interface ApproachingStop {
   id: string;
   name: string;
   sequence: number;
-  distance: number; // in kilometers
-  childrenNames: string; // e.g., "A and B"
+  distance: number;
+  childrenNames: string;
 }
 
 const formatTime = (iso: string) => {
-  const date = new Date(iso);
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
+  if (!iso) return '--:--';
+  try {
+    const date = new Date(iso);
+    const vnTimeString = date.toLocaleString('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    return vnTimeString;
+  } catch {
+    return '--:--';
+  }
+};
+
+const formatPlannedTime = (iso: string) => {
+  if (!iso) return '--:--';
+  try {
+    const timeMatch = iso.match(/T(\d{2}):(\d{2})/);
+    if (timeMatch) {
+      return `${timeMatch[1]}:${timeMatch[2]}`;
+    }
+    return '--:--';
+  } catch {
+    return '--:--';
+  }
 };
 
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'InProgress':
-      return '#4CAF50'; // Green
+      return '#4CAF50';
     case 'Completed':
-      return '#2196F3'; // Blue
+      return '#2196F3';
     case 'Scheduled':
-      return '#FF9800'; // Orange
+      return '#FF9800';
     case 'Cancelled':
-      return '#F44336'; // Red
+      return '#F44336';
     case 'Delayed':
-      return '#FF5722'; // Deep Orange
+      return '#FF5722';
     default:
-      return '#9E9E9E'; // Grey
+      return '#9E9E9E';
   }
 };
 
@@ -185,6 +209,28 @@ type VehicleInfo = {
 
 type ParentTripWithVehicle = ParentTripDto & {
   vehicle?: VehicleInfo;
+  pickupStop?: {
+    sequenceOrder?: number;
+    pickupPointName?: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    arrivedAt?: string;
+    departedAt?: string;
+    actualArrival?: string;
+    actualDeparture?: string;
+  };
+  dropoffStop?: {
+    sequenceOrder?: number;
+    pickupPointName?: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    arrivedAt?: string;
+    departedAt?: string;
+    actualArrival?: string;
+    actualDeparture?: string;
+  };
 };
 
 export default function ParentTripTrackingScreen() {
@@ -198,6 +244,7 @@ export default function ParentTripTrackingScreen() {
   const [showDriverModal, setShowDriverModal] = useState(false);
   const [showChildModal, setShowChildModal] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<Guid | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [supervisorAvatarUrl, setSupervisorAvatarUrl] = useState<string | null>(null);
   const mapRef = useRef<MapViewRef>(null);
   const hasRealtimeRef = useRef(false);
@@ -225,14 +272,22 @@ export default function ParentTripTrackingScreen() {
     return trip.children.find((c) => c.id === selectedChildId) ?? null;
   }, [selectedChildId, trip?.children]);
 
+  // Find the stop that contains the selected child
+  const selectedChildStop = useMemo(() => {
+    if (!selectedChild || !trip?.stops) return null;
+
+    return trip.stops.find(stop =>
+      stop.attendance?.some(att => att.id === selectedChild.id)
+    ) ?? null;
+  }, [selectedChild, trip?.stops]);
+
   // Check if all children of this parent already have a boardStatus (attendance taken)
   const hasAllChildrenBoardStatus = useMemo(() => {
     if (!childStatusList || childStatusList.length === 0) return false;
     return childStatusList.every(child => child.boardStatus != null);
   }, [childStatusList]);
 
-  // Load trip data - check Redux store first, then fetch from API if not found
-  useEffect(() => {
+  const loadTrip = useCallback(async () => {
     if (!tripId) {
       Alert.alert('Error', 'Trip ID is missing', [
         { text: 'OK', onPress: () => router.replace('/(parent-tabs)/trips/today') },
@@ -240,46 +295,59 @@ export default function ParentTripTrackingScreen() {
       return;
     }
 
-    (async () => {
-      try {
-        // First, check if trip exists in Redux store
-        let tripData: ParentTripDto | null | undefined = tripsFromStore.find(t => t.id === tripId);
+    try {
+      setLoading(true);
 
-        // If not in store, fetch from API
-        if (!tripData) {
-          tripData = await getParentTripDetail(tripId);
+      // First, check if trip exists in Redux store
+      let tripData: ParentTripDto | null | undefined = tripsFromStore.find(t => t.id === tripId);
+
+      // If not in store OR store data is missing schoolLocation (needed for departure trips),
+      // fetch from API to get complete data
+      if (!tripData || !tripData.schoolLocation) {
+        const freshData = await getParentTripDetail(tripId);
+        if (freshData) {
+          tripData = freshData;
           // Cache trip detail in Redux store
-          if (tripData) {
-            dispatch(updateTrip(tripData));
-          }
+          dispatch(updateTrip(freshData));
         }
+      }
 
-        if (tripData) {
-          setTrip(tripData);
-          
-          // Load supervisor avatar URL directly (UserAvatar component will handle authentication and fallback)
-          if (tripData.supervisor?.id) {
-            // Directly use getAvatarUrl - UserAvatar component will handle the case when no avatar exists
-            setSupervisorAvatarUrl(userAccountApi.getAvatarUrl(tripData.supervisor.id));
-          }
-        } else {
-          Alert.alert('Error', 'Trip not found', [
-            { text: 'OK', onPress: () => router.replace('/(parent-tabs)/trips/today') },
-          ]);
+      if (tripData) {
+        setTrip(tripData);
+        
+        // Load supervisor avatar URL directly (UserAvatar component will handle authentication and fallback)
+        if (tripData.supervisor?.id) {
+          // Directly use getAvatarUrl - UserAvatar component will handle the case when no avatar exists
+          setSupervisorAvatarUrl(userAccountApi.getAvatarUrl(tripData.supervisor.id));
         }
-      } catch (error: any) {
-        console.error('Error loading trip:', error);
-        const errorMessage = error.message === 'UNAUTHORIZED'
-          ? 'Session expired. Please login again.'
-          : error.message || 'Failed to load trip';
-        Alert.alert('Error', errorMessage, [
+      } else {
+        Alert.alert('Error', 'Trip not found', [
           { text: 'OK', onPress: () => router.replace('/(parent-tabs)/trips/today') },
         ]);
-      } finally {
-        setLoading(false);
       }
-    })();
+    } catch (error: any) {
+      console.error('Error loading trip:', error);
+      const errorMessage = error.message === 'UNAUTHORIZED'
+        ? 'Session expired. Please login again.'
+        : error.message || 'Failed to load trip';
+      Alert.alert('Error', errorMessage, [
+        { text: 'OK', onPress: () => router.replace('/(parent-tabs)/trips/today') },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   }, [tripId, tripsFromStore, dispatch]);
+
+  // Load trip on mount
+  useEffect(() => {
+    loadTrip();
+  }, [loadTrip]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadTrip();
+    setRefreshing(false);
+  }, [loadTrip]);
 
 
 
@@ -298,6 +366,9 @@ export default function ParentTripTrackingScreen() {
   // Initialize TripHub connection for real-time location updates
   useEffect(() => {
     if (!tripId || !trip || trip.status !== 'InProgress') return;
+
+    // Only subscribe to StopsReordered if parent has more than 1 stop
+    const hasMultipleStops = (trip.stops?.length ?? 0) > 1;
 
     const initializeTripHub = async () => {
       try {
@@ -399,6 +470,8 @@ export default function ParentTripTrackingScreen() {
           if (data.tripId === tripId && trip) {
             const updatedTrip = { ...trip };
             let wasUpdated = false;
+            const stopArrivedAt = data.arrivedAt ?? data.attendance.arrivedAt;
+            const stopDepartedAt = data.departedAt ?? data.attendance.departedAt;
 
             // Update children array if exists
             if (updatedTrip.children) {
@@ -426,29 +499,70 @@ export default function ParentTripTrackingScreen() {
 
             // Update stops array attendance if exists (deep clone to avoid read-only errors)
             if (updatedTrip.stops) {
+              let updatedStopSequence: number | undefined;
+
               updatedTrip.stops = updatedTrip.stops.map((stop) => {
                 if (stop.id !== data.stopId || !stop.attendance) {
                   return stop; // Return unchanged
                 }
 
-                // Clone stop with updated attendance
-                return {
+                let stopChanged = false;
+
+                const updatedAttendance = stop.attendance.map(att =>
+                  att.id === data.attendance.studentId
+                    ? {
+                      ...att,
+                      state: data.attendance.state,
+                      boardStatus: data.attendance.boardStatus,
+                      alightStatus: data.attendance.alightStatus,
+                      boardedAt: data.attendance.boardedAt,
+                      alightedAt: data.attendance.alightedAt,
+                    }
+                    : att
+                );
+
+                if (updatedAttendance !== stop.attendance) {
+                  stopChanged = true;
+                }
+
+                const updatedStop = {
                   ...stop,
-                  attendance: stop.attendance.map(att =>
-                    att.id === data.attendance.studentId
-                      ? {
-                        ...att,
-                        state: data.attendance.state,
-                        boardStatus: data.attendance.boardStatus,
-                        alightStatus: data.attendance.alightStatus,
-                        boardedAt: data.attendance.boardedAt,
-                        alightedAt: data.attendance.alightedAt,
-                      }
-                      : att
-                  )
+                  ...(stopArrivedAt !== undefined ? { actualArrival: stopArrivedAt ?? undefined } : {}),
+                  ...(stopDepartedAt !== undefined ? { actualDeparture: stopDepartedAt ?? undefined } : {}),
+                  attendance: updatedAttendance,
                 };
+
+                if (stopArrivedAt !== undefined || stopDepartedAt !== undefined) {
+                  stopChanged = true;
+                }
+
+                if (stopChanged) {
+                  updatedStopSequence = stop.sequence;
+                  wasUpdated = true;
+                }
+
+                return updatedStop;
               });
-              wasUpdated = true;
+
+              // Sync pickupStop/dropoffStop timing if sequence matches
+              if (updatedStopSequence !== undefined) {
+                if (updatedTrip.pickupStop?.sequenceOrder === updatedStopSequence) {
+                  updatedTrip.pickupStop = {
+                    ...updatedTrip.pickupStop,
+                    arrivedAt: stopArrivedAt ?? updatedTrip.pickupStop.arrivedAt,
+                    departedAt: stopDepartedAt ?? updatedTrip.pickupStop.departedAt,
+                  };
+                }
+
+                if (updatedTrip.dropoffStop?.sequenceOrder === updatedStopSequence) {
+                  updatedTrip.dropoffStop = {
+                    ...updatedTrip.dropoffStop,
+                    arrivedAt: stopArrivedAt ?? updatedTrip.dropoffStop.arrivedAt,
+                    departedAt: stopDepartedAt ?? updatedTrip.dropoffStop.departedAt,
+                  };
+                }
+              }
+
               console.log('✅ Updated attendance in stops array');
             }
 
@@ -461,6 +575,80 @@ export default function ParentTripTrackingScreen() {
             }
           }
         });
+
+        // Subscribe to stops reordered event (only if parent has multiple stops)
+        if (hasMultipleStops) {
+          tripHubService.on<StopsReorderedEvent>('StopsReordered', (data) => {
+            console.log('🔔 Parent - Stops reordered:', JSON.stringify(data, null, 2));
+
+            if (data.tripId === tripId && trip) {
+              // Update stops order based on new sequence
+              setTrip((currentTrip) => {
+                if (!currentTrip || !currentTrip.stops) return currentTrip;
+
+                // Create a map of pickupPointId to new sequence order
+                const sequenceMap = new Map<string, number>();
+                data.stops.forEach((stop) => {
+                  sequenceMap.set(stop.pickupPointId, stop.sequenceOrder);
+                });
+
+                // Update stops with new sequence order and sort by sequence
+                const updatedStops = currentTrip.stops
+                  .map((stop) => {
+                    const newSequence = sequenceMap.get(stop.id);
+                    if (newSequence !== undefined) {
+                      return { ...stop, sequence: newSequence };
+                    }
+                    return stop;
+                  })
+                  .sort((a, b) => a.sequence - b.sequence);
+
+                const updatedTrip = {
+                  ...currentTrip,
+                  stops: updatedStops,
+                };
+
+                // Update Redux store
+                dispatch(updateTrip(updatedTrip));
+
+                return updatedTrip;
+              });
+            }
+          });
+        }
+
+        // Subscribe to trip status changed event
+        tripHubService.on<TripStatusChangedEvent>('TripStatusChanged', (data) => {
+          console.log('🚦 Trip status changed:', JSON.stringify(data, null, 2));
+
+          if (data.tripId === tripId && trip) {
+            const updatedTrip = {
+              ...trip,
+              status: data.status as DriverTripStatus,
+              startTime: data.startTime || trip.startTime,
+              endTime: data.endTime || trip.endTime,
+            };
+
+            setTrip(updatedTrip);
+            dispatch(updateTrip(updatedTrip));
+
+            console.log('✅ Trip status updated to:', data.status);
+
+            if (data.status === 'Completed') {
+              Alert.alert(
+                'Trip Completed',
+                'The trip has been completed successfully.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => router.replace('/(parent-tabs)/trips/today')
+                  }
+                ]
+              );
+            }
+          }
+        });
+
         console.log('✅ TripHub initialized for trip tracking:', tripId);
       } catch (error) {
         console.error('❌ Error initializing TripHub:', error);
@@ -474,6 +662,10 @@ export default function ParentTripTrackingScreen() {
       tripHubService.offLocationUpdate();
       tripHubService.off('StopArrivalConfirmed');
       tripHubService.off('AttendanceUpdated');
+      tripHubService.off('TripStatusChanged');
+      if (hasMultipleStops) {
+        tripHubService.off('StopsReordered');
+      }
       if (tripId) {
         tripHubService.leaveTrip(tripId).catch((error) => {
           console.error('❌ Error leaving trip:', error);
@@ -507,10 +699,43 @@ export default function ParentTripTrackingScreen() {
         return;
       }
 
-      // For departure trips: once all of this parent's children have a boarding status,
-      // stop drawing the route from the bus to the pickup point (parent's job is done).
+      // For departure trips: once all of this parent's children have boarded,
+      // draw route from bus to school (schoolLocation) instead of pickup point
       if (trip.tripType === TripType.Departure && hasAllChildrenBoardStatus) {
-        setRouteCoordinates(null);
+        // Check if school coordinates available
+        if (!trip.schoolLocation?.latitude || !trip.schoolLocation?.longitude) {
+          setRouteCoordinates(null);
+          return;
+        }
+
+        // Fetch route from bus to school
+        setIsLoadingRoute(true);
+        try {
+          const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || '';
+          if (!apiKey) {
+            setRouteCoordinates(null);
+            return;
+          }
+
+          const [longitude, latitude] = busLocation;
+
+          const routeData = await getRoute(
+            { lat: latitude, lng: longitude },
+            { lat: trip.schoolLocation.latitude, lng: trip.schoolLocation.longitude },
+            apiKey
+          );
+
+          if (routeData) {
+            setRouteCoordinates(routeData.coordinates);
+          } else {
+            setRouteCoordinates(null);
+          }
+        } catch (error) {
+          setRouteCoordinates(null);
+        } finally {
+          setIsLoadingRoute(false);
+        }
+
         return;
       }
 
@@ -534,8 +759,8 @@ export default function ParentTripTrackingScreen() {
         const [longitude, latitude] = busLocation;
 
         const routeData = await getRoute(
-          { lat: latitude, lng: longitude }, // Current vehicle location
-          { lat: nextStop.latitude, lng: nextStop.longitude }, // Next pickup point
+          { lat: latitude, lng: longitude },
+          { lat: nextStop.latitude, lng: nextStop.longitude },
           apiKey
         );
 
@@ -554,7 +779,7 @@ export default function ParentTripTrackingScreen() {
     };
 
     fetchRouteToPickup();
-  }, [busLocation, trip?.stops, trip?.status, trip?.tripType, hasAllChildrenBoardStatus]);
+  }, [busLocation, trip?.stops, trip?.status, trip?.tripType, trip?.schoolLocation, hasAllChildrenBoardStatus]);
 
   // Calculate approaching stops (within 2km) every 60 seconds
   useEffect(() => {
@@ -760,6 +985,9 @@ export default function ParentTripTrackingScreen() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         showsVerticalScrollIndicator={false}>
 
         {/* Trip Info */}
@@ -767,7 +995,7 @@ export default function ParentTripTrackingScreen() {
           <View style={styles.tripInfoRow}>
             <Ionicons name="time-outline" size={20} color="#6B7280" />
             <Text style={styles.tripTime}>
-              {formatTime(trip.plannedStartAt)} - {formatTime(trip.plannedEndAt)}
+              {formatPlannedTime(trip.plannedStartAt)} - {formatPlannedTime(trip.plannedEndAt)}
             </Text>
           </View>
           <View style={styles.tripInfoRow}>
@@ -783,7 +1011,7 @@ export default function ParentTripTrackingScreen() {
                 <View style={styles.tripInfoRow}>
                   <Ionicons name="person-outline" size={20} color="#6B7280" />
                   <Text style={styles.tripSchedule}>
-                    Driver: {trip.driver.fullName}
+                    Driver: <Text style={styles.driverName}>{trip.driver.fullName}</Text>
                   </Text>
                 </View>
               )}
@@ -986,6 +1214,16 @@ export default function ParentTripTrackingScreen() {
                     </View>
                   </View>
                 )}
+
+                {!hasAllChildrenBoardStatus && approachingStops.length === 0 && allPickupsCompleted && (
+                  <View style={styles.statusBanner}>
+                    <View style={styles.statusBannerContent}>
+                      <Text style={styles.statusBannerTitle}>
+                        The bus has completed drop-off for your child.
+                      </Text>
+                    </View>
+                  </View>
+                )}
               </>
             )}
 
@@ -1107,7 +1345,7 @@ export default function ParentTripTrackingScreen() {
                     pickupStatus === 'completed' && styles.stopMarkerCompleted,
                   ]}>
                     <Ionicons
-                      name={pickupStatus === 'completed' ? 'checkmark-circle' : 'location'}
+                      name="location"
                       size={36}
                       color="#4CAF50"
                     />
@@ -1127,10 +1365,50 @@ export default function ParentTripTrackingScreen() {
                     dropoffStatus === 'completed' && styles.stopMarkerCompleted,
                   ]}>
                     <Ionicons
-                      name={dropoffStatus === 'completed' ? 'checkmark-circle' : 'location'}
+                      name="location"
                       size={36}
                       color="#FFFFFF"
                     />
+                  </View>
+                </PointAnnotation>
+              )}
+
+              {/* All Stops Markers */}
+              {trip.stops && trip.stops.map((stop) => {
+                if (!stop.latitude || !stop.longitude) return null;
+                
+                const isCompleted = !!stop.actualDeparture;
+                const isArrived = !!stop.actualArrival && !isCompleted;
+                
+                return (
+                  <PointAnnotation
+                    key={`stop-${stop.id}`}
+                    id={`stop-${stop.id}`}
+                    coordinate={[stop.longitude, stop.latitude]}
+                    anchor={{ x: 0.5, y: 1 }}>
+                    <View style={[
+                      styles.stopMarker,
+                      isCompleted && styles.stopMarkerCompleted,
+                      isArrived && styles.stopMarkerArrived,
+                    ]}>
+                      <Ionicons
+                        name="location"
+                        size={36}
+                        color="#4CAF50"
+                      />
+                    </View>
+                  </PointAnnotation>
+                );
+              })}
+
+              {/* School Location Marker */}
+              {trip.schoolLocation && trip.schoolLocation.latitude && trip.schoolLocation.longitude && (
+                <PointAnnotation
+                  id="school-location"
+                  coordinate={[trip.schoolLocation.longitude, trip.schoolLocation.latitude]}
+                  anchor={{ x: 0.5, y: 1 }}>
+                  <View style={styles.schoolMarker}>
+                    <Ionicons name="school" size={32} color="#FFFFFF" />
                   </View>
                 </PointAnnotation>
               )}
@@ -1297,7 +1575,7 @@ export default function ParentTripTrackingScreen() {
 
                     <View style={styles.modalDriverInfo}>
                       {/* Address Info */}
-                      {trip?.pickupStop?.address && (
+                      {selectedChildStop?.address && (
                         <View style={styles.vehicleInfoContainer}>
                           <View style={styles.vehicleInfoItem}>
                             <View style={styles.vehicleInfoIcon}>
@@ -1305,7 +1583,7 @@ export default function ParentTripTrackingScreen() {
                             </View>
                             <View style={styles.vehicleInfoText}>
                               <Text style={styles.vehicleInfoValue}>
-                                {trip.pickupStop.address}
+                                {selectedChildStop.address}
                               </Text>
                             </View>
                           </View>
@@ -1646,6 +1924,10 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontFamily: 'RobotoSlab-Medium',
   },
+  driverName: {
+    fontFamily: 'RobotoSlab-Bold',
+    color: '#000000',
+  },
   mapContainer: {
     height: 600,
     borderRadius: 16,
@@ -1714,6 +1996,21 @@ const styles = StyleSheet.create({
   },
   stopMarkerArrived: {
     backgroundColor: '#FF9800',
+  },
+  schoolMarker: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#1565C0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   stopsContainer: {
     gap: 12,
