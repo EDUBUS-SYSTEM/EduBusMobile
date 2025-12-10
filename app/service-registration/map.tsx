@@ -24,6 +24,7 @@ import { childrenApi } from '@/lib/parent/children.api';
 import { authApi } from '@/lib/auth/auth.api';
 import { useSchoolInfo } from '@/hooks/useSchoolInfo';
 import type { Child } from '@/lib/parent/children.type';
+import { multiStudentPolicyApi, type CalculatePerStudentResponse } from '@/lib/parent/multiStudentPolicy.api';
 
 interface Student {
   id: string;
@@ -221,6 +222,7 @@ export default function MapScreen() {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [distance, setDistance] = useState<string>('');
+  const [distanceKmValue, setDistanceKmValue] = useState<number>(0);
   const [duration, setDuration] = useState<string>('');
   const [fare, setFare] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
@@ -233,7 +235,9 @@ export default function MapScreen() {
   const [semesterFeeInfo, setSemesterFeeInfo] = useState<SemesterFeeInfo | null>(null);
   const [semesterFeeLoading, setSemesterFeeLoading] = useState(false);
   const [semesterFeeError, setSemesterFeeError] = useState('');
+  const [discountResponse, setDiscountResponse] = useState<CalculatePerStudentResponse | null>(null);
   const [prefilledPickupPoint, setPrefilledPickupPoint] = useState<ReusePickupPointPayload | null>(null);
+  const [existingStudentCount, setExistingStudentCount] = useState(0);
   const [unitPriceReady, setUnitPriceReady] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const webViewRef = useRef<WebView>(null);
@@ -265,6 +269,34 @@ export default function MapScreen() {
   const schoolAddress = useMemo(
     () => schoolInfo?.displayAddress?.trim() || schoolInfo?.fullAddress?.trim() || '',
     [schoolInfo?.displayAddress, schoolInfo?.fullAddress]
+  );
+
+  // Fetch how many of this parent's students are already at the pickup point (or within 200m of the selected location)
+  const loadExistingStudentCount = useCallback(
+    async (pickupPointId?: string | null, coords?: { lat: number; lng: number } | null) => {
+      // Default: no existing students considered
+      if ((!pickupPointId || pickupPointId === '') && !coords) {
+        setExistingStudentCount(0);
+        return;
+      }
+
+      try {
+        const count = pickupPointId
+          ? await pickupPointApi.getExistingStudentCount({ pickupPointId, parentEmail: parentEmail || undefined })
+          : await pickupPointApi.getExistingStudentCount({
+              latitude: coords!.lat,
+              longitude: coords!.lng,
+              radiusMeters: 200,
+              parentEmail: parentEmail || undefined,
+            });
+
+        setExistingStudentCount(typeof count === 'number' ? count : 0);
+      } catch (err) {
+        console.warn('Could not load existing student count', err);
+        setExistingStudentCount(0);
+      }
+    },
+    [parentEmail]
   );
 
   // Load data on mount
@@ -381,6 +413,38 @@ export default function MapScreen() {
       setSemesterFeeLoading(false);
     }
   };
+
+  // Recompute discount once fee info is available
+  useEffect(() => {
+    if (semesterFeeInfo && students.length > 0) {
+      const perStudent = semesterFeeInfo.totalFee; // current flow: fee is per student
+      void calculateDiscounts(perStudent);
+    } else {
+      setDiscountResponse(null);
+    }
+  }, [semesterFeeInfo, students.length, calculateDiscounts]);
+
+  // Calculate per-student discounts (after fee known)
+  const calculateDiscounts = useCallback(
+    async (originalPerStudent: number) => {
+      if (students.length === 0) {
+        setDiscountResponse(null);
+        return;
+      }
+      try {
+        const resp = await multiStudentPolicyApi.calculatePerStudent({
+          studentCount: students.length,
+          existingCount: existingStudentCount,
+          originalFeePerStudent: originalPerStudent,
+        });
+        setDiscountResponse(resp);
+      } catch (err) {
+        console.warn('Could not calculate per-student discount', err);
+        setDiscountResponse(null);
+      }
+    },
+    [students.length, existingStudentCount]
+  );
 
   // VietMap Geocoding API functions
   const geocode = async (query: string, location?: { lat: number; lng: number }): Promise<VietMapGeocodeResult[]> => {
@@ -767,6 +831,9 @@ export default function MapScreen() {
 
     console.log('[handleTempLocationSelected] ✅ Valid coordinates:', coords, 'Address:', address);
 
+    // New location selection => reset existing count; will reload if a nearby pickup point (<=200m) is detected.
+    setExistingStudentCount(0);
+
     setTempCoords(coords);
     setSearchQuery(address || 'Selected location');
 
@@ -799,6 +866,7 @@ export default function MapScreen() {
 
     if (routeData) {
       const distanceKm = routeData.distance;
+      setDistanceKmValue(distanceKm);
       setDistance(`${distanceKm.toFixed(2)} km`);
 
       // Calculate duration from route
@@ -817,6 +885,9 @@ export default function MapScreen() {
 
       // Calculate semester fee
       calculateSemesterFee(distanceKm);
+
+      // After selecting a free-form location, try to load existing students nearby (<=200m) for discount stacking eligibility
+      await loadExistingStudentCount(undefined, coords);
 
       // Draw route on map through WebView on all platforms
       if (webViewRef.current) {
@@ -842,6 +913,7 @@ export default function MapScreen() {
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distanceKm = R * c;
 
+      setDistanceKmValue(distanceKm);
       setDistance(`${distanceKm.toFixed(2)} km (estimated)`);
       const minutes = Math.round(distanceKm * 2);
       const hours = Math.floor(minutes / 60);
@@ -886,6 +958,7 @@ export default function MapScreen() {
         setSelectedCoords(coords);
         setTempCoords(null);
         setShowSubmitForm(true);
+        await loadExistingStudentCount(prefilledPickupPoint.pickupPointId, coords);
       } catch (prefillError) {
         console.error('Error applying saved pickup point:', prefillError);
         Alert.alert('Không thể dùng điểm đón cũ', 'Vui lòng chọn lại điểm đón mới.');
@@ -895,7 +968,7 @@ export default function MapScreen() {
     };
 
     applyPrefill();
-  }, [prefilledPickupPoint, unitPriceReady, isLoading]);
+  }, [prefilledPickupPoint, unitPriceReady, isLoading, loadExistingStudentCount]);
 
   // Handle search result selection
   const handleSearchResultSelect = useCallback(async (result: VietMapGeocodeResult) => {
@@ -1101,7 +1174,7 @@ export default function MapScreen() {
       return;
     }
 
-    if (!distance || parseFloat(distance.replace(' km', '')) <= 0) {
+    if (!distance || distanceKmValue <= 0) {
       Alert.alert('Error', 'Please ensure distance is calculated correctly.');
       return;
     }
@@ -1111,15 +1184,13 @@ export default function MapScreen() {
     setSubmitSuccess('');
 
     try {
-      const distanceKm = parseFloat(distance.replace(' km', '')) || 0;
-
       const payload = {
         email: parentEmail,
         studentIds: students.map((s) => s.id),
         addressText: searchQuery || 'Selected location',
         latitude: selectedCoords.lat,
         longitude: selectedCoords.lng,
-        distanceKm: distanceKm,
+        distanceKm: distanceKmValue,
         description: `Pickup point request for ${students.length} student(s)`,
         reason: 'Parent requested pickup point service',
       };
@@ -1645,9 +1716,56 @@ export default function MapScreen() {
 
             {semesterFeeInfo && (
               <View style={styles.formSection}>
-                <Text style={styles.formLabel}>Semester Total:</Text>
+                <Text style={styles.formLabel}>Semester Total (per student before discount):</Text>
                 <Text style={styles.formValue}>
                   {semesterFeeInfo.totalFee.toLocaleString('vi-VN')}₫
+                </Text>
+              </View>
+            )}
+
+            {discountResponse && Array.isArray(discountResponse.students) && discountResponse.students.length > 0 && (
+              <View style={[styles.formSection, { gap: 8 }]}>
+                <Text style={styles.formLabel}>Per-student fees (after discount):</Text>
+                {students.map((s, idx) => {
+                  const info = discountResponse.students[idx];
+                  const hasDiscount = info && info.discountPercentage > 0;
+                  const original = info?.originalFee ?? semesterFeeInfo?.totalFee ?? 0;
+                  const finalFee = info?.finalFee ?? original;
+                  return (
+                    <View
+                      key={s.id || idx}
+                      style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'RobotoSlab-Bold', color: '#000000' }}>
+                          {s.firstName} {s.lastName}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#666666' }}>
+                          {hasDiscount
+                            ? `Discount: -${info.discountPercentage.toFixed(0)}%`
+                            : 'No discount'}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        {hasDiscount ? (
+                          <>
+                            <Text style={{ fontSize: 12, color: '#999999', textDecorationLine: 'line-through' }}>
+                              {original.toLocaleString('vi-VN')}₫
+                            </Text>
+                            <Text style={{ fontSize: 16, fontFamily: 'RobotoSlab-Bold', color: '#D08700' }}>
+                              {finalFee.toLocaleString('vi-VN')}₫
+                            </Text>
+                          </>
+                        ) : (
+                          <Text style={{ fontSize: 16, fontFamily: 'RobotoSlab-Bold', color: '#000000' }}>
+                            {finalFee.toLocaleString('vi-VN')}₫
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+                <Text style={{ fontSize: 12, color: '#666666', marginTop: 4 }}>
+                  Stacked discount applies (max 100%). If no active policy, fees stay unchanged.
                 </Text>
               </View>
             )}

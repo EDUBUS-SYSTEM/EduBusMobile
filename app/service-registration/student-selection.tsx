@@ -18,6 +18,7 @@ import {
   type StudentBriefDto,
   type StudentCurrentPickupPointDto,
 } from '@/lib/parent/pickupPoint.api';
+import { multiStudentPolicyApi, type CalculatePerStudentResponse } from '@/lib/parent/multiStudentPolicy.api';
 
 function decodeJwtPayload<T = any>(token: string): T | null {
   try {
@@ -88,6 +89,8 @@ function getCommonPickupPoint(selectedDetails: StudentBriefDto[]): StudentCurren
 export default function StudentSelectionScreen() {
   const [students, setStudents] = useState<StudentBriefDto[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [discounts, setDiscounts] = useState<Record<string, number>>({});
+  const [discountLoading, setDiscountLoading] = useState(false);
   const [parentEmail, setParentEmail] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -245,6 +248,37 @@ export default function StudentSelectionScreen() {
     });
     if (error) setError('');
   };
+
+  // Calculate discount percentages (without location, only %)
+  useEffect(() => {
+    const loadDiscounts = async () => {
+      if (selectedStudents.length === 0) {
+        setDiscounts({});
+        return;
+      }
+      try {
+        setDiscountLoading(true);
+        const resp: CalculatePerStudentResponse = await multiStudentPolicyApi.calculatePerStudent({
+          studentCount: selectedStudents.length,
+          existingCount: 0,
+        });
+        const map: Record<string, number> = {};
+        resp.students.forEach((s, idx) => {
+          const studentId = selectedStudents[idx];
+          if (studentId) {
+            map[studentId] = s.discountPercentage;
+          }
+        });
+        setDiscounts(map);
+      } catch (e) {
+        console.warn('Could not load discounts', e);
+        setDiscounts({});
+      } finally {
+        setDiscountLoading(false);
+      }
+    };
+    void loadDiscounts();
+  }, [selectedStudents]);
 
   const continueToMap = async (studentIds: string[], reusePayload?: ReusePickupPointPayload) => {
     try {
@@ -534,7 +568,13 @@ export default function StudentSelectionScreen() {
                             color: isSelected ? '#FFFFFF' : '#666666',
                             fontFamily: 'RobotoSlab-Medium',
                           }}>
-                          {isSelected ? 'Selected' : 'Not Selected'}
+                          {isSelected
+                            ? discounts[student.id] !== undefined
+                              ? `Selected • -${discounts[student.id].toFixed(0)}%`
+                              : discountLoading
+                              ? 'Selected • …'
+                              : 'Selected'
+                            : 'Not Selected'}
                         </Text>
                       </View>
                     </TouchableOpacity>

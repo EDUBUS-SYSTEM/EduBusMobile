@@ -206,5 +206,26 @@ export const pickupPointApi = {
     const response = await apiService.get<PickupPointRequestDetailDto[]>('/PickupPoint/parent/requests', params);
     return response;
   },
+
+  // Get how many students of the current parent are already assigned to a pickup point (or near a location within radiusMeters)
+  getExistingStudentCount: async (
+    args:
+      | { pickupPointId: string; parentEmail?: string }
+      | { latitude: number; longitude: number; radiusMeters?: number; parentEmail?: string }
+  ): Promise<number> => {
+    const params = 'pickupPointId' in args
+      ? { pickupPointId: args.pickupPointId, parentEmail: args.parentEmail }
+      : {
+          latitude: args.latitude,
+          longitude: args.longitude,
+          radiusMeters: args.radiusMeters ?? 200,
+          parentEmail: args.parentEmail,
+        };
+
+    const response = await apiService.get<{ count: number }>('/PickupPoint/parent/existing-count', params);
+    // API may return { count } or nested in data; handle both
+    // @ts-expect-error dynamic response shape
+    return response?.count ?? response?.data?.count ?? 0;
+  },
 };
 
