@@ -18,6 +18,12 @@ export default function DriverAccountScreen() {
       description: 'Account profile'
     },
     {
+      id: 9,
+      title: 'Change Password',
+      icon: 'lock-closed-outline',
+      description: 'Change your password'
+    },
+    {
       id: 3,
       title: 'Route history',
       icon: 'map-outline',
@@ -251,6 +257,10 @@ export default function DriverAccountScreen() {
               }
               if (item.id === 4) {
                 router.push('/(driver-leave)' as any);
+                return;
+              }
+              if (item.id === 9) {
+                router.push('/change-password' as any);
                 return;
               }
               if (item.id === 8) {

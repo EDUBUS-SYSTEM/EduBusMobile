@@ -9,6 +9,7 @@ import { childrenApi } from '@/lib/parent/children.api';
 import { apiService } from '@/lib/api';
 import { API_CONFIG } from '@/constants/ApiConfig';
 import type { Child } from '@/lib/parent/children.type';
+import { formatDate } from '@/utils/date.utils';
 import {
   pickupPointApi,
   type ParentRegistrationSemesterDto,
@@ -34,13 +35,6 @@ function decodeJwtPayload<T = any>(token: string): T | null {
     console.error('Error decoding JWT:', error);
     return null;
   }
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-US');
 }
 
 function isWithinRegistrationWindow(semester?: ParentRegistrationSemesterDto | null) {

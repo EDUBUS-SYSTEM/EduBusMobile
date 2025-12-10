@@ -1,26 +1,29 @@
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchDriverTripsToday } from '@/store/slices/driverTodaySlice';
-import { getTodayISOString, toHourMinute } from '@/utils/date.utils';
+import { formatDateWithWeekday, getTodayISOString, toHourMinute } from '@/utils/date.utils';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React from 'react';
 import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 
+// Align status colors with parent Trips Today
 const statusColor: Record<string, string> = {
-  Scheduled: '#4CAF50',
-  InProgress: '#2196F3',
-  Completed: '#9C27B0',
-  Delayed: '#FF9800',
-  Cancelled: '#F44336',
+  Scheduled: '#FFFFFF',
+  InProgress: '#FFFFFF',
+  Completed: '#FFFFFF',
+  Delayed: '#FFFFFF',
+  Cancelled: '#FFFFFF',
 };
 const statusBg: Record<string, string> = {
-  Scheduled: '#E8F5E8',
-  InProgress: '#E3F2FD',
-  Completed: '#F3E5F5',
-  Delayed: '#FFF3E0',
-  Cancelled: '#FFEBEE',
+  InProgress: '#4CAF50', // Green
+  Completed: '#2196F3', // Blue
+  Scheduled: '#FF9800', // Orange
+  Cancelled: '#F44336', // Red
+  Delayed: '#FF5722', // Deep Orange
+  default: '#9E9E9E', // Grey
 };
 
 export default function DriverDashboardScreen() {
@@ -30,16 +33,7 @@ export default function DriverDashboardScreen() {
 
   const todayDisplay = React.useMemo(() => {
     const now = new Date();
-    try {
-      return now.toLocaleDateString('en-US', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      });
-    } catch {
-      return now.toDateString();
-    }
+    return formatDateWithWeekday(now);
   }, []);
 
   const loadTrips = React.useCallback(async () => {
@@ -72,6 +66,12 @@ export default function DriverDashboardScreen() {
       mounted = false;
     };
   }, [loadTrips]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadTrips();
+    }, [loadTrips])
+  );
 
   return (
     <ScrollView

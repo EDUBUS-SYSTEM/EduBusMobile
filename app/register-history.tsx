@@ -15,6 +15,7 @@ import {
   pickupPointApi,
   type PickupPointRequestDetailDto,
 } from '@/lib/parent/pickupPoint.api';
+import { formatDateTime } from '@/utils/date.utils';
 
 interface SemesterGroup {
   code: string;
@@ -33,19 +34,6 @@ function formatCurrencyVnd(value: number): string {
   } catch {
     return `${Math.round(value).toLocaleString('vi-VN')} đ`;
   }
-}
-
-function formatDateTime(value?: string | null) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 export default function RegisterHistoryScreen() {

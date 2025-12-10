@@ -9,6 +9,7 @@ export type NotificationItem = {
   message: string;
   notificationType?: string;
   timestamp: number;
+  createdAt?: string;
 };
 
 type NotificationAlertState = {
@@ -34,6 +35,7 @@ const notificationAlertSlice = createSlice({
         ...action.payload,
         id: `${action.payload.notificationId}-${Date.now()}`,
         timestamp: Date.now(),
+        createdAt: action.payload.createdAt,
       };
 
       // Check if we should merge with existing notification in queue

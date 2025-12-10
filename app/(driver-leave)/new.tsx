@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { leaveApi } from '@/lib/driver/leave.api';
 import { CreateLeaveRequest, LeaveType, getLeaveTypeName, getLeaveTypeIcon } from '@/lib/driver/leave.type';
+import { formatDate as formatDateDisplay } from '@/utils/date.utils';
 
 export default function LeaveRequestFormScreen() {
   const [leaveType, setLeaveType] = useState<LeaveType | null>(null);
@@ -130,13 +131,7 @@ export default function LeaveRequestFormScreen() {
     }
   };
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
+  const formatDateLabel = (date: Date) => formatDateDisplay(date);
 
   return (
     <KeyboardAvoidingView
@@ -311,7 +306,7 @@ export default function LeaveRequestFormScreen() {
                 color: '#000000',
                 marginLeft: 10
               }}>
-                {formatDate(startDate)}
+                {formatDateLabel(startDate)}
               </Text>
             </View>
             <Ionicons name="chevron-down" size={20} color="#666" />
@@ -366,7 +361,7 @@ export default function LeaveRequestFormScreen() {
                 color: '#000000',
                 marginLeft: 10
               }}>
-                {formatDate(endDate)}
+                {formatDateLabel(endDate)}
               </Text>
             </View>
             <Ionicons name="chevron-down" size={20} color="#666" />

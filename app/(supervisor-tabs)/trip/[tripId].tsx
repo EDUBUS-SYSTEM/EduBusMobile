@@ -1,3 +1,5 @@
+import { StopsReorderedEvent } from '@/lib/signalr/signalr.types';
+import { tripHubService } from '@/lib/signalr/tripHub.service';
 import { StudentAvatar } from '@/components/StudentAvatar';
 import { UserAvatar } from '@/components/UserAvatar';
 import { getSupervisorTripDetail, submitManualAttendance } from '@/lib/supervisor/supervisor.api';
@@ -7,6 +9,7 @@ import { TripIncidentListItem, TripIncidentReason } from '@/lib/trip/tripInciden
 import type { Guid } from '@/lib/types';
 import { userAccountApi } from '@/lib/userAccount/userAccount.api';
 import { toHourMinute } from '@/utils/date.utils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -210,6 +213,85 @@ export default function SupervisorTripDetailScreen() {
     loadTripData();
     loadIncidents();
   }, [tripId, loadTripData, loadIncidents]);
+
+  // Initialize TripHub connection for realtime updates
+  React.useEffect(() => {
+    if (!tripId || !trip || trip.status !== 'InProgress') return;
+
+    const initializeTripHub = async () => {
+      try {
+        const token = await AsyncStorage.getItem('accessToken');
+        if (!token) {
+          console.warn('⚠️ No access token found');
+          return;
+        }
+
+        if (!tripHubService.isConnected()) {
+          console.log('🔌 Initializing TripHub connection...');
+          await tripHubService.initialize(token);
+        }
+
+        // Join trip group to receive events
+        await tripHubService.joinTrip(tripId);
+        console.log('✅ Joined trip group:', tripId);
+
+        // Subscribe to stops reordered event
+        tripHubService.on<StopsReorderedEvent>('StopsReordered', (data) => {
+          console.log('🔔 Supervisor - Stops reordered:', JSON.stringify(data, null, 2));
+
+          if (data.tripId === tripId && trip) {
+            // Update stops order based on new sequence
+            setTrip((currentTrip) => {
+              if (!currentTrip) return currentTrip;
+
+              // Create a map of pickupPointId to new sequence order
+              const sequenceMap = new Map<string, number>();
+              data.stops.forEach((stop) => {
+                sequenceMap.set(stop.pickupPointId, stop.sequenceOrder);
+              });
+
+              // Update stops with new sequence order
+              const updatedStops = currentTrip.stops.map((stop) => {
+                const newSequence = sequenceMap.get(stop.id);
+                if (newSequence !== undefined) {
+                  return {
+                    ...stop,
+                    sequence: newSequence,
+                  };
+                }
+                return stop;
+              });
+
+              // Sort stops by new sequence order
+              updatedStops.sort((a, b) => a.sequence - b.sequence);
+
+              console.log('✅ Supervisor - Updated stops order');
+              return {
+                ...currentTrip,
+                stops: updatedStops,
+              };
+            });
+          }
+        });
+
+        console.log('✅ TripHub initialized for supervisor trip:', tripId);
+      } catch (error) {
+        console.error('❌ Error initializing TripHub:', error);
+      }
+    };
+
+    initializeTripHub();
+
+    // Cleanup
+    return () => {
+      tripHubService.off('StopsReordered');
+      if (tripId) {
+        tripHubService.leaveTrip(tripId).catch((error) => {
+          console.error('❌ Error leaving trip:', error);
+        });
+      }
+    };
+  }, [tripId, trip?.id, trip?.status, loadTripData]);
 
   const handleBoardingStatus = async (studentId: string, stopSequence: number, status: 'Present' | 'Absent') => {
     if (!trip || !tripId) {
@@ -630,7 +712,7 @@ export default function SupervisorTripDetailScreen() {
                   {stopIndex < trip.stops.length - 1 && <View style={styles.timelineLine} />}
                 </View>
                 <View style={styles.stopInfo}>
-                  <Text style={styles.stopName}>Stop {stop.sequence}: {stop.name}</Text>
+                  <Text style={styles.stopName}>Stop {stop.sequence + 1}: {stop.name}</Text>
                   {/* Removed planned time as requested */}
                 </View>
               </View>
@@ -644,10 +726,92 @@ export default function SupervisorTripDetailScreen() {
                       index === self.findIndex(s => s.studentId === student.studentId)
                     )
                     .map((student) => {
-                      const boardingStatusValue = boardingStatus[student.studentId];
-                      const alightingStatusValue = alightingStatus[student.studentId];
-                      const isBoarded = boardingStatusValue !== null && boardingStatusValue !== undefined;
-                      const isAlighted = alightingStatusValue !== null && alightingStatusValue !== undefined;
+                    const boardingStatusValue = boardingStatus[student.studentId];
+                    const alightingStatusValue = alightingStatus[student.studentId];
+                    const isBoarded = boardingStatusValue !== null && boardingStatusValue !== undefined;
+                    const isAlighted = alightingStatusValue !== null && alightingStatusValue !== undefined;
+                    
+                    const boardedAt = student.boardedAt ? formatTime(student.boardedAt) : null;
+                    const alightedAt = student.alightedAt ? formatTime(student.alightedAt) : null;
+                    
+                    let statusText = 'Not Checked';
+                    if (isAlighted) {
+                      statusText = alightingStatusValue === 'Present' 
+                        ? `Alighted${alightedAt ? ` (${alightedAt})` : ''}` 
+                        : `Absent (Alighting)${alightedAt ? ` (${alightedAt})` : ''}`;
+                    } else if (isBoarded) {
+                      statusText = boardingStatusValue === 'Present' 
+                        ? `Boarded${boardedAt ? ` (${boardedAt})` : ''}` 
+                        : `Absent (Boarding)${boardedAt ? ` (${boardedAt})` : ''}`;
+                    }
+                    
+                    const uniqueKey = `${stop.id}-${student.studentId}`;
+                    let boardingButtonRef: View | null = null;
+                    let alightingButtonRef: View | null = null;
+                    
+                    return (
+                      <View
+                        key={uniqueKey}
+                        style={[
+                          styles.studentCard,
+                          isBoarded && boardingStatusValue === 'Present' && styles.studentCardPresent,
+                          isAlighted && alightingStatusValue === 'Present' && styles.studentCardAlighted,
+                          (boardingStatusValue === 'Absent' || alightingStatusValue === 'Absent') && styles.studentCardAbsent
+                        ]}
+                      >
+                        <View style={styles.studentHeader}>
+                          <StudentAvatar
+                            studentId={student.studentId}
+                            studentName={student.studentName}
+                            studentImageId={student.studentImageId}
+                            size={48}
+                            showBorder={false}
+                          />
+                          <View style={styles.studentInfo}>
+                            <Text style={styles.studentName} numberOfLines={1}>
+                              {student.studentName}
+                            </Text>
+                            <Text style={styles.studentMeta} numberOfLines={1}>
+                              {(student.className || 'No class info') + ` • Stop ${stop.sequence + 1}`}
+                            </Text>
+                            {/* Show boarding/alighting status with times */}
+                            {(isBoarded || isAlighted) && (
+                              <View style={styles.attendanceStatusRow}>
+                                {isBoarded && boardingStatusValue && (
+                                  <Text style={styles.attendanceStatusText}>
+                                    Boarding: {boardingStatusValue}
+                                    {student.boardedAt && ` • ${formatTime(student.boardedAt)}`}
+                                  </Text>
+                                )}
+                                {isAlighted && alightingStatusValue && (
+                                  <Text style={styles.attendanceStatusText}>
+                                    Alighting: {alightingStatusValue}
+                                    {student.alightedAt && ` • ${formatTime(student.alightedAt)}`}
+                                  </Text>
+                                )}
+                              </View>
+                            )}
+                          </View>
+                          <View
+                            style={[
+                              styles.statusPill,
+                              isAlighted
+                                ? styles.statusPillAlighted
+                                : isBoarded
+                                ? styles.statusPillPresent
+                                : styles.statusPillPending
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusPillText,
+                                (isBoarded || isAlighted) && styles.statusPillTextActive
+                              ]}
+                            >
+                              {statusText}
+                            </Text>
+                          </View>
+                        </View>
 
                       const boardedAt = student.boardedAt ? formatTime(student.boardedAt) : null;
                       const alightedAt = student.alightedAt ? formatTime(student.alightedAt) : null;

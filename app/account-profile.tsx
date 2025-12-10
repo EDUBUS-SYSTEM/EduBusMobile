@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
+import { formatDate } from "@/utils/date.utils";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
@@ -529,7 +530,7 @@ export default function AccountProfileScreen() {
               }}
             >
               {profile?.dateOfBirth
-                ? new Date(profile.dateOfBirth).toLocaleDateString()
+                ? formatDate(profile.dateOfBirth)
                 : "—"}
             </Text>
           </View>

@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { formatDateWithWeekday } from '@/utils/date.utils';
 
 const formatTime = (iso: string) => {
   const date = new Date(iso);
@@ -19,14 +20,7 @@ const formatTime = (iso: string) => {
 };
 
 const formatTodayLabel = () => {
-  const now = new Date();
-  const formatted = now.toLocaleDateString('en-US', {
-    weekday: 'long',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-  return `${formatted}`;
+  return formatDateWithWeekday(new Date());
 };
 
 const getStatusColor = (status: string) => {

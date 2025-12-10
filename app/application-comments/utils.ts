@@ -2,6 +2,7 @@ import type {
   AbsenceRequestStatus,
   RawAbsenceRequestStatus,
 } from "@/lib/parent/studentAbsenceRequest.type";
+import { formatDate, formatDateTime } from "@/utils/date.utils";
 
 export const STATUS_STYLES: Record<
   AbsenceRequestStatus,
@@ -54,12 +55,7 @@ export const getStatusStyle = (
   };
 };
 
-export const formatDateLabel = (date: Date) =>
-  date.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+export const formatDateLabel = (date: Date) => formatDate(date);
 
 export const formatRangeLabel = (start: string, end: string) => {
   const startDate = new Date(start);
@@ -71,12 +67,6 @@ export const formatRangeLabel = (start: string, end: string) => {
   return `${formatDateLabel(startDate)} -> ${formatDateLabel(endDate)}`;
 };
 
-export const formatSubmittedAt = (value: string) =>
-  new Date(value).toLocaleString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "numeric",
-    month: "short",
-  });
+export const formatSubmittedAt = (value: string) => formatDateTime(value);
 
 
