@@ -10,15 +10,6 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 export default function ParentAccountScreen() {
   const { avatarUrl, loading: avatarLoading } = useUserAvatar();
 
-  // Debug logging
-  React.useEffect(() => {
-    console.log('[ParentAccountScreen] Avatar state:', {
-      hasUrl: !!avatarUrl,
-      url: avatarUrl?.substring(0, 50) + '...',
-      loading: avatarLoading,
-    });
-  }, [avatarUrl, avatarLoading]);
-
   const menuItems = [
     {
       id: 1,
