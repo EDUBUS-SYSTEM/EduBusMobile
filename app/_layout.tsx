@@ -25,7 +25,7 @@ function ArrivalNotificationsSubscriber() {
 
 function RootLayoutContent() {
   const colorScheme = useColorScheme();
-  
+
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
@@ -41,6 +41,8 @@ function RootLayoutContent() {
         <Stack.Screen name="account-profile" options={{ headerShown: false }} />
         <Stack.Screen name="register-history" options={{ headerShown: false }} />
         <Stack.Screen name="help" options={{ headerShown: false }} />
+        <Stack.Screen name="change-password" options={{ headerShown: false }} />
+        <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
         <Stack.Screen name="service-registration" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
         <Stack.Screen name="index" redirect />
@@ -56,18 +58,18 @@ function SignalRInitializer() {
 
   useEffect(() => {
     console.log('📍 App Layout mounted, initializing SignalR...');
-    
+
     const initSignalRWithRetry = async () => {
       let retries = 0;
       const maxRetries = 3;
       const retryDelay = 500;
-      
+
       while (retries < maxRetries) {
         try {
           console.log(`📍 SignalR init attempt ${retries + 1}/${maxRetries}`);
-          
+
           const token = await AsyncStorage.getItem('accessToken');
-          
+
           if (token && !signalRService.isConnected()) {
             console.log('🔌 Initializing SignalR connection from App Layout');
             dispatch(setSignalRConnecting());
@@ -85,30 +87,30 @@ function SignalRInitializer() {
           }
         } catch (error: any) {
           retries++;
-          
+
           dispatch(setSignalRError(error?.message || 'SignalR connection failed'));
-          
-          const isNetworkError = error?.message?.includes('Failed to fetch') || 
-                               error?.message?.includes('ERR_CONNECTION_TIMED_OUT') ||
-                               error?.message?.includes('negotiation');
-          
+
+          const isNetworkError = error?.message?.includes('Failed to fetch') ||
+            error?.message?.includes('ERR_CONNECTION_TIMED_OUT') ||
+            error?.message?.includes('negotiation');
+
           if (!isNetworkError) {
             console.error(`❌ SignalR init attempt ${retries} failed:`, error);
           } else if (retries === maxRetries) {
             console.warn('⚠️ SignalR connection unavailable (server may be offline or network issue)');
           }
-          
+
           if (retries < maxRetries) {
             await new Promise(resolve => setTimeout(resolve, retryDelay));
           }
         }
       }
-      
+
       console.warn('⚠️ SignalR initialization skipped (optional feature)');
     };
 
     let cancelled = false;
-    
+
     initSignalRWithRetry().catch(error => {
       if (!cancelled) {
         console.error('❌ Fatal SignalR initialization error:', error);

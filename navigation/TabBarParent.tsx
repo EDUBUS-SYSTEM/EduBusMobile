@@ -129,7 +129,6 @@ export default function TabBarParent() {
           href: null, // Hide from tab bar
         }}
       />
-
     </Tabs>
   );
 }
