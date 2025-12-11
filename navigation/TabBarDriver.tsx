@@ -93,15 +93,16 @@ export default function TabBarDriver() {
       <Tabs.Screen
         name="notifications"
         options={{
-          title: 'Notifications',
-          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? "notifications" : "notifications-outline"}
-              size={24} 
-              color={focused ? '#01CBCA' : color} 
-            />
-          ),
+          // Keep route accessible but hide from bottom tabs; notifications via dashboard quick action
+          href: null,
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
+        name="trips-today"
+        options={{
+          href: null, // hidden; opened via dashboard quick action
+          headerShown: false,
         }}
       />
       <Tabs.Screen

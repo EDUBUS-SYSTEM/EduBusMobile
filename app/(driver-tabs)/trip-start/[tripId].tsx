@@ -1,9 +1,9 @@
+import { startTrip } from '@/lib/trip/trip.api';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { startTrip } from '@/lib/trip/trip.api';
 
 type Params = { tripId?: string };
 
@@ -55,7 +55,7 @@ export default function TripStartScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient colors={["#FFDD00", "#FFDD00"]} style={styles.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/(driver-tabs)/trips-today' as any)}>
           <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Before you start</Text>

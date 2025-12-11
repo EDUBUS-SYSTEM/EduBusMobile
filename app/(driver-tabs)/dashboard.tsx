@@ -1,84 +1,32 @@
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { fetchDriverTripsToday } from '@/store/slices/driverTodaySlice';
-import { formatDateWithWeekday, getTodayISOString, toHourMinute } from '@/utils/date.utils';
+import { fetchUnreadCount } from '@/store/slices/notificationsSlice';
+import { formatDateWithWeekday } from '@/utils/date.utils';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React from 'react';
-import { RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
-
-// Align status colors with parent Trips Today
-const statusColor: Record<string, string> = {
-  Scheduled: '#FFFFFF',
-  InProgress: '#FFFFFF',
-  Completed: '#FFFFFF',
-  Delayed: '#FFFFFF',
-  Cancelled: '#FFFFFF',
-};
-const statusBg: Record<string, string> = {
-  InProgress: '#4CAF50', // Green
-  Completed: '#2196F3', // Blue
-  Scheduled: '#FF9800', // Orange
-  Cancelled: '#F44336', // Red
-  Delayed: '#FF5722', // Deep Orange
-  default: '#9E9E9E', // Grey
-};
 
 export default function DriverDashboardScreen() {
   const dispatch = useAppDispatch();
-  const { trips, status } = useAppSelector((s) => s.driverToday);
-  const [refreshing, setRefreshing] = React.useState(false);
+  const unreadCount = useAppSelector((s) => s.notifications.unreadCount);
 
   const todayDisplay = React.useMemo(() => {
     const now = new Date();
     return formatDateWithWeekday(now);
   }, []);
 
-  const loadTrips = React.useCallback(async () => {
-    try {
-      const isoDate = getTodayISOString();
-      await dispatch(fetchDriverTripsToday({ dateISO: isoDate })).unwrap();
-    } catch (error) {
-      console.error('Error loading trips:', error);
-    }
-  }, [dispatch]);
-
-  const onRefresh = React.useCallback(async () => {
-    setRefreshing(true);
-    await loadTrips();
-    setRefreshing(false);
-  }, [loadTrips]);
-
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        if (mounted) {
-          await loadTrips();
-        }
-      } catch {
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [loadTrips]);
-
   useFocusEffect(
     React.useCallback(() => {
-      loadTrips();
-    }, [loadTrips])
+      dispatch(fetchUnreadCount());
+    }, [dispatch])
   );
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: '#FFFFFF' }}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
     >
       {/* Header Section with Yellow Circles Background */}
       <View
@@ -267,125 +215,102 @@ export default function DriverDashboardScreen() {
       </View>
 
       <View style={{ padding: 20 }}>
-        <View style={{ marginBottom: 10 }}>
+        {/* Quick Actions */}
+        <View style={{ marginBottom: 20 }}>
           <Text style={{
             fontFamily: 'RobotoSlab-Bold',
-            fontSize: 22,
-            color: '#111827',
+            fontSize: 20,
+            color: '#000000',
+            marginBottom: 16
           }}>
-            Trips Today
+            Quick Actions
           </Text>
-        </View>
 
-        {status === 'loading' && (
-          <View style={{ backgroundColor: '#F3F4F6', padding: 16, borderRadius: 12 }}>
-            <Text style={{ fontFamily: 'RobotoSlab-Regular', color: '#6B7280' }}>Loading trips...</Text>
-          </View>
-        )}
+          <View style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            justifyContent: 'space-between',
+            rowGap: 12
+          }}>
+            <TouchableOpacity
+              onPress={() => router.push('/(driver-tabs)/trips-today' as any)}
+              style={{
+                backgroundColor: '#E0F7FA',
+                borderRadius: 15,
+                padding: 18,
+                width: '48%',
+                alignItems: 'center',
+                ...Platform.select({
+                  ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+                  android: { elevation: 3 },
+                  default: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+                })
+              }}>
+              <Ionicons name="calendar" size={32} color="#01CBCA" />
+              <Text style={{
+                fontFamily: 'RobotoSlab-Medium',
+                fontSize: 14,
+                color: '#000000',
+                marginTop: 8,
+                textAlign: 'center'
+              }}>
+                Trips Today
+              </Text>
+            </TouchableOpacity>
 
-        {status !== 'loading' && trips.length === 0 && (
-          <View style={{ backgroundColor: '#F8F9FA', padding: 20, borderRadius: 12, alignItems: 'center' }}>
-            <Ionicons name="calendar-outline" size={36} color="#9CA3AF" />
-            <Text style={{ marginTop: 8, fontFamily: 'RobotoSlab-Medium', color: '#6B7280' }}>No trips today</Text>
-          </View>
-        )}
-
-        {trips.map((trip) => {
-          const handleTripPress = () => {
-            if (trip.status === 'InProgress') {
-              router.push(`/(driver-tabs)/trip/${trip.id}` as any);
-            }
-          };
-
-          const TripCardContent = () => (
-            <>
-              <View style={{ height: 6, backgroundColor: '#FFDD00' }} />
-              <View style={{ padding: 16 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flex: 1, paddingRight: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="time" size={16} color="#6B7280" />
-                      <Text style={{ marginLeft: 6, fontFamily: 'RobotoSlab-Medium', color: '#374151' }}>
-                        {toHourMinute(trip.plannedStartAt)} - {toHourMinute(trip.plannedEndAt)}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
-                      <Ionicons name="location" size={16} color="#6B7280" />
-                      <Text style={{ marginLeft: 6, fontFamily: 'RobotoSlab-Regular', color: '#4B5563' }}>{trip.scheduleName}</Text>
-                    </View>
-                  </View>
-                  <View style={{ backgroundColor: statusBg[trip.status] || '#F3F4F6', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
+            <TouchableOpacity
+              onPress={() => router.push('/(driver-tabs)/notifications' as any)}
+              style={{
+                backgroundColor: '#E0F7FA',
+                borderRadius: 15,
+                padding: 18,
+                width: '48%',
+                alignItems: 'center',
+                ...Platform.select({
+                  ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+                  android: { elevation: 3 },
+                  default: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+                })
+              }}>
+              <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="notifications" size={32} color="#01CBCA" />
+                {unreadCount > 0 && (
+                  <View style={{
+                    position: 'absolute',
+                    top: -6,
+                    right: -10,
+                    minWidth: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    backgroundColor: '#FF5722',
+                    paddingHorizontal: 4,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: '#FFFFFF',
+                  }}>
                     <Text style={{
                       fontFamily: 'RobotoSlab-Bold',
-                      fontSize: 12,
-                      color: statusColor[trip.status] || '#6B7280'
-                    }}>{trip.status}</Text>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', marginTop: 12 }}>
-                  <View style={{ backgroundColor: '#F9FAFB', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8 }}>
-                    <Text style={{ fontFamily: 'RobotoSlab-Medium', color: '#6B7280', fontSize: 12 }}>Stops: {trip.totalStops}</Text>
-                  </View>
-                  <View style={{ backgroundColor: '#F9FAFB', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-                    <Text style={{ fontFamily: 'RobotoSlab-Medium', color: '#6B7280', fontSize: 12 }}>Completed: {trip.completedStops}/{trip.totalStops}</Text>
-                  </View>
-                </View>
-
-                {trip.status === 'Scheduled' && (
-                  <View style={{ marginTop: 14, alignItems: 'flex-end' }}>
-                    <TouchableOpacity
-                      onPress={() => router.push(`/(driver-tabs)/trip-start/${trip.id}` as any)}
-                      style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#FFDD00' }}
-                    >
-                      <Text style={{ color: '#000000', fontFamily: 'RobotoSlab-Bold' }}>Start</Text>
-                    </TouchableOpacity>
+                      fontSize: 11,
+                      color: '#FFFFFF',
+                    }}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </Text>
                   </View>
                 )}
               </View>
-            </>
-          );
-
-          if (trip.status === 'InProgress') {
-            return (
-              <TouchableOpacity
-                key={trip.id}
-                onPress={handleTripPress}
-                activeOpacity={0.7}
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  borderRadius: 16,
-                  marginBottom: 14,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.06,
-                  shadowRadius: 6,
-                  elevation: 2,
-                  overflow: 'hidden'
-                }}>
-                <TripCardContent />
-              </TouchableOpacity>
-            );
-          }
-
-          return (
-            <View
-              key={trip.id}
-              style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: 16,
-                marginBottom: 14,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.06,
-                shadowRadius: 6,
-                elevation: 2,
-                overflow: 'hidden'
+              <Text style={{
+                fontFamily: 'RobotoSlab-Medium',
+                fontSize: 14,
+                color: '#000000',
+                marginTop: 8,
+                textAlign: 'center'
               }}>
-              <TripCardContent />
-            </View>
-          );
-        })}
+                Notifications
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
 
         {/* Vehicle Status */}
