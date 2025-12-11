@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Camera, LineLayer, MapView, PointAnnotation, ShapeSource, type MapViewRef } from '@vietmap/vietmap-gl-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Alert, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -34,13 +35,17 @@ export default function TripDetailScreen() {
   const [trip, setTrip] = React.useState<DriverTripDto | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [clickedCoordinate, setClickedCoordinate] = useState<[number, number] | null>(null);
+  // Realtime bus location (updated from device GPS, not map clicks)
+  const [busCoordinate, setBusCoordinate] = useState<[number, number] | null>(null);
   const [showStopsModal, setShowStopsModal] = useState(false);
   const [selectedStop, setSelectedStop] = useState<DriverTripStopDto | null>(null);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [routeSegments, setRouteSegments] = useState<[number, number][][]>([]);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [listKey, setListKey] = useState(0); // Key to force re-render DraggableFlatList
+  const [followBus, setFollowBus] = useState(true);
+  const [centerOnBusTimestamp, setCenterOnBusTimestamp] = useState<number>(0);
+  const lastCameraKeyRef = useRef<string>('camera-static');
 
   // Helper to load trip data (used on mount and pull-to-refresh)
   const fetchTripDetail = React.useCallback(async () => {
@@ -71,6 +76,89 @@ export default function TripDetailScreen() {
   React.useEffect(() => {
     fetchTripDetail();
   }, [fetchTripDetail]);
+
+  // Periodically send driver device location to TripHub (every 5 seconds)
+  React.useEffect(() => {
+    let isMounted = true;
+    if (!tripId) return;
+
+    const sendCurrentLocation = async () => {
+      // Only send when trip is in progress and hub connected
+      if (!trip || trip.status !== 'InProgress') return;
+      if (!tripHubService.isConnected()) return;
+
+      try {
+        let loc: Location.LocationObject | null = null;
+        try {
+          loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.BestForNavigation,
+          });
+        } catch (err) {
+          console.warn('getCurrentPositionAsync failed, trying last known:', err);
+          loc = await Location.getLastKnownPositionAsync({ maxAge: 5000 });
+        }
+
+        if (!loc) {
+          console.warn('No location available (current or last known)');
+          return;
+        }
+
+        const { latitude, longitude, speed, accuracy } = loc.coords;
+
+        // Update bus marker on the map
+        setBusCoordinate([longitude, latitude]);
+
+        // Auto-center when follow mode is enabled
+        if (followBus) {
+          setCenterOnBusTimestamp(Date.now());
+        }
+
+        await tripHubService.sendLocation(
+          tripId,
+          latitude,
+          longitude,
+          speed ?? null,
+          accuracy ?? null,
+          Boolean(speed && speed > 0)
+        );
+      } catch (error) {
+        console.error('❌ Error sending device location:', error);
+      }
+    };
+
+    const startLocationInterval = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.warn('⚠️ Location permission not granted');
+          return;
+        }
+
+        // Send immediately
+        await sendCurrentLocation();
+        if (!isMounted) return;
+
+        // Clear any existing interval before starting a new one
+        if (locationIntervalRef.current) {
+          clearInterval(locationIntervalRef.current);
+        }
+
+        locationIntervalRef.current = setInterval(sendCurrentLocation, 5000);
+      } catch (error) {
+        console.error('❌ Error initializing location updates:', error);
+      }
+    };
+
+    startLocationInterval();
+
+    return () => {
+      isMounted = false;
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current);
+        locationIntervalRef.current = null;
+      }
+    };
+  }, [tripId, trip?.status, followBus]);
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -212,8 +300,8 @@ export default function TripDetailScreen() {
         // If there are no active stops, check if we need route to school
         if (activeStops.length === 0) {
           // For departure trip, still show route from vehicle to school
-          if (trip.tripType === 1 && trip.schoolLocation && clickedCoordinate) {
-            const [longitude, latitude] = clickedCoordinate;
+          if (trip.tripType === 1 && trip.schoolLocation && busCoordinate) {
+            const [longitude, latitude] = busCoordinate;
             const routeToSchool = await getRoute(
               { lat: latitude, lng: longitude },
               { lat: trip.schoolLocation.latitude, lng: trip.schoolLocation.longitude },
@@ -231,10 +319,10 @@ export default function TripDetailScreen() {
           }
         } else {
           // Calculate route from vehicle to first active stop (if vehicle location exists)
-          if (clickedCoordinate) {
+          if (busCoordinate) {
             const firstPendingStop = activeStops[0];
             if (firstPendingStop) {
-              const [longitude, latitude] = clickedCoordinate;
+              const [longitude, latitude] = busCoordinate;
               const routeData = await getRoute(
                 { lat: latitude, lng: longitude },
                 { lat: firstPendingStop.latitude, lng: firstPendingStop.longitude },
@@ -290,7 +378,7 @@ export default function TripDetailScreen() {
     };
 
     calculateRoutes();
-  }, [trip, clickedCoordinate]);
+  }, [trip, busCoordinate]);
 
   const handleArrive = async (stop: DriverTripStopDto) => {
     if (!trip) return;
@@ -519,80 +607,29 @@ export default function TripDetailScreen() {
     };
   }, [trip]);
 
-  const getCameraSettings = React.useCallback(() => {
-    if (clickedCoordinate) {
+  const initialMapBounds = React.useMemo(() => {
+    return getMapBounds();
+  }, [getMapBounds]);
+
+  const cameraSettings = React.useMemo(() => {
+    if (followBus && centerOnBusTimestamp > 0 && busCoordinate) {
       return {
-        centerCoordinate: clickedCoordinate,
+        centerCoordinate: busCoordinate,
         zoomLevel: 15,
+        animationDuration: 1000,
       };
     }
-    return getMapBounds();
-  }, [clickedCoordinate, getMapBounds]);
+    return null;
+  }, [followBus, centerOnBusTimestamp, busCoordinate]);
 
-  const handleMapPress = async (feature: GeoJSON.Feature) => {
-    try {
-      console.log('Map pressed, feature:', JSON.stringify(feature, null, 2));
-
-      let longitude: number | null = null;
-      let latitude: number | null = null;
-
-      // Method 1: Try to get coordinates from geometry (most common case)
-      if (feature.geometry) {
-        if (feature.geometry.type === 'Point' && feature.geometry.coordinates) {
-          const coords = feature.geometry.coordinates;
-          if (Array.isArray(coords) && coords.length >= 2) {
-            longitude = coords[0];
-            latitude = coords[1];
-          }
-        }
-      }
-
-      // Method 2: Try to get coordinates from properties
-      if ((!longitude || !latitude) && feature.properties) {
-        const props = feature.properties as any;
-        if (props.coordinates && Array.isArray(props.coordinates) && props.coordinates.length >= 2) {
-          longitude = props.coordinates[0];
-          latitude = props.coordinates[1];
-        } else if (props.longitude !== undefined && props.latitude !== undefined) {
-          longitude = props.longitude;
-          latitude = props.latitude;
-        } else if (props.lng !== undefined && props.lat !== undefined) {
-          longitude = props.lng;
-          latitude = props.lat;
-        }
-      }
-
-      // If we got coordinates, set them
-      if (longitude !== null && latitude !== null && !isNaN(longitude) && !isNaN(latitude)) {
-        setClickedCoordinate([longitude, latitude]);
-        console.log('✅ Map clicked at:', latitude, longitude);
-        if (trip && tripId) {
-          try {
-            await tripHubService.sendLocation(
-              tripId,
-              latitude,
-              longitude,
-              null,
-              null,
-              false
-            );
-            console.log('✅ Location sent via SignalR');
-          } catch (error: any) {
-            console.error('❌ Failed to send location:', error);
-          }
-        }
-      } else {
-        console.warn('⚠️ Could not extract coordinates from feature:', feature);
-      }
-    } catch (error) {
-      console.error('❌ Error handling map press:', error);
+  const cameraKey = React.useMemo(() => {
+    if (followBus && centerOnBusTimestamp > 0) {
+      const newKey = `camera-${centerOnBusTimestamp}`;
+      lastCameraKeyRef.current = newKey;
+      return newKey;
     }
-  };
-
-  const handleMapLongPress = (feature: GeoJSON.Feature) => {
-    // Also handle long press as fallback
-    handleMapPress(feature);
-  };
+    return lastCameraKeyRef.current;
+  }, [followBus, centerOnBusTimestamp]);
 
   if (loading) {
     return (
@@ -670,18 +707,10 @@ export default function TripDetailScreen() {
               ref={mapRef}
               style={styles.map}
               mapStyle={mapStyle}
-              onPress={handleMapPress}
-              onLongPress={handleMapLongPress}
             >
               <Camera
-                defaultSettings={{
-                  centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Da Nang
-                  zoomLevel: 12,
-                  animationDuration: 0,
-                }}
-                centerCoordinate={getCameraSettings().centerCoordinate}
-                zoomLevel={getCameraSettings().zoomLevel}
-                animationDuration={trip ? 500 : 0}
+                key={cameraKey}
+                defaultSettings={cameraSettings || initialMapBounds}
               />
               {/* Routes between all stops in sequence - placed before markers to avoid covering them */}
               {routeSegments.map((segment, index) => (
@@ -737,10 +766,10 @@ export default function TripDetailScreen() {
                   </View>
                 </PointAnnotation>
               )}
-              {clickedCoordinate && (
+              {busCoordinate && (
                 <PointAnnotation
-                  id="clicked-pin"
-                  coordinate={clickedCoordinate}
+                  id="bus-pin"
+                  coordinate={busCoordinate}
                   anchor={{ x: 0.5, y: 1 }}
                 >
                   <View style={styles.pinContainer}>
@@ -756,6 +785,25 @@ export default function TripDetailScreen() {
                 Please set EXPO_PUBLIC_VIETMAP_API_KEY in your .env file.
               </Text>
             </View>
+          )}
+
+          {/* Center on Bus Button */}
+          {busCoordinate && trip.status === 'InProgress' && (
+            <TouchableOpacity
+              style={[
+                styles.centerOnBusButton,
+                followBus ? styles.centerOnBusButtonActive : styles.centerOnBusButtonInactive,
+              ]}
+              onPress={() => {
+                const nextFollow = !followBus;
+                setFollowBus(nextFollow);
+                if (nextFollow && busCoordinate) {
+                  setCenterOnBusTimestamp(Date.now());
+                }
+              }}
+              activeOpacity={0.8}>
+              <Ionicons name="locate" size={24} color="#000000" />
+            </TouchableOpacity>
           )}
         </View>
       </ScrollView>
@@ -1202,6 +1250,27 @@ const styles = StyleSheet.create({
     fontFamily: 'RobotoSlab-Bold',
     fontSize: 12,
     color: '#FFFFFF',
+  },
+  centerOnBusButton: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  centerOnBusButtonInactive: {
+    backgroundColor: '#FFFFFF',
+  },
+  centerOnBusButtonActive: {
+    backgroundColor: '#FFDD00',
   },
   modalOverlay: {
     flex: 1,

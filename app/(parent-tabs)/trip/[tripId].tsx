@@ -241,6 +241,7 @@ export default function ParentTripTrackingScreen() {
   const [loading, setLoading] = useState(true);
   const [busLocation, setBusLocation] = useState<[number, number] | null>(null);
   const [centerOnBusTimestamp, setCenterOnBusTimestamp] = useState<number>(0);
+  const [followBus, setFollowBus] = useState(false);
   const [showDriverModal, setShowDriverModal] = useState(false);
   const [showChildModal, setShowChildModal] = useState(false);
   const [selectedChildId, setSelectedChildId] = useState<Guid | null>(null);
@@ -393,7 +394,10 @@ export default function ParentTripTrackingScreen() {
 
             hasRealtimeRef.current = true;
             setBusLocation(newLocation);
-            // Removed: setCameraCenter(newLocation); - Camera no longer auto-follows bus
+            // Auto-center when follow mode is enabled
+            if (followBus) {
+              setCenterOnBusTimestamp(Date.now());
+            }
 
             // Update Redux store so list screens have the latest bus position
             dispatch(updateTrip({
@@ -672,7 +676,7 @@ export default function ParentTripTrackingScreen() {
         });
       }
     };
-  }, [tripId, trip, dispatch]);
+  }, [tripId, trip, dispatch, followBus]);
 
   // Calculate current active stop and status
   const currentStop = useMemo(() => getCurrentActiveStop(trip?.stops), [trip?.stops]);
@@ -1426,10 +1430,14 @@ export default function ParentTripTrackingScreen() {
           {/* Center on Bus Button - Positioned inside map container */}
           {busLocation && trip.status === 'InProgress' && (
             <TouchableOpacity
-              style={styles.centerOnBusButton}
+              style={[
+                styles.centerOnBusButton,
+                followBus ? styles.centerOnBusButtonActive : styles.centerOnBusButtonInactive,
+              ]}
               onPress={() => {
-                if (busLocation) {
-                  // Use timestamp to trigger camera re-mount and center on bus
+                const nextFollow = !followBus;
+                setFollowBus(nextFollow);
+                if (nextFollow && busLocation) {
                   setCenterOnBusTimestamp(Date.now());
                 }
               }}
@@ -1490,21 +1498,6 @@ export default function ParentTripTrackingScreen() {
 
                 <View style={styles.modalDriverInfo}>
                   <Text style={styles.modalDriverName}>{trip.supervisor.fullName}</Text>
-
-                  {/* Supervisor Phone Info */}
-                  <View style={styles.vehicleInfoContainer}>
-                    <View style={styles.vehicleInfoItem}>
-                      <View style={styles.vehicleInfoIcon}>
-                        <Ionicons name="call" size={18} color="#6B7280" />
-                      </View>
-                      <View style={styles.vehicleInfoText}>
-                        <Text style={styles.vehicleInfoLabel}>Phone</Text>
-                        <Text style={styles.vehicleInfoValue}>
-                          {trip.supervisor.phone}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
 
                   <TouchableOpacity
                     style={styles.callButton}
@@ -2122,7 +2115,6 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#FFDD00',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -2130,6 +2122,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 8,
+  },
+  centerOnBusButtonInactive: {
+    backgroundColor: '#FFFFFF',
+  },
+  centerOnBusButtonActive: {
+    backgroundColor: '#FFDD00',
   },
   floatingButtonLabel: {
     marginTop: 4,
