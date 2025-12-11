@@ -1,6 +1,7 @@
 import { apiService } from '../api';
 
 export interface AcademicSemester {
+  id?: string;
   name: string;
   code: string;
   startDate: string;

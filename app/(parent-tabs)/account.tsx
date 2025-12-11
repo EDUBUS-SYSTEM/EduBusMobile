@@ -42,6 +42,12 @@ export default function ParentAccountScreen() {
       description: "Register history",
     },
     {
+      id: 5,
+      title: "Trip report",
+      icon: "stats-chart-outline",
+      description: "Trips and attendance",
+    },
+    {
       id: 6,
       title: "Help",
       icon: "help-circle-outline",
@@ -286,6 +292,10 @@ export default function ParentAccountScreen() {
               }
               if (item.id === 4) {
                 router.push("/register-history" as any);
+                return;
+              }
+              if (item.id === 5) {
+                router.push("/trip-report" as any);
                 return;
               }
               if (item.id === 6) {

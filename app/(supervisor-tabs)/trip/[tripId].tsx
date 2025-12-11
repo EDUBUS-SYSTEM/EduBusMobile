@@ -1,7 +1,7 @@
-import { StopsReorderedEvent } from '@/lib/signalr/signalr.types';
-import { tripHubService } from '@/lib/signalr/tripHub.service';
 import { StudentAvatar } from '@/components/StudentAvatar';
 import { UserAvatar } from '@/components/UserAvatar';
+import { StopsReorderedEvent } from '@/lib/signalr/signalr.types';
+import { tripHubService } from '@/lib/signalr/tripHub.service';
 import { getSupervisorTripDetail, submitManualAttendance } from '@/lib/supervisor/supervisor.api';
 import { SupervisorTripDetailDto } from '@/lib/supervisor/supervisor.types';
 import { tripIncidentApi } from '@/lib/trip/tripIncident.api';
@@ -9,8 +9,8 @@ import { TripIncidentListItem, TripIncidentReason } from '@/lib/trip/tripInciden
 import type { Guid } from '@/lib/types';
 import { userAccountApi } from '@/lib/userAccount/userAccount.api';
 import { toHourMinute } from '@/utils/date.utils';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -36,6 +36,7 @@ const formatTime = (iso: string) => {
     return '--:--';
   }
 };
+
 
 const getStatusColor = (status: string): string => {
   const normalizedStatus = status?.toLowerCase() || '';
@@ -97,6 +98,7 @@ export default function SupervisorTripDetailScreen() {
   const [driverAvatarUrl, setDriverAvatarUrl] = React.useState<string | null>(null);
   const [showBoardingDropdown, setShowBoardingDropdown] = React.useState<{ studentId: string; stopSequence: number; position: { x: number; y: number; width: number } } | null>(null);
   const [showAlightingDropdown, setShowAlightingDropdown] = React.useState<{ studentId: string; stopSequence: number; position: { x: number; y: number; width: number } } | null>(null);
+  const scrollRef = React.useRef<ScrollView | null>(null);
   const [incidents, setIncidents] = React.useState<TripIncidentListItem[]>([]);
   const [incidentsLoading, setIncidentsLoading] = React.useState(false);
   const [incidentDetailVisible, setIncidentDetailVisible] = React.useState(false);
@@ -306,8 +308,29 @@ export default function SupervisorTripDetailScreen() {
     setShowBoardingDropdown(null);
 
     try {
-      await submitManualAttendance(tripId, stopSequence, studentId, status, null);
-      await loadTripData();
+      const result = await submitManualAttendance(tripId, stopSequence, studentId, status, null);
+
+      setTrip((prev) => {
+        if (!prev) return prev;
+        const newStops = prev.stops.map((stop) => {
+          if (stop.sequence !== stopSequence) {
+            return stop;
+          }
+          const updatedAttendance = stop.attendance.map((a) => {
+            if (a.studentId !== studentId) return a;
+            return {
+              ...a,
+              boardStatus: status,
+              boardedAt: result.timestamp,
+            };
+          });
+          return {
+            ...stop,
+            attendance: updatedAttendance,
+          };
+        });
+        return { ...prev, stops: newStops };
+      });
     } catch (error: any) {
       console.error('Error updating boarding:', error);
       setBoardingStatus(prev => ({
@@ -331,8 +354,29 @@ export default function SupervisorTripDetailScreen() {
     setShowAlightingDropdown(null);
 
     try {
-      await submitManualAttendance(tripId, stopSequence, studentId, null, status);
-      await loadTripData();
+      const result = await submitManualAttendance(tripId, stopSequence, studentId, null, status);
+
+      setTrip((prev) => {
+        if (!prev) return prev;
+        const newStops = prev.stops.map((stop) => {
+          if (stop.sequence !== stopSequence) {
+            return stop;
+          }
+          const updatedAttendance = stop.attendance.map((a) => {
+            if (a.studentId !== studentId) return a;
+            return {
+              ...a,
+              alightStatus: status,
+              alightedAt: result.timestamp,
+            };
+          });
+          return {
+            ...stop,
+            attendance: updatedAttendance,
+          };
+        });
+        return { ...prev, stops: newStops };
+      });
     } catch (error: any) {
       console.error('Error updating alighting:', error);
       setAlightingStatus(prev => ({
@@ -547,6 +591,7 @@ export default function SupervisorTripDetailScreen() {
       </LinearGradient>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.content}
         contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20, paddingTop: 20 }}
         showsVerticalScrollIndicator={false}
@@ -561,7 +606,6 @@ export default function SupervisorTripDetailScreen() {
           />
         }
         onScrollBeginDrag={() => {
-          // Close dropdowns when scrolling
           setShowBoardingDropdown(null);
           setShowAlightingDropdown(null);
         }}
@@ -813,186 +857,104 @@ export default function SupervisorTripDetailScreen() {
                           </View>
                         </View>
 
-                      const boardedAt = student.boardedAt ? formatTime(student.boardedAt) : null;
-                      const alightedAt = student.alightedAt ? formatTime(student.alightedAt) : null;
-
-                      let statusText = 'Not Checked';
-                      if (isAlighted) {
-                        statusText = alightingStatusValue === 'Present'
-                          ? `Alighted${alightedAt ? ` (${alightedAt})` : ''}`
-                          : `Absent (Alighting)${alightedAt ? ` (${alightedAt})` : ''}`;
-                      } else if (isBoarded) {
-                        statusText = boardingStatusValue === 'Present'
-                          ? `Boarded${boardedAt ? ` (${boardedAt})` : ''}`
-                          : `Absent (Boarding)${boardedAt ? ` (${boardedAt})` : ''}`;
-                      }
-
-                      const uniqueKey = `${stop.id}-${student.studentId}`;
-                      let boardingButtonRef: View | null = null;
-                      let alightingButtonRef: View | null = null;
-
-                      return (
-                        <View
-                          key={uniqueKey}
-                          style={[
-                            styles.studentCard,
-                            isBoarded && boardingStatusValue === 'Present' && styles.studentCardPresent,
-                            isAlighted && alightingStatusValue === 'Present' && styles.studentCardAlighted,
-                            (boardingStatusValue === 'Absent' || alightingStatusValue === 'Absent') && styles.studentCardAbsent
-                          ]}
-                        >
-                          <View style={styles.studentHeader}>
-                            <StudentAvatar
-                              studentId={student.studentId}
-                              studentName={student.studentName}
-                              studentImageId={student.studentImageId}
-                              size={48}
-                              showBorder={false}
-                            />
-                            <View style={styles.studentInfo}>
-                              <Text style={styles.studentName} numberOfLines={1}>
-                                {student.studentName}
-                              </Text>
-                              <Text style={styles.studentMeta} numberOfLines={1}>
-                                {(student.className || 'No class info') + ` • Stop ${stop.sequence}`}
-                              </Text>
-                              {/* Show boarding/alighting status with times */}
-                              {(isBoarded || isAlighted) && (
-                                <View style={styles.attendanceStatusRow}>
-                                  {isBoarded && boardingStatusValue && (
-                                    <Text style={styles.attendanceStatusText}>
-                                      Boarding: {boardingStatusValue}
-                                      {student.boardedAt && ` • ${formatTime(student.boardedAt)}`}
-                                    </Text>
-                                  )}
-                                  {isAlighted && alightingStatusValue && (
-                                    <Text style={styles.attendanceStatusText}>
-                                      Alighting: {alightingStatusValue}
-                                      {student.alightedAt && ` • ${formatTime(student.alightedAt)}`}
-                                    </Text>
-                                  )}
-                                </View>
-                              )}
-                            </View>
+                        {trip.status === 'InProgress' && (
+                          <View style={styles.attendanceButtons}>
+                            {/* Boarding Button with Dropdown */}
                             <View
-                              style={[
-                                styles.statusPill,
-                                isAlighted
-                                  ? styles.statusPillAlighted
-                                  : isBoarded
-                                    ? styles.statusPillPresent
-                                    : styles.statusPillPending
-                              ]}
+                              style={styles.dropdownContainer}
+                              ref={(ref) => { boardingButtonRef = ref; }}
                             >
-                              <Text
+                              <TouchableOpacity
                                 style={[
-                                  styles.statusPillText,
-                                  (isBoarded || isAlighted) && styles.statusPillTextActive
+                                  styles.attendanceBtn,
+                                  styles.boardingBtn,
+                                  isBoarded && boardingStatusValue === 'Present' && styles.boardingBtnActive,
+                                  boardingStatusValue === 'Absent' && styles.boardingBtnAbsent
                                 ]}
+                                onPress={() => {
+                                  if (showBoardingDropdown?.studentId === student.studentId) {
+                                    setShowBoardingDropdown(null);
+                                  } else {
+                                    boardingButtonRef?.measureInWindow((x, y, width, height) => {
+                                      setShowBoardingDropdown({
+                                        studentId: student.studentId,
+                                        stopSequence: stop.sequence,
+                                        position: { x, y: y + height, width }
+                                      });
+                                      setShowAlightingDropdown(null);
+                                    });
+                                  }
+                                }}
+                                disabled={false}
                               >
-                                {statusText}
-                              </Text>
+                                <Ionicons
+                                  name={isBoarded ? 'checkmark-circle' : 'arrow-up-circle-outline'}
+                                  size={18}
+                                  color={isBoarded && boardingStatusValue === 'Present' ? '#FFFFFF' : boardingStatusValue === 'Absent' ? '#FFFFFF' : '#2E7D32'}
+                                />
+                                <Text
+                                  style={[
+                                    styles.attendanceBtnText,
+                                    (isBoarded && boardingStatusValue === 'Present') || boardingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  Boarding {isBoarded && boardingStatusValue ? `(${boardingStatusValue})` : ''}
+                                </Text>
+                                <Ionicons name="chevron-down" size={14} color={isBoarded && boardingStatusValue === 'Present' ? '#FFFFFF' : boardingStatusValue === 'Absent' ? '#FFFFFF' : '#2E7D32'} />
+                              </TouchableOpacity>
+                            </View>
+
+                            {/* Alighting Button with Dropdown */}
+                            <View
+                              style={styles.dropdownContainer}
+                              ref={(ref) => { alightingButtonRef = ref; }}
+                            >
+                              <TouchableOpacity
+                                style={[
+                                  styles.attendanceBtn,
+                                  styles.alightingBtn,
+                                  isAlighted && alightingStatusValue === 'Present' && styles.alightingBtnActive,
+                                  alightingStatusValue === 'Absent' && styles.alightingBtnAbsent,
+                                  ((!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress') && styles.attendanceBtnDisabled
+                                ]}
+                                onPress={() => {
+                                  if (showAlightingDropdown?.studentId === student.studentId) {
+                                    setShowAlightingDropdown(null);
+                                  } else {
+                                    alightingButtonRef?.measureInWindow((x, y, width, height) => {
+                                      setShowAlightingDropdown({
+                                        studentId: student.studentId,
+                                        stopSequence: stop.sequence,
+                                        position: { x, y: y + height, width }
+                                      });
+                                      setShowBoardingDropdown(null);
+                                    });
+                                  }
+                                }}
+                                disabled={(!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress'}
+                              >
+                                <Ionicons
+                                  name={isAlighted ? 'checkmark-circle' : 'arrow-down-circle-outline'}
+                                  size={18}
+                                  color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'}
+                                />
+                                <Text
+                                  style={[
+                                    styles.attendanceBtnText,
+                                    (isAlighted && alightingStatusValue === 'Present') || alightingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  Alighting {isAlighted && alightingStatusValue ? `(${alightingStatusValue})` : ''}
+                                </Text>
+                                <Ionicons name="chevron-down" size={14} color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'} />
+                              </TouchableOpacity>
                             </View>
                           </View>
-
-                          {trip.status === 'InProgress' && (
-                            <View style={styles.attendanceButtons}>
-                              {/* Boarding Button with Dropdown */}
-                              <View
-                                style={styles.dropdownContainer}
-                                ref={(ref) => { boardingButtonRef = ref; }}
-                              >
-                                <TouchableOpacity
-                                  style={[
-                                    styles.attendanceBtn,
-                                    styles.boardingBtn,
-                                    isBoarded && boardingStatusValue === 'Present' && styles.boardingBtnActive,
-                                    boardingStatusValue === 'Absent' && styles.boardingBtnAbsent
-                                  ]}
-                                  onPress={() => {
-                                    if (showBoardingDropdown?.studentId === student.studentId) {
-                                      setShowBoardingDropdown(null);
-                                    } else {
-                                      boardingButtonRef?.measureInWindow((x, y, width, height) => {
-                                        setShowBoardingDropdown({
-                                          studentId: student.studentId,
-                                          stopSequence: stop.sequence,
-                                          position: { x, y: y + height, width }
-                                        });
-                                        setShowAlightingDropdown(null);
-                                      });
-                                    }
-                                  }}
-                                  disabled={false}
-                                >
-                                  <Ionicons
-                                    name={isBoarded ? 'checkmark-circle' : 'arrow-up-circle-outline'}
-                                    size={18}
-                                    color={isBoarded && boardingStatusValue === 'Present' ? '#FFFFFF' : boardingStatusValue === 'Absent' ? '#FFFFFF' : '#2E7D32'}
-                                  />
-                                  <Text
-                                    style={[
-                                      styles.attendanceBtnText,
-                                      (isBoarded && boardingStatusValue === 'Present') || boardingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
-                                    ]}
-                                    numberOfLines={1}
-                                  >
-                                    Boarding {isBoarded && boardingStatusValue ? `(${boardingStatusValue})` : ''}
-                                  </Text>
-                                  <Ionicons name="chevron-down" size={14} color={isBoarded && boardingStatusValue === 'Present' ? '#FFFFFF' : boardingStatusValue === 'Absent' ? '#FFFFFF' : '#2E7D32'} />
-                                </TouchableOpacity>
-                              </View>
-
-                              {/* Alighting Button with Dropdown */}
-                              <View
-                                style={styles.dropdownContainer}
-                                ref={(ref) => { alightingButtonRef = ref; }}
-                              >
-                                <TouchableOpacity
-                                  style={[
-                                    styles.attendanceBtn,
-                                    styles.alightingBtn,
-                                    isAlighted && alightingStatusValue === 'Present' && styles.alightingBtnActive,
-                                    alightingStatusValue === 'Absent' && styles.alightingBtnAbsent,
-                                    ((!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress') && styles.attendanceBtnDisabled
-                                  ]}
-                                  onPress={() => {
-                                    if (showAlightingDropdown?.studentId === student.studentId) {
-                                      setShowAlightingDropdown(null);
-                                    } else {
-                                      alightingButtonRef?.measureInWindow((x, y, width, height) => {
-                                        setShowAlightingDropdown({
-                                          studentId: student.studentId,
-                                          stopSequence: stop.sequence,
-                                          position: { x, y: y + height, width }
-                                        });
-                                        setShowBoardingDropdown(null);
-                                      });
-                                    }
-                                  }}
-                                  disabled={(!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress'}
-                                >
-                                  <Ionicons
-                                    name={isAlighted ? 'checkmark-circle' : 'arrow-down-circle-outline'}
-                                    size={18}
-                                    color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'}
-                                  />
-                                  <Text
-                                    style={[
-                                      styles.attendanceBtnText,
-                                      (isAlighted && alightingStatusValue === 'Present') || alightingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
-                                    ]}
-                                    numberOfLines={1}
-                                  >
-                                    Alighting {isAlighted && alightingStatusValue ? `(${alightingStatusValue})` : ''}
-                                  </Text>
-                                  <Ionicons name="chevron-down" size={14} color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'} />
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          )}
-                        </View>
-                      );
+                        )}
+                      </View>
+                    );
                     })
                 ) : (
                   <Text style={styles.noStudentsText}>No students</Text>
