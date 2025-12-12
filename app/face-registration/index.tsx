@@ -142,7 +142,7 @@ export default function FaceRegistrationScreen() {
     }
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     console.log('🔵 Complete button pressed! capturedCount:', capturedCount);
     
     if (capturedCount < 10) {
@@ -154,16 +154,8 @@ export default function FaceRegistrationScreen() {
       return;
     }
 
-    console.log('✅ Navigating to success page');
-    // Navigate directly to success page without alert
-    submitFaceData();
-    router.push({
-      pathname: '/face-registration-success',
-      params: {
-        capturedCount: capturedCount,
-        childName: childName,
-      },
-    } as any);
+    // Wait for server response before showing success UI
+    await submitFaceData();
   };
 
   const submitFaceData = async () => {
@@ -242,42 +234,87 @@ export default function FaceRegistrationScreen() {
     } catch (error: any) {
       console.error('❌ Enrollment error:', error);
       
-      // English error message mapping
-      const errorMap: Record<string, string> = {
-        'no_face': '❌ No face detected in photo. Please take again.',
-        'multiple_faces': '❌ Multiple faces detected. Only one person allowed in frame.',
-        'face_too_small': '📏 Face too small. Please move closer to camera and retake.',
-        'low_confidence': '⚠️ Low recognition quality. Please retake in better conditions.',
-        'blurry': '😵 Photo is blurry. Please hold phone steady and retake.',
-        'too_dark': '🌙 Photo too dark. Please turn on lights or move to brighter area.',
-        'too_bright': '☀️ Photo too bright. Please avoid direct light and retake.',
+      // Friendlier, actionable error mapping
+      const errorDetails: Record<string, { title: string; message: string; tip: string }> = {
+        no_face: {
+          title: 'Face Not Found',
+          message: 'We could not detect a face in the photo.',
+          tip: 'Keep your face fully in the oval and retry.',
+        },
+        multiple_faces: {
+          title: 'Multiple Faces Detected',
+          message: 'Only one person is allowed in the frame.',
+          tip: 'Ask others to step out of frame and retry.',
+        },
+        face_too_small: {
+          title: 'Face Too Small',
+          message: 'Your face is too far from the camera.',
+          tip: 'Move closer so your face fills the oval.',
+        },
+        low_confidence: {
+          title: 'Low Quality',
+          message: 'The photo quality is not good enough.',
+          tip: 'Hold still and ensure the camera is steady.',
+        },
+        blurry: {
+          title: 'Photo Is Blurry',
+          message: 'The image is too blurry to use.',
+          tip: 'Hold the phone steady and retry.',
+        },
+        too_dark: {
+          title: 'Too Dark',
+          message: 'The lighting is too low.',
+          tip: 'Move to a brighter spot or turn on more light.',
+        },
+        too_bright: {
+          title: 'Too Bright',
+          message: 'There is too much direct light.',
+          tip: 'Avoid backlight or direct sunlight.',
+        },
       };
       
-      let errorTitle = 'Face Registration Error';
-      let errorMessage = 'Enrollment failed. Please try again.';
+      const fallback = {
+        title: 'Face Registration Failed',
+        message: 'Enrollment failed. Please try again.',
+        tip: 'Keep your face centered, steady, and in good light.',
+      };
+      
+      let errorTitle = fallback.title;
+      let errorMessage = fallback.message;
+      let tip = fallback.tip;
       
       if (error.response?.data) {
         const { quality_issue, error: serverError } = error.response.data;
-        errorMessage = errorMap[quality_issue] || serverError || errorMessage;
+        const mapped = quality_issue ? errorDetails[quality_issue] : undefined;
+        errorTitle = mapped?.title || fallback.title;
+        errorMessage = mapped?.message || serverError || fallback.message;
+        tip = mapped?.tip || fallback.tip;
       } else if (error.message) {
-        errorMessage = `Connection error: ${error.message}`;
+        errorTitle = 'Connection Error';
+        errorMessage = error.message;
       }
       
-      Alert.alert(errorTitle, errorMessage, [
-        {
-          text: 'Retry',
-          onPress: () => {
-            setCapturedImages([]);
-            setCapturedCount(0);
-            setIsCapturing(false);
-          }
-        },
-        {
-          text: 'Cancel',
-          onPress: () => router.back(),
-          style: 'cancel'
-        }
-      ]);
+      Alert.alert(
+        errorTitle,
+        `${errorMessage}\n\nTip: ${tip}`,
+        [
+          {
+            text: 'Try Again',
+            onPress: () => {
+              setCapturedImages([]);
+              setCapturedCount(0);
+              setIsCapturing(false);
+            },
+            style: 'default',
+          },
+          {
+            text: 'Back',
+            onPress: () => router.back(),
+            style: 'cancel',
+          },
+        ],
+        { cancelable: true }
+      );
 
     } finally {
       setIsSubmitting(false);
