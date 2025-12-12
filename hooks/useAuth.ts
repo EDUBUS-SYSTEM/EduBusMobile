@@ -5,6 +5,7 @@ import { signalRService } from '@/lib/signalr/notificationHub.service';
 import { store } from '@/store';
 import { setSignalRConnecting, setSignalRConnected, setSignalRError } from '@/store/slices/signalRSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { pushNotificationService } from '@/lib/notification/pushNotification.service';
 
 interface UserInfo {
   role: "Admin" | "Driver" | "Parent" | "Supervisor" | null;
@@ -86,6 +87,15 @@ export const useAuth = () => {
           store.dispatch(setSignalRError(signalRError?.message || 'SignalR initialization failed'));
         }
 
+        // Register push notification token after login
+        try {
+          console.log('📱 Registering push notification token after login...');
+          await pushNotificationService.reinitializeToken();
+        } catch (pushError) {
+          console.error('❌ Error registering push token:', pushError);
+          // Don't fail login if push notification fails
+        }
+
         return { success: true, data: res.data };
       } else {
         return { success: false, error: res.error?.message || 'Login failed' };
@@ -98,6 +108,15 @@ export const useAuth = () => {
 
   const logout = async () => {
     try {
+      // Unregister push notification token before logging out
+      try {
+        console.log('📱 Unregistering push notification token...');
+        await pushNotificationService.unregisterToken();
+      } catch (pushError) {
+        console.error('❌ Error unregistering push token:', pushError);
+        // Don't fail logout if push notification fails
+      }
+
       // Disconnect SignalR before logging out
       console.log('🔌 Disconnecting SignalR...');
       await signalRService.stop();
