@@ -6,7 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 interface AuthenticatedImageProps {
-  uri: string;
+  uri?: string | null;
   fallbackIcon?: keyof typeof Ionicons.glyphMap;
   fallbackColor?: string;
   fallbackInitials?: string;

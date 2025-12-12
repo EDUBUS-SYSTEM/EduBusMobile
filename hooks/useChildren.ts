@@ -1,14 +1,14 @@
 import { authApi } from "@/lib/auth/auth.api";
 import { childrenApi } from "@/lib/parent/children.api";
 import type { Child } from "@/lib/parent/children.type";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 export const useChildrenList = () => {
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadChildren = async () => {
+  const loadChildren = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -36,11 +36,11 @@ export const useChildrenList = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadChildren();
-  }, []);
+  }, [loadChildren]);
 
   return {
     children,
