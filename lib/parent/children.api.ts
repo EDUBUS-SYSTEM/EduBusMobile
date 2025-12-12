@@ -24,15 +24,24 @@ export const childrenApi = {
   },
 
   formatChildForUI: (child: Child) => {
-    // Generate avatar URL from studentImageId if available
+    // IMPORTANT: Use studentImageId (the file ID), NOT child.id (student ID)
     const avatarUrl = child.studentImageId
-      ? studentApi.getPhotoUrl(child.id)
+      ? studentApi.getPhotoUrl(child.studentImageId)  // ← FIXED: Use studentImageId
       : null;
+
+    console.log('[formatChildForUI]', {
+      childId: child.id,
+      firstName: child.firstName,
+      lastName: child.lastName,
+      studentImageId: child.studentImageId,
+      hasImageId: !!child.studentImageId,
+      avatarUrl: avatarUrl
+    });
 
     return {
       id: child.id,
       name: `${child.firstName} ${child.lastName}`,
-      avatar: avatarUrl ? { uri: avatarUrl } : null,  // null instead of mock URL
+      avatar: avatarUrl ? { uri: avatarUrl } : null,
       studentId: child.id,
       studentImageId: child.studentImageId,  // Pass through for StudentAvatar component
       className: child.className || "N/A",

@@ -32,8 +32,18 @@ export function StudentAvatar({
   };
 
   const initials = getInitials(studentName);
-  // Always try to get photo URL - AuthenticatedImage will handle 404 and fallback to initials
-  const avatarUrl = studentApi.getPhotoUrl(studentId);
+  
+  // Use studentImageId if available, otherwise no photo URL (will show initials)
+  const avatarUrl = studentImageId 
+    ? studentApi.getPhotoUrl(studentImageId) 
+    : null;
+
+  console.log(`[StudentAvatar] ${studentName}:`, {
+    studentId,
+    studentImageId,
+    avatarUrl,
+    hasImage: !!studentImageId
+  });
 
   return (
     <View
@@ -49,7 +59,7 @@ export function StudentAvatar({
       ]}
     >
       <AuthenticatedImage
-        key={`student-${studentId}`}
+        key={`student-${studentId}-${studentImageId || 'no-photo'}`}
         uri={avatarUrl}
         size={size}
         style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
