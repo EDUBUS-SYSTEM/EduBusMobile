@@ -89,8 +89,8 @@ export default function SupervisorTripDetailScreen() {
   const [boardingStatus, setBoardingStatus] = React.useState<Record<string, 'Present' | 'Absent' | null>>({});
   const [alightingStatus, setAlightingStatus] = React.useState<Record<string, 'Present' | 'Absent' | null>>({});
   const [driverAvatarUrl, setDriverAvatarUrl] = React.useState<string | null>(null);
-  const [showBoardingDropdown, setShowBoardingDropdown] = React.useState<{ studentId: string; stopSequence: number; position: { x: number; y: number; width: number } } | null>(null);
-  const [showAlightingDropdown, setShowAlightingDropdown] = React.useState<{ studentId: string; stopSequence: number; position: { x: number; y: number; width: number } } | null>(null);
+  const [showBoardingDropdown, setShowBoardingDropdown] = React.useState<{ studentId: string; pickupPointId: string; position: { x: number; y: number; width: number } } | null>(null);
+  const [showAlightingDropdown, setShowAlightingDropdown] = React.useState<{ studentId: string; pickupPointId: string; position: { x: number; y: number; width: number } } | null>(null);
   const insets = useSafeAreaInsets();
 
   const loadTripData = React.useCallback(async () => {
@@ -162,7 +162,7 @@ export default function SupervisorTripDetailScreen() {
     loadTripData();
   }, [tripId, loadTripData]);
 
-  const handleBoardingStatus = async (studentId: string, stopSequence: number, status: 'Present' | 'Absent') => {
+  const handleBoardingStatus = async (studentId: string, pickupPointId: string, status: 'Present' | 'Absent') => {
     if (!trip || !tripId) {
       Alert.alert('Error', 'Trip information is missing');
       return;
@@ -175,7 +175,7 @@ export default function SupervisorTripDetailScreen() {
     setShowBoardingDropdown(null);
 
     try {
-      await submitManualAttendance(tripId, stopSequence, studentId, status, null);
+      await submitManualAttendance(tripId, pickupPointId, studentId, status, null);
       await loadTripData();
     } catch (error: any) {
       console.error('Error updating boarding:', error);
@@ -187,7 +187,7 @@ export default function SupervisorTripDetailScreen() {
     }
   };
 
-  const handleAlightingStatus = async (studentId: string, stopSequence: number, status: 'Present' | 'Absent') => {
+  const handleAlightingStatus = async (studentId: string, pickupPointId: string, status: 'Present' | 'Absent') => {
     if (!trip || !tripId) {
       Alert.alert('Error', 'Trip information is missing');
       return;
@@ -200,7 +200,7 @@ export default function SupervisorTripDetailScreen() {
     setShowAlightingDropdown(null);
 
     try {
-      await submitManualAttendance(tripId, stopSequence, studentId, null, status);
+      await submitManualAttendance(tripId, pickupPointId, studentId, null, status);
       await loadTripData();
     } catch (error: any) {
       console.error('Error updating alighting:', error);
@@ -492,7 +492,7 @@ export default function SupervisorTripDetailScreen() {
                                   boardingButtonRef?.measureInWindow((x, y, width, height) => {
                                     setShowBoardingDropdown({ 
                                       studentId: student.studentId, 
-                                      stopSequence: stop.sequence,
+                                      pickupPointId: stop.pickupPointId,
                                       position: { x, y: y + height, width }
                                     });
                                     setShowAlightingDropdown(null);
@@ -539,7 +539,7 @@ export default function SupervisorTripDetailScreen() {
                                   alightingButtonRef?.measureInWindow((x, y, width, height) => {
                                     setShowAlightingDropdown({ 
                                       studentId: student.studentId, 
-                                      stopSequence: stop.sequence,
+                                      pickupPointId: stop.pickupPointId,
                                       position: { x, y: y + height, width }
                                     });
                                     setShowBoardingDropdown(null);
@@ -613,7 +613,7 @@ export default function SupervisorTripDetailScreen() {
                   style={[styles.dropdownItem, boardingStatusValue === 'Present' && styles.dropdownItemActive]}
                   onPress={() => {
                     if (student) {
-                      handleBoardingStatus(showBoardingDropdown.studentId, showBoardingDropdown.stopSequence, 'Present');
+                      handleBoardingStatus(showBoardingDropdown.studentId, showBoardingDropdown.pickupPointId, 'Present');
                     }
                   }}
                 >
@@ -623,7 +623,7 @@ export default function SupervisorTripDetailScreen() {
                   style={[styles.dropdownItem, boardingStatusValue === 'Absent' && styles.dropdownItemActive]}
                   onPress={() => {
                     if (student) {
-                      handleBoardingStatus(showBoardingDropdown.studentId, showBoardingDropdown.stopSequence, 'Absent');
+                      handleBoardingStatus(showBoardingDropdown.studentId, showBoardingDropdown.pickupPointId, 'Absent');
                     }
                   }}
                 >
@@ -669,7 +669,7 @@ export default function SupervisorTripDetailScreen() {
                   style={[styles.dropdownItem, alightingStatusValue === 'Present' && styles.dropdownItemActive]}
                   onPress={() => {
                     if (student) {
-                      handleAlightingStatus(showAlightingDropdown.studentId, showAlightingDropdown.stopSequence, 'Present');
+                      handleAlightingStatus(showAlightingDropdown.studentId, showAlightingDropdown.pickupPointId, 'Present');
                     }
                   }}
                 >
@@ -679,7 +679,7 @@ export default function SupervisorTripDetailScreen() {
                   style={[styles.dropdownItem, alightingStatusValue === 'Absent' && styles.dropdownItemActive]}
                   onPress={() => {
                     if (student) {
-                      handleAlightingStatus(showAlightingDropdown.studentId, showAlightingDropdown.stopSequence, 'Absent');
+                      handleAlightingStatus(showAlightingDropdown.studentId, showAlightingDropdown.pickupPointId, 'Absent');
                     }
                   }}
                 >

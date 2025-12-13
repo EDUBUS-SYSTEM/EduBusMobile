@@ -19,6 +19,7 @@ export interface SupervisorAttendanceDto {
 
 export interface SupervisorTripStopDto {
   id: Guid;
+  pickupPointId: Guid;
   name: string;
   plannedArrival: string;
   actualArrival?: string | null;
