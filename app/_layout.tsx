@@ -6,7 +6,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { store } from '@/store';
-import { useAppSelector, useAppDispatch } from '@/store/hooks';
+import { useAppDispatch } from '@/store/hooks';
 import { Provider } from 'react-redux';
 import { useEffect } from 'react';
 import { signalRService } from '@/lib/signalr/notificationHub.service';
@@ -44,6 +44,13 @@ function RootLayoutContent() {
         <Stack.Screen name="account-profile" options={{ headerShown: false }} />
         <Stack.Screen name="register-history" options={{ headerShown: false }} />
         <Stack.Screen name="help" options={{ headerShown: false }} />
+        <Stack.Screen name="help-parent" options={{ headerShown: false }} />
+        <Stack.Screen name="help-driver" options={{ headerShown: false }} />
+        <Stack.Screen name="help-supervisor" options={{ headerShown: false }} />
+        <Stack.Screen name="trip-history-driver" options={{ headerShown: false }} />
+        <Stack.Screen name="trip-history-supervisor" options={{ headerShown: false }} />
+        <Stack.Screen name="trip-history-supervisor/[tripId]" options={{ headerShown: false }} />
+        <Stack.Screen name="trip-report" options={{ headerShown: false }} />
         <Stack.Screen name="change-password" options={{ headerShown: false }} />
         <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
         <Stack.Screen name="service-registration" options={{ headerShown: false }} />

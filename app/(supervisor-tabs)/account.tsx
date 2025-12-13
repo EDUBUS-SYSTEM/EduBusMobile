@@ -25,9 +25,9 @@ export default function SupervisorAccountScreen() {
     },
     {
       id: 2,
-      title: "Settings",
-      icon: "settings-outline",
-      description: "Settings",
+      title: "Trip history",
+      icon: "map-outline",
+      description: "Trip history",
     },
     {
       id: 3,
@@ -266,6 +266,14 @@ export default function SupervisorAccountScreen() {
               }
               if (item.id === 5) {
                 router.push("/change-password" as any);
+                return;
+              }
+              if (item.id === 3) {
+                router.push("/help" as any);
+                return;
+              }
+              if (item.id === 2) {
+                router.push("/trip-history-supervisor" as any);
                 return;
               }
               if (item.id === 4) {

@@ -313,7 +313,6 @@ export default function ParentAccountScreen() {
                 } finally {
                   router.replace("/login");
                 }
-                return;
               }
               // Add more navigation logic for other menu items here
             }}
