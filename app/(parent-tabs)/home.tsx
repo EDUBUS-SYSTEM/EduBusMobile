@@ -308,8 +308,8 @@ export default function ParentHomeScreen() {
 
           <TouchableOpacity
             onPress={() => router.push('/service-registration/student-selection')}
-            style={[styles.quickActionCard, styles.quickActionCardHighlight]}>
-            <Ionicons name="clipboard" size={32} color="#D08700" />
+            style={styles.quickActionCard}>
+            <Ionicons name="clipboard" size={32} color="#01CBCA" />
             <Text style={{
               fontFamily: 'RobotoSlab-Medium',
               fontSize: 14,
@@ -417,10 +417,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
     ...sharedShadow,
-  },
-  quickActionCardHighlight: {
-    backgroundColor: '#FEFCE8',
-    borderWidth: 2,
-    borderColor: '#FDC700',
   },
 });

@@ -236,6 +236,7 @@ const extractChildrenFromStops = (stops: ParentTripDtoResponse['stops']): Parent
       children.push({
         id: student.studentId,
         name: student.studentName,
+        studentImageId: student.studentImageId ?? null,
         state: student.state,
         boardedAt: student.boardedAt ?? null,
         boardStatus: student.boardStatus ?? null,
@@ -330,8 +331,11 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
           attendance: stop.attendance?.map(att => ({
             id: att.studentId,
             name: att.studentName,
+            studentImageId: att.studentImageId ?? null,
             state: att.state,
             boardedAt: att.boardedAt ?? null,
+            boardStatus: att.boardStatus ?? null,
+            alightStatus: att.alightStatus ?? null,
           })) || [],
         })),
         totalStops: trip.stops.length,
@@ -388,6 +392,31 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
 
     throw new Error(error.response?.data?.message || 'Failed to load trips. Please try again.');
   }
+};
+
+/**
+ * Get trips for current parent by date range (inclusive).
+ * Note: This calls the existing single-day API per day; suitable for moderate ranges.
+ * @param startDateISO - YYYY-MM-DD
+ * @param endDateISO   - YYYY-MM-DD
+ */
+export const getParentTripsByDateRange = async (
+  startDateISO: string,
+  endDateISO: string
+): Promise<ParentTripDto[]> => {
+  const start = new Date(startDateISO);
+  const end = new Date(endDateISO);
+  const all: ParentTripDto[] = [];
+
+  const toDateStr = (d: Date) => d.toISOString().split('T')[0];
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = toDateStr(d);
+    const trips = await getParentTripsByDate(dateStr);
+    all.push(...trips);
+  }
+
+  return all;
 };
 
 /**
@@ -450,6 +479,7 @@ export const getParentTripDetail = async (tripId: string): Promise<ParentTripDto
         attendance: stop.attendance?.map(att => ({
           id: att.studentId,
           name: att.studentName,
+          studentImageId: att.studentImageId ?? null,
           state: att.state,
           boardedAt: att.boardedAt ?? null,
           boardStatus: att.boardStatus ?? null,

@@ -1,3 +1,4 @@
+import { userAccountApi } from '@/lib/userAccount/userAccount.api';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -32,6 +33,9 @@ export function UserAvatar({
   };
 
   const initials = userName ? getInitials(userName) : null;
+  
+  // Automatically get avatar URL from userId if avatarUrl is not provided
+  const finalAvatarUrl = avatarUrl || (userId ? userAccountApi.getAvatarUrl(userId) : null);
 
   return (
     <View
@@ -46,15 +50,16 @@ export function UserAvatar({
         style,
       ]}
     >
-      {avatarUrl ? (
+      {finalAvatarUrl ? (
         <AuthenticatedImage
-          key={`user-${userId || 'unknown'}-${avatarUrl}`}
-          uri={avatarUrl}
+          key={`user-${userId || 'unknown'}-${finalAvatarUrl}`}
+          uri={finalAvatarUrl}
           size={size}
           style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
           contentFit="cover"
           fallbackIcon="person"
           fallbackColor="#01CBCA"
+          fallbackInitials={initials ?? undefined}
         />
       ) : initials ? (
         <View style={styles.initialsContainer}>
