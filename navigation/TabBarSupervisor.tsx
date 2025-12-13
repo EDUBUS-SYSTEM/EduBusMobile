@@ -84,21 +84,22 @@ export default function TabBarSupervisor() {
       <Tabs.Screen
         name="notifications"
         options={{
-          title: 'Notifications',
-          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? "notifications" : "notifications-outline"}
-              size={24} 
-              color={focused ? '#01CBCA' : color} 
-            />
-          ),
+          // Keep route accessible but hide from bottom tabs; moved to dashboard quick actions
+          href: null,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
         name="trips"
         options={{
           href: null, 
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
+        name="trips-today"
+        options={{
+          href: null, // Hidden; opened via dashboard quick action
           headerShown: false,
         }}
       />

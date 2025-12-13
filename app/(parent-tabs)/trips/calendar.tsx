@@ -10,7 +10,6 @@ import type { Child } from '@/lib/parent/children.type';
 import type { ParentTripDto } from '@/lib/trip/parentTrip.types';
 import { getParentTripsByDateRange } from '@/lib/trip/trip.api';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -330,12 +329,8 @@ export default function ParentTripCalendarScreen() {
             <Ionicons name="arrow-back" size={20} color="#111827" />
           </TouchableOpacity>
         </View>
-        <View style={styles.logoContainer}>
-          <Image
-            source={require('@/assets/images/edubus_logo.png')}
-            style={styles.logo}
-            contentFit="contain"
-          />
+        <View style={styles.titleContainer}>
+          <Text style={styles.headerTitle}>Schedule</Text>
         </View>
 
         {/* Semester Filter */}
@@ -460,7 +455,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    marginBottom: 4,
+    paddingTop: 25,
+    marginBottom: 8,
   },
   backBtn: {
     width: 36,
@@ -486,19 +482,13 @@ const styles = StyleSheet.create({
   bgIcon: {
     position: 'absolute',
   },
-  logoContainer: {
-    flexDirection: 'row',
+  titleContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    marginBottom: 4,
+    paddingBottom: 8,
   },
-  logo: {
-    width: 78,
-    height: 78,
-  },
-  logoText: {
-    fontSize: 26,
+  headerTitle: {
+    fontSize: 24,
     fontFamily: 'RobotoSlab-Bold',
     color: '#000000',
   },

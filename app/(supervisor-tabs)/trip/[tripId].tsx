@@ -544,7 +544,7 @@ export default function SupervisorTripDetailScreen() {
       >
         <View style={styles.headerContent}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => router.replace('/(supervisor-tabs)/trips-today' as any)}
             style={styles.backButton}
           >
             <Ionicons name="arrow-back" size={24} color="#000000" />

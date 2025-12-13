@@ -132,7 +132,7 @@ export default function ParentTripDetailScreen() {
         <StatusBar barStyle="dark-content" backgroundColor="#FCDC44" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#FFDD00" />
-          <Text style={styles.loadingText}>Loading shuttle detail...</Text>
+          <Text style={styles.loadingText}>Loading trip detail...</Text>
         </View>
       </SafeAreaView>
     );
@@ -160,16 +160,15 @@ export default function ParentTripDetailScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerIconButton}
-          onPress={() => router.replace('/(parent-tabs)/trips/calendar')}
-          activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color="#000000" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Shuttle Detail</Text>
-        <View style={styles.headerIconButton}>
-          <Ionicons name="lock-closed" size={20} color="#000000" />
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.headerIconButton}
+            onPress={() => router.replace('/(parent-tabs)/trips/calendar')}
+            activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={22} color="#000000" />
+          </TouchableOpacity>
         </View>
+        <Text style={styles.headerTitle}>Trip Detail</Text>
       </View>
 
       <ScrollView
@@ -179,7 +178,7 @@ export default function ParentTripDetailScreen() {
         {/* Driver Information */}
         {driver && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Driver Information</Text>
+            <Text style={styles.sectionTitle}>Driver</Text>
             <View style={styles.infoCard}>
               <View style={styles.driverRow}>
                 <View style={{ marginRight: 12 }}>
@@ -194,7 +193,6 @@ export default function ParentTripDetailScreen() {
                 <View style={styles.driverInfo}>
                   <Text style={styles.driverName}>{driver.fullName}</Text>
                   <Text style={styles.driverText}>Phone: {driver.phone}</Text>
-                  <Text style={styles.driverText}>Role: Driver</Text>
                 </View>
               </View>
             </View>
@@ -204,7 +202,7 @@ export default function ParentTripDetailScreen() {
         {/* Supervisor Information */}
         {supervisor && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Supervisor Information</Text>
+            <Text style={styles.sectionTitle}>Supervisor</Text>
             <View style={styles.infoCard}>
               <View style={styles.driverRow}>
                 <View style={{ marginRight: 12 }}>
@@ -219,7 +217,6 @@ export default function ParentTripDetailScreen() {
                 <View style={styles.driverInfo}>
                   <Text style={styles.driverName}>{supervisor.fullName}</Text>
                   <Text style={styles.driverText}>Phone: {supervisor.phone}</Text>
-                  <Text style={styles.driverText}>Role: Supervisor</Text>
                 </View>
               </View>
             </View>
@@ -229,7 +226,7 @@ export default function ParentTripDetailScreen() {
         {/* Vehicle Information */}
         {vehicle && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Vehicle Information</Text>
+            <Text style={styles.sectionTitle}>Vehicle</Text>
             <View style={styles.infoCard}>
               <View style={styles.vehicleRow}>
                 <View style={styles.vehicleIcon}>
@@ -246,9 +243,9 @@ export default function ParentTripDetailScreen() {
           </View>
         )}
 
-        {/* Shuttle Detail Information */}
+        {/* Trip Detail Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Shuttle Detail Information</Text>
+          <Text style={styles.sectionTitle}>Trip Detail Information</Text>
           <View style={styles.statusCard}>
             <View style={[styles.statusHeader, { backgroundColor: getStatusColor(trip.status) }]}>
               <Text style={styles.statusHeaderText}>Status: {getStatusText(trip.status)}</Text>
@@ -361,13 +358,18 @@ const styles = StyleSheet.create({
     fontFamily: 'RobotoSlab-Medium',
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 40,
     paddingBottom: 12,
     backgroundColor: '#FCDC44',
+  },
+  headerRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginBottom: 0,
   },
   headerIconButton: {
     width: 36,

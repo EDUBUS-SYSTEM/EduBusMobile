@@ -49,6 +49,10 @@ export const API_CONFIG = {
       SCHOOL: {
         INFO: '/School',
       },
+      DEVICE_TOKEN: {
+        REGISTER: '/DeviceToken/register',
+        UNREGISTER: '/DeviceToken/unregister',
+      },
     },
     TIMEOUT: 10000,
     RETRY_ATTEMPTS: 3,
