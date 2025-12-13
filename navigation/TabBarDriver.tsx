@@ -39,19 +39,6 @@ export default function TabBarDriver() {
         }}
       />
       <Tabs.Screen
-        name="routes"
-        options={{
-          title: 'Routes',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name="map" 
-              size={24} 
-                     color={focused ? '#01CBCA' : color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="trip-schedule"
         options={{
           title: 'Schedule',

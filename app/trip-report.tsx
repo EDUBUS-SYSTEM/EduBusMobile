@@ -8,6 +8,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Dimensions, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import Svg, { Circle, Rect } from "react-native-svg";
 
+export const options = {
+  headerShown: false,
+};
+
 const screenWidth = Dimensions.get("window").width;
 
 export default function TripReportScreen() {
@@ -400,89 +404,66 @@ export default function TripReportScreen() {
               shadowOpacity: 0.08,
               shadowRadius: 6,
               elevation: 3,
-              gap: 12,
+              gap: 8,
             }}
           >
-            <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 16, color: "#111827" }}>Students</Text>
-            {loadingReport && (
-              <View style={{ paddingVertical: 16, alignItems: "center" }}>
-                <ActivityIndicator size="small" color="#01CBCA" />
-              </View>
-            )}
-            {!loadingReport && (!report?.studentStatistics || report.studentStatistics.length === 0) && (
-              <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 14, color: "#6B7280" }}>No data available.</Text>
-            )}
-            {!loadingReport &&
-              report?.studentStatistics?.map((student: StudentTripStatistics) => (
+            <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 16, color: "#111827" }}>Student statistics</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+              {report?.studentStatistics?.map((student: StudentTripStatistics) => (
                 <View
-                  key={student.studentId}
+                  key={`${student.studentId}-${student.semesterCode}`}
                   style={{
+                    width: 220,
+                    marginRight: 12,
+                    padding: 14,
+                    backgroundColor: "#F9FAFB",
+                    borderRadius: 14,
                     borderWidth: 1,
                     borderColor: "#E5E7EB",
-                    borderRadius: 14,
-                    padding: 12,
-                    backgroundColor: "#F9FAFB",
-                    gap: 8,
+                    gap: 6,
                   }}
                 >
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                    <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 15, color: "#111827" }}>{student.studentName}</Text>
-                    <View style={{ backgroundColor: "#FFFFFF", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
-                      <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#6B7280" }}>
-                        {student.grade || "N/A"}
-                      </Text>
+                  <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 14, color: "#111827" }}>{student.studentName}</Text>
+                  <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#6B7280" }}>
+                    {student.semesterName || student.semesterCode}
+                  </Text>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+                    <View style={{ alignItems: "center" }}>
+                      <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#6B7280" }}>Trips</Text>
+                      <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 16, color: "#111827" }}>{student.totalTrips}</Text>
                     </View>
-                  </View>
-                  <View style={{ flexDirection: "row", gap: 10 }}>
-                    <View style={{ flex: 1, backgroundColor: "#ECFEFF", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "#CFFAFE" }}>
-                      <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#0F172A" }}>Paid</Text>
-                      <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 15, color: "#0F172A", marginTop: 4 }}>
-                        {formatCurrency(student.amountPaid)}
-                      </Text>
+                    <View style={{ alignItems: "center" }}>
+                      <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#6B7280" }}>Present</Text>
+                      <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 16, color: "#111827" }}>{student.presentCount}</Text>
                     </View>
-                    <View style={{ flex: 1, backgroundColor: "#FFF7ED", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "#FED7AA" }}>
-                      <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#7C2D12" }}>Pending</Text>
-                      <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 15, color: "#7C2D12", marginTop: 4 }}>
-                        {formatCurrency(student.amountPending)}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: "row", gap: 10 }}>
-                    <View style={{ flex: 1, backgroundColor: "#EEF2FF", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "#E0E7FF" }}>
-                      <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#312E81" }}>Trips</Text>
-                      <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 15, color: "#111827", marginTop: 4 }}>
-                        {student.totalTripsForStudent} total
-                      </Text>
-                      <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#6B7280", marginTop: 2 }}>
-                        {student.completedTripsForStudent} done • {student.upcomingTripsForStudent} upcoming
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1, backgroundColor: "#F0FDF4", borderRadius: 12, padding: 10, borderWidth: 1, borderColor: "#BBF7D0" }}>
-                      <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#065F46" }}>Attendance</Text>
-                      <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 15, color: "#065F46", marginTop: 4 }}>
-                        {student.attendanceRate.toFixed(1)}%
-                      </Text>
-                      <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#6B7280", marginTop: 2 }}>
-                        {student.presentCount}/{student.totalAttendanceRecords} present
+                    <View style={{ alignItems: "center" }}>
+                      <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#6B7280" }}>Rate</Text>
+                      <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 16, color: "#111827" }}>
+                        {student.totalAttendanceRecords > 0
+                          ? `${Math.round((student.presentCount / student.totalAttendanceRecords) * 100)}%`
+                          : "0%"}
                       </Text>
                     </View>
                   </View>
                 </View>
               ))}
+            </ScrollView>
           </View>
 
           {error && (
-            <View style={{ padding: 14, backgroundColor: "#FEF2F2", borderRadius: 12, borderWidth: 1, borderColor: "#FECACA" }}>
-              <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 14, color: "#B91C1C" }}>{error}</Text>
+            <View
+              style={{
+                backgroundColor: "#FEF2F2",
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: "#FECACA",
+                marginTop: 12,
+              }}
+            >
+              <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 14, color: "#B91C1C" }}>{error}</Text>
               {debugInfo && (
-                <Text
-                  style={{
-                    marginTop: 8,
-                    fontFamily: "RobotoSlab-Regular",
-                    fontSize: 12,
-                    color: "#7F1D1D",
-                  }}
-                >
+                <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#B91C1C", marginTop: 6 }}>
                   {debugInfo}
                 </Text>
               )}
