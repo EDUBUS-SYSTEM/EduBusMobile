@@ -33,17 +33,8 @@ export function StudentAvatar({
 
   const initials = getInitials(studentName);
   
-  // Use studentImageId if available, otherwise no photo URL (will show initials)
-  const avatarUrl = studentImageId 
-    ? studentApi.getPhotoUrl(studentImageId) 
-    : null;
 
-  console.log(`[StudentAvatar] ${studentName}:`, {
-    studentId,
-    studentImageId,
-    avatarUrl,
-    hasImage: !!studentImageId
-  });
+  const avatarUrl = studentApi.getStudentPhotoUrl(studentId);
 
   return (
     <View
@@ -62,7 +53,7 @@ export function StudentAvatar({
         key={`student-${studentId}-${studentImageId || 'no-photo'}`}
         uri={avatarUrl}
         size={size}
-        style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
         contentFit="cover"
         fallbackIcon="person"
         fallbackColor="#01CBCA"

@@ -38,7 +38,20 @@ export function AuthenticatedImage({
 
   // Load image when token is available
   useEffect(() => {
-    if (!token || !uri) {
+    // Don't set error if token is still loading (null means not loaded yet)
+    if (token === null) {
+      // Token is still being loaded, wait
+      return;
+    }
+    
+    if (!uri) {
+      setError(true);
+      setLoading(false);
+      return;
+    }
+    
+    if (!token) {
+      // Token loaded but is empty/invalid
       setError(true);
       setLoading(false);
       return;
@@ -93,7 +106,7 @@ export function AuthenticatedImage({
         downloadedFileUri = downloadResult.uri;
         setImageUri(downloadResult.uri);
         setLoading(false);
-      } catch {
+      } catch (err) {
         if (isMounted && !cancelled) {
           setError(true);
           setLoading(false);
@@ -120,7 +133,7 @@ export function AuthenticatedImage({
   if (error || !imageUri || loading) {
     if (fallbackInitials) {
       return (
-        <View style={[style, { width: size, height: size, borderRadius: size / 2, backgroundColor: fallbackColor, alignItems: 'center', justifyContent: 'center' }]}>
+        <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: fallbackColor, alignItems: 'center', justifyContent: 'center' }, style]}>
           <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: size * 0.35, textAlign: 'center' }}>
             {fallbackInitials}
           </Text>
@@ -128,19 +141,24 @@ export function AuthenticatedImage({
       );
     }
     return (
-      <Ionicons name={fallbackIcon} size={size * 0.5} color={fallbackColor} />
+      <View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center', backgroundColor: fallbackColor }, style]}>
+        <Ionicons name={fallbackIcon} size={size * 0.5} color="#FFFFFF" />
+      </View>
     );
   }
 
   return (
-    <Image
-      source={{ uri: imageUri }}
-      style={style}
-      contentFit={contentFit}
-      onError={() => {
-        setError(true);
-      }}
-    />
+    <View style={[{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden' }, style]}>
+      <Image
+        source={{ uri: imageUri }}
+        style={{ width: '100%', height: '100%' }}
+        contentFit={contentFit}
+        transition={200}
+        onError={() => {
+          setError(true);
+        }}
+      />
+    </View>
   );
 }
 

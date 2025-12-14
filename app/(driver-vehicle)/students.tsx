@@ -10,7 +10,9 @@ import {
   TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getMyVehicleStudents, type VehicleStudentInfo, type VehicleStudentsData } from '@/lib/driverVehicle/driverVehicle.api';
+import { getMyVehicleStudents } from '@/lib/driverVehicle/driverVehicle.api';
+import type { VehicleStudentInfo, VehicleStudentsData } from '@/lib/driverVehicle/driverVehicle.types';
+import { StudentAvatar } from '@/components/StudentAvatar';
 
 export default function VehicleStudentsScreen() {
   const [vehicleData, setVehicleData] = useState<VehicleStudentsData | null>(null);
@@ -187,15 +189,23 @@ export default function VehicleStudentsScreen() {
             >
               {/* Student Header */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{
-                    fontFamily: 'RobotoSlab-Bold',
-                    fontSize: 18,
-                    color: '#000000',
-                    marginBottom: 4
-                  }}>
-                    {student.firstName} {student.lastName}
-                  </Text>
+                <View style={{ flexDirection: 'row', flex: 1, alignItems: 'center' }}>
+                  <StudentAvatar
+                    studentId={student.studentId}
+                    studentName={`${student.firstName} ${student.lastName}`}
+                    size={60}
+                    showBorder={false}
+                    style={{ marginRight: 12 }}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{
+                      fontFamily: 'RobotoSlab-Bold',
+                      fontSize: 18,
+                      color: '#000000',
+                      marginBottom: 4
+                    }}>
+                      {student.firstName} {student.lastName}
+                    </Text>
                   {student.gradeLevel && (
                     <View style={{
                       backgroundColor: '#4CAF5020',
@@ -213,6 +223,7 @@ export default function VehicleStudentsScreen() {
                       </Text>
                     </View>
                   )}
+                  </View>
                 </View>
                 <View style={{
                   backgroundColor: '#01CBCA',

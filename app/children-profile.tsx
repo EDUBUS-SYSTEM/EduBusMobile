@@ -126,7 +126,7 @@ function ChildrenProfileContent() {
           <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Student Profile</Text>
+        <Text style={styles.headerTitle}>Children Profile</Text>
 
         <TouchableOpacity
           onPress={handleNotification}

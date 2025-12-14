@@ -26,17 +26,8 @@ export const childrenApi = {
   formatChildForUI: (child: Child) => {
     // IMPORTANT: Use studentImageId (the file ID), NOT child.id (student ID)
     const avatarUrl = child.studentImageId
-      ? studentApi.getPhotoUrl(child.studentImageId)  // ← FIXED: Use studentImageId
+      ? studentApi.getPhotoUrl(child.studentImageId)
       : null;
-
-    console.log('[formatChildForUI]', {
-      childId: child.id,
-      firstName: child.firstName,
-      lastName: child.lastName,
-      studentImageId: child.studentImageId,
-      hasImageId: !!child.studentImageId,
-      avatarUrl: avatarUrl
-    });
 
     return {
       id: child.id,

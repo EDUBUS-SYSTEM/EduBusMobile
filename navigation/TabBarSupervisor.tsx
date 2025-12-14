@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabBarSupervisor() {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Tabs
       screenOptions={{
@@ -14,7 +17,7 @@ export default function TabBarSupervisor() {
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
-          height: 60,
+          height: 75,
           paddingBottom: 8,
           paddingTop: 8,
         },

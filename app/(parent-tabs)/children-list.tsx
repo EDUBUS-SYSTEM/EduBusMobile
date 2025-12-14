@@ -7,13 +7,13 @@ import { useFocusEffect, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Image,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ChildrenListScreen() {
   const router = useRouter();
@@ -34,12 +34,7 @@ export default function ChildrenListScreen() {
   // Helper function to check if student has enrolled face
   const hasEnrolledFace = (child: any): boolean => {
     // Check if student has a studentImageId (indicates enrolled)
-    const enrolled = child.studentImageId != null && child.studentImageId !== '';
-    console.log(`[DEBUG] hasEnrolledFace for ${child.name}:`, {
-      studentImageId: child.studentImageId,
-      isEnrolled: enrolled
-    });
-    return enrolled;
+    return child.studentImageId != null && child.studentImageId !== '';
   };
 
   // Format API data for UI or use fallback data
@@ -146,6 +141,22 @@ export default function ChildrenListScreen() {
   if (error) {
     console.error("API Error:", error);
     // Continue with fallback data instead of showing error
+  }
+
+  // Safety check: if no currentChild, show loading or empty state
+  if (!currentChild) {
+    return (
+      <SafeAreaView
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <Text style={{ fontSize: 18, color: "#000000" }}>
+          No children found
+        </Text>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -294,8 +305,8 @@ export default function ChildrenListScreen() {
             style={{ alignItems: "center", width: "80%" }}
           >
             <StudentAvatar
-              studentId={currentChild.studentId}
-              studentName={currentChild.name}
+              studentId={currentChild.studentId || currentChild.id}
+              studentName={currentChild.name || 'Unknown'}
               studentImageId={currentChild.studentImageId}
               size={240}
               showBorder={false}
@@ -410,10 +421,6 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   childImage: {
-    width: 240,
-    height: 240,
-    borderRadius: 12,
-    resizeMode: "cover",
     marginBottom: 12,
   },
   childName: {
