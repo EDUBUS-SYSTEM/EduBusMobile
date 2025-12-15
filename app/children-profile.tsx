@@ -5,7 +5,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import React from "react";
 import {
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ChildrenProfileScreen() {
   return (
@@ -107,8 +107,11 @@ function ChildrenProfileContent() {
 
   const handleBack = () => {
     console.log("Back button pressed");
-    // Always navigate to children-list since this is a standalone page
     router.push("/(parent-tabs)/children-list");
+  };
+
+  const handleNotification = () => {
+    console.log("Notification button pressed");
   };
 
   return (

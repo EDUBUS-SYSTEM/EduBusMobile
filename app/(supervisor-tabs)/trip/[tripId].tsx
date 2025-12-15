@@ -98,6 +98,20 @@ export default function SupervisorTripDetailScreen() {
   const [driverAvatarUrl, setDriverAvatarUrl] = React.useState<string | null>(null);
   const [showBoardingDropdown, setShowBoardingDropdown] = React.useState<{ studentId: string; pickupPointId: string; position: { x: number; y: number; width: number } } | null>(null);
   const [showAlightingDropdown, setShowAlightingDropdown] = React.useState<{ studentId: string; pickupPointId: string; position: { x: number; y: number; width: number } } | null>(null);
+  const [incidents, setIncidents] = React.useState<TripIncidentListItem[]>([]);
+  const [incidentsLoading, setIncidentsLoading] = React.useState(false);
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const [reportReason, setReportReason] = React.useState<TripIncidentReason>('SafetyConcern');
+  const [reportTitle, setReportTitle] = React.useState('');
+  const [reportDescription, setReportDescription] = React.useState('');
+  const [reportError, setReportError] = React.useState<string | null>(null);
+  const [reportSubmitting, setReportSubmitting] = React.useState(false);
+  const [reportModalVisible, setReportModalVisible] = React.useState(false);
+  const [confirmModalVisible, setConfirmModalVisible] = React.useState(false);
+  const [selectedIncident, setSelectedIncident] = React.useState<TripIncidentListItem | null>(null);
+  const [incidentDetailVisible, setIncidentDetailVisible] = React.useState(false);
+  const [incidentDetailLoading, setIncidentDetailLoading] = React.useState(false);
+  const scrollRef = React.useRef<ScrollView | null>(null);
   const insets = useSafeAreaInsets();
 
   const loadTripData = React.useCallback(async () => {
@@ -240,7 +254,7 @@ export default function SupervisorTripDetailScreen() {
 
               // Update stops with new sequence order
               const updatedStops = currentTrip.stops.map((stop) => {
-                const newSequence = sequenceMap.get(stop.id);
+                const newSequence = sequenceMap.get(stop.pickupPointId);
                 if (newSequence !== undefined) {
                   return {
                     ...stop,
@@ -688,7 +702,7 @@ export default function SupervisorTripDetailScreen() {
           <Text style={styles.sectionTitle}>Student List</Text>
 
           {trip.stops.map((stop, stopIndex) => (
-            <View key={stop.id} style={styles.stopGroup}>
+            <View key={stop.pickupPointId} style={styles.stopGroup}>
               {/* Stop Header (Timeline style) */}
               <View style={styles.stopHeader}>
                 <View style={styles.timelineContainer}>
@@ -733,9 +747,14 @@ export default function SupervisorTripDetailScreen() {
                         : `Absent (Boarding)${boardedAt ? ` (${boardedAt})` : ''}`;
                     }
                     
-                    const uniqueKey = `${stop.id}-${student.studentId}`;
+                    const uniqueKey = `${stop.pickupPointId}-${student.studentId}`;
                     let boardingButtonRef: View | null = null;
                     let alightingButtonRef: View | null = null;
+
+                    const boardingIconColor =
+                      (isBoarded && boardingStatusValue === 'Present') || boardingStatusValue === 'Absent'
+                        ? '#FFFFFF'
+                        : '#2E7D32';
                     
                     return (
                       <View
@@ -820,8 +839,8 @@ export default function SupervisorTripDetailScreen() {
                                   setShowBoardingDropdown(null);
                                 } else {
                                   boardingButtonRef?.measureInWindow((x, y, width, height) => {
-                                    setShowBoardingDropdown({ 
-                                      studentId: student.studentId, 
+                                    setShowBoardingDropdown({
+                                      studentId: student.studentId,
                                       pickupPointId: stop.pickupPointId,
                                       position: { x, y: y + height, width }
                                     });
@@ -831,46 +850,23 @@ export default function SupervisorTripDetailScreen() {
                               }}
                               disabled={false}
                             >
-                              <TouchableOpacity
+                              <Ionicons
+                                name={isBoarded ? 'checkmark-circle' : 'arrow-up-circle-outline'}
+                                size={18}
+                                color={boardingIconColor}
+                              />
+                              <Text
                                 style={[
-                                  styles.attendanceBtn,
-                                  styles.boardingBtn,
-                                  isBoarded && boardingStatusValue === 'Present' && styles.boardingBtnActive,
-                                  boardingStatusValue === 'Absent' && styles.boardingBtnAbsent
+                                  styles.attendanceBtnText,
+                                  (isBoarded && boardingStatusValue === 'Present') || boardingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
                                 ]}
-                                onPress={() => {
-                                  if (showBoardingDropdown?.studentId === student.studentId) {
-                                    setShowBoardingDropdown(null);
-                                  } else {
-                                    boardingButtonRef?.measureInWindow((x, y, width, height) => {
-                                      setShowBoardingDropdown({
-                                        studentId: student.studentId,
-                                        stopSequence: stop.sequence,
-                                        position: { x, y: y + height, width }
-                                      });
-                                      setShowAlightingDropdown(null);
-                                    });
-                                  }
-                                }}
-                                disabled={false}
+                                numberOfLines={1}
                               >
-                                <Ionicons
-                                  name={isBoarded ? 'checkmark-circle' : 'arrow-up-circle-outline'}
-                                  size={18}
-                                  color={isBoarded && boardingStatusValue === 'Present' ? '#FFFFFF' : boardingStatusValue === 'Absent' ? '#FFFFFF' : '#2E7D32'}
-                                />
-                                <Text
-                                  style={[
-                                    styles.attendanceBtnText,
-                                    (isBoarded && boardingStatusValue === 'Present') || boardingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
-                                  ]}
-                                  numberOfLines={1}
-                                >
-                                  Boarding {isBoarded && boardingStatusValue ? `(${boardingStatusValue})` : ''}
-                                </Text>
-                                <Ionicons name="chevron-down" size={14} color={isBoarded && boardingStatusValue === 'Present' ? '#FFFFFF' : boardingStatusValue === 'Absent' ? '#FFFFFF' : '#2E7D32'} />
-                              </TouchableOpacity>
-                            </View>
+                                Boarding {isBoarded && boardingStatusValue ? `(${boardingStatusValue})` : ''}
+                              </Text>
+                              <Ionicons name="chevron-down" size={14} color={isBoarded && boardingStatusValue === 'Present' ? '#FFFFFF' : boardingStatusValue === 'Absent' ? '#FFFFFF' : '#2E7D32'} />
+                            </TouchableOpacity>
+                          </View>
 
                           {/* Alighting Button with Dropdown */}
                           <View 
@@ -890,8 +886,8 @@ export default function SupervisorTripDetailScreen() {
                                   setShowAlightingDropdown(null);
                                 } else {
                                   alightingButtonRef?.measureInWindow((x, y, width, height) => {
-                                    setShowAlightingDropdown({ 
-                                      studentId: student.studentId, 
+                                    setShowAlightingDropdown({
+                                      studentId: student.studentId,
                                       pickupPointId: stop.pickupPointId,
                                       position: { x, y: y + height, width }
                                     });
@@ -901,47 +897,23 @@ export default function SupervisorTripDetailScreen() {
                               }}
                               disabled={(!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress'}
                             >
-                              <TouchableOpacity
+                              <Ionicons
+                                name={isAlighted ? 'checkmark-circle' : 'arrow-down-circle-outline'}
+                                size={18}
+                                color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'}
+                              />
+                              <Text
                                 style={[
-                                  styles.attendanceBtn,
-                                  styles.alightingBtn,
-                                  isAlighted && alightingStatusValue === 'Present' && styles.alightingBtnActive,
-                                  alightingStatusValue === 'Absent' && styles.alightingBtnAbsent,
-                                  ((!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress') && styles.attendanceBtnDisabled
+                                  styles.attendanceBtnText,
+                                  (isAlighted && alightingStatusValue === 'Present') || alightingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
                                 ]}
-                                onPress={() => {
-                                  if (showAlightingDropdown?.studentId === student.studentId) {
-                                    setShowAlightingDropdown(null);
-                                  } else {
-                                    alightingButtonRef?.measureInWindow((x, y, width, height) => {
-                                      setShowAlightingDropdown({
-                                        studentId: student.studentId,
-                                        stopSequence: stop.sequence,
-                                        position: { x, y: y + height, width }
-                                      });
-                                      setShowBoardingDropdown(null);
-                                    });
-                                  }
-                                }}
-                                disabled={(!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress'}
+                                numberOfLines={1}
                               >
-                                <Ionicons
-                                  name={isAlighted ? 'checkmark-circle' : 'arrow-down-circle-outline'}
-                                  size={18}
-                                  color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'}
-                                />
-                                <Text
-                                  style={[
-                                    styles.attendanceBtnText,
-                                    (isAlighted && alightingStatusValue === 'Present') || alightingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
-                                  ]}
-                                  numberOfLines={1}
-                                >
-                                  Alighting {isAlighted && alightingStatusValue ? `(${alightingStatusValue})` : ''}
-                                </Text>
-                                <Ionicons name="chevron-down" size={14} color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'} />
-                              </TouchableOpacity>
-                            </View>
+                                Alighting {isAlighted && alightingStatusValue ? `(${alightingStatusValue})` : ''}
+                              </Text>
+                              <Ionicons name="chevron-down" size={14} color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'} />
+                            </TouchableOpacity>
+                          </View>
                           </View>
                         )}
                       </View>
