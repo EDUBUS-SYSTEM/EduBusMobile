@@ -129,6 +129,7 @@ export interface TripDto {
 export interface ParentAttendanceDto {
   studentId: Guid;
   studentName: string;
+  studentImageId?: Guid | null;
   boardedAt?: string;
   alightedAt?: string;
   boardStatus?: string | null;
@@ -187,6 +188,8 @@ export interface ParentTripDtoResponse {
     rRule: string;
     tripType: TripType;
   };
+  // School location (added for parent detail)
+  schoolLocation?: TripLocationDto;
   stops: ParentTripStopDto[];
   createdAt: string;
   updatedAt?: string;

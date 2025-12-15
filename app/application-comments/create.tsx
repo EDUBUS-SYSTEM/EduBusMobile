@@ -43,8 +43,7 @@ export default function CreateAbsenceReportScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: 'Absence Report',
-      headerShown: true,
+      headerShown: false,
     });
   }, [navigation]);
   const [parentId, setParentId] = useState<string | null>(null);
@@ -480,6 +479,50 @@ export default function CreateAbsenceReportScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F6FCFF" }}>
+      {/* Header */}
+      <View
+        style={{
+          backgroundColor: "#FFFFFF",
+          paddingTop: 50,
+          paddingBottom: 12,
+          paddingHorizontal: 20,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 0,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: "#FFD700",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#000000" />
+          </TouchableOpacity>
+
+          <Text
+            style={{
+              fontFamily: "RobotoSlab-Bold",
+              fontSize: 20,
+              color: "#000000",
+            }}
+          >
+            Create Absence Report
+          </Text>
+
+          <View style={{ width: 40 }} />
+        </View>
+      </View>
       <KeyboardAvoidingView 
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
+import { formatDate } from "@/utils/date.utils";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
@@ -67,8 +68,7 @@ export default function AccountProfileScreen() {
       } else {
         setAvatarUrl(null);
       }
-    } catch (error) {
-      console.error("Error loading profile:", error);
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -98,8 +98,7 @@ export default function AccountProfileScreen() {
       if (!result.canceled && result.assets[0]) {
         await uploadAvatar(result.assets[0]);
       }
-    } catch (error) {
-      console.error("Error picking image:", error);
+    } catch {
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
@@ -140,7 +139,6 @@ export default function AccountProfileScreen() {
       await loadProfile();
       Alert.alert("Success", "Avatar updated successfully!");
     } catch (error: any) {
-      console.error("Error uploading avatar:", error);
       Alert.alert("Error", error.response?.data?.message || "Failed to upload avatar. Please try again.");
     } finally {
       setUploading(false);
@@ -532,7 +530,7 @@ export default function AccountProfileScreen() {
               }}
             >
               {profile?.dateOfBirth
-                ? new Date(profile.dateOfBirth).toLocaleDateString()
+                ? formatDate(profile.dateOfBirth)
                 : "—"}
             </Text>
           </View>

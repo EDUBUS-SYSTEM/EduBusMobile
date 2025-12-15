@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { DriverTrip } from '../../../lib/trip-mock-data/driverSchedule';
+import { DriverTrip } from '../../lib/trip-mock-data/driverSchedule';
 
 interface DayModalProps {
   visible: boolean;
@@ -313,3 +313,4 @@ const styles = StyleSheet.create({
     fontFamily: 'RobotoSlab-Medium',
   },
 });
+

@@ -1,4 +1,5 @@
 // Leave Request Types for Driver
+import { formatDate as formatWebDate, formatDateTime as formatWebDateTime } from '@/utils/date.utils';
 
 export enum LeaveType {
   Annual = 1,
@@ -147,29 +148,25 @@ export const formatDateRange = (startDate: string, endDate: string): string => {
   const start = new Date(startDate);
   const end = new Date(endDate);
   
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric' 
-    });
-  };
-  
-  if (start.toDateString() === end.toDateString()) {
-    return formatDate(start);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return '--';
+  }
+
+  const startLabel = formatWebDate(startDate);
+  const endLabel = formatWebDate(endDate);
+  if (startLabel === 'N/A' || startLabel === 'Invalid Date' || endLabel === 'N/A' || endLabel === 'Invalid Date') {
+    return '--';
   }
   
-  return `${formatDate(start)} - ${formatDate(end)}`;
+  if (start.toDateString() === end.toDateString()) {
+    return startLabel;
+  }
+  
+  return `${startLabel} - ${endLabel}`;
 };
 
 export const formatDateTime = (dateString: string): string => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  const formatted = formatWebDateTime(dateString);
+  return formatted === 'N/A' || formatted === 'Invalid Date' ? '--' : formatted;
 };
 

@@ -4,6 +4,7 @@ import { authApi } from '@/lib/auth/auth.api';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import React from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function DriverAccountScreen() {
@@ -17,28 +18,22 @@ export default function DriverAccountScreen() {
       description: 'Account profile'
     },
     {
+      id: 9,
+      title: 'Change Password',
+      icon: 'lock-closed-outline',
+      description: 'Change your password'
+    },
+    {
       id: 3,
-      title: 'Route history',
+      title: 'Trip history',
       icon: 'map-outline',
-      description: 'Route history'
+      description: 'Trip history'
     },
     {
       id: 4,
       title: 'Leave requests',
       icon: 'calendar-outline',
       description: 'Request and manage time off'
-    },
-    {
-      id: 5,
-      title: 'Performance stats',
-      icon: 'analytics-outline',
-      description: 'Performance statistics'
-    },
-    {
-      id: 6,
-      title: 'Settings',
-      icon: 'settings-outline',
-      description: 'Settings'
     },
     {
       id: 7,
@@ -252,13 +247,24 @@ export default function DriverAccountScreen() {
                 router.push('/(driver-leave)' as any);
                 return;
               }
+              if (item.id === 9) {
+                router.push('/change-password' as any);
+                return;
+              }
+              if (item.id === 3) {
+                router.push('/trip-history-driver' as any);
+                return;
+              }
+              if (item.id === 7) {
+                router.push('/help' as any);
+                return;
+              }
               if (item.id === 8) {
                 try {
                   await authApi.logout();
                 } finally {
                   router.replace('/login');
                 }
-                return;
               }
               // Add more navigation logic for other menu items here
             }}

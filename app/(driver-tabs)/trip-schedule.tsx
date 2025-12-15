@@ -10,10 +10,11 @@ import {
   View,
 } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
-import DayModal from '../../features/driverSchedule/components/DayModal';
+import DayModal from '@/components/driverSchedule/DayModal';
 import { academicCalendarApi, AcademicSemester } from '../../lib/academicCalendar/academicCalendar.api';
 import { authApi } from '../../lib/auth/auth.api';
 import { DriverSchedule, driverScheduleApi } from '../../lib/trip-mock-data/driverSchedule';
+import { formatDateWithWeekday } from '@/utils/date.utils';
 
 export default function DriverScheduleScreen() {
   const [schedule, setSchedule] = useState<DriverSchedule>({ dots: [], byDate: {} });
@@ -338,11 +339,7 @@ export default function DriverScheduleScreen() {
         {Boolean(selectedDate && schedule.byDate[selectedDate]) && (
           <View style={styles.selectedDateInfo}>
             <Text style={styles.selectedDateTitle}>
-              {new Date(selectedDate).toLocaleDateString('en-US', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-              })}
+              {formatDateWithWeekday(selectedDate)}
             </Text>
             <Text style={styles.tripCount}>
               {schedule.byDate[selectedDate].length} trip(s) scheduled

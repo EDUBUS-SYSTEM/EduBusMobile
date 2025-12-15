@@ -1,29 +1,36 @@
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Location from 'expo-location';
-import { router } from 'expo-router';
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  StyleSheet,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { WebView } from 'react-native-webview';
+import { useSchoolInfo } from '@/hooks/useSchoolInfo';
+import { authApi } from '@/lib/auth/auth.api';
+import { childrenApi } from '@/lib/parent/children.api';
+import type { Child } from '@/lib/parent/children.type';
 import {
   pickupPointApi,
   REUSE_PICKUP_POINT_STORAGE_KEY,
   type ReusePickupPointPayload,
 } from '@/lib/parent/pickupPoint.api';
-import { childrenApi } from '@/lib/parent/children.api';
-import { authApi } from '@/lib/auth/auth.api';
-import { useSchoolInfo } from '@/hooks/useSchoolInfo';
-import type { Child } from '@/lib/parent/children.type';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  Camera,
+  LineLayer,
+  MapView,
+  PointAnnotation,
+  ShapeSource,
+  type MapViewRef,
+} from '@vietmap/vietmap-gl-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
+import { router } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 interface Student {
   id: string;
@@ -69,14 +76,6 @@ const FALLBACK_SCHOOL_LOCATION = {
 };
 
 const FALLBACK_SCHOOL_NAME = 'FPT School Da Nang';
-
-const sanitizeHtml = (value: string) =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 
 // Helper function to decode polyline encoded string
 function decodePolyline(encoded: string): { lat: number; lng: number }[] {
@@ -152,18 +151,44 @@ async function getRoute(
       vehicle: 'car'
     });
 
-    // VietMap Directions API expects coordinates in "lng,lat" order
-    const originPoint = `${origin.lng},${origin.lat}`;
-    const destPoint = `${destination.lng},${destination.lat}`;
+    // VietMap Directions API expects coordinates in "lat,lng" order
+    // Ensure coordinates are valid numbers and within reasonable range
+    const originLat = Number(origin.lat);
+    const originLng = Number(origin.lng);
+    const destLat = Number(destination.lat);
+    const destLng = Number(destination.lng);
+
+    if (isNaN(originLat) || isNaN(originLng) || isNaN(destLat) || isNaN(destLng)) {
+      console.error('[getRoute] ❌ Coordinates contain NaN:', { origin, destination });
+      return null;
+    }
+
+    // Validate Vietnam bounds more strictly
+    if (
+      originLat < 8 || originLat > 24 || originLng < 102 || originLng > 110 ||
+      destLat < 8 || destLat > 24 || destLng < 102 || destLng > 110
+    ) {
+      console.error('[getRoute] ❌ Coordinates outside Vietnam bounds:', {
+        origin: { lat: originLat, lng: originLng },
+        destination: { lat: destLat, lng: destLng }
+      });
+      return null;
+    }
+
+    // VietMap API expects "lat,lng" format
+    const originPoint = `${originLat},${originLng}`;
+    const destPoint = `${destLat},${destLng}`;
 
     params.append('point', originPoint);
     params.append('point', destPoint);
 
     const url = `${baseUrl}?${params}`;
     console.log('[getRoute] Requesting route:', {
-      origin: `${origin.lat},${origin.lng}`,
-      destination: `${destination.lat},${destination.lng}`,
-      url: url.replace(apikey, '***')
+      origin: { lat: originLat, lng: originLng },
+      destination: { lat: destLat, lng: destLng },
+      originPoint,
+      destPoint,
+      url: url.replace(apiKey, '***')
     });
 
     const response = await fetch(url);
@@ -179,11 +204,20 @@ async function getRoute(
       code: data.code,
       hasPaths: !!data.paths,
       pathsLength: data.paths?.length || 0,
-      messages: data.messages
+      messages: data.messages,
+      error: data.error
     });
 
     if (data.code !== 'OK' || !data.paths || data.paths.length === 0) {
-      console.error('[getRoute] ❌ Route API error:', data.messages || data.error || 'No paths found');
+      console.error('[getRoute] ❌ Route API error:', {
+        code: data.code,
+        messages: data.messages,
+        error: data.error,
+        origin: { lat: originLat, lng: originLng },
+        destination: { lat: destLat, lng: destLng },
+        originPoint: `${originLat},${originLng}`,
+        destPoint: `${destLat},${destLng}`
+      });
       return null;
     }
 
@@ -236,15 +270,8 @@ export default function MapScreen() {
   const [prefilledPickupPoint, setPrefilledPickupPoint] = useState<ReusePickupPointPayload | null>(null);
   const [unitPriceReady, setUnitPriceReady] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
-  const webViewRef = useRef<WebView>(null);
-  // NOTE: These refs are only used for the direct VietMap GL web implementation.
-  // To make the screen work better with Expo Go, we'll now rely solely on WebView
-  // (with embedded HTML) for ALL platforms, so these are commented out.
-  // const webMapRef = useRef<any>(null);
-  // const routeLayerRef = useRef<any>(null);
-  // const routeSourceRef = useRef<any>(null);
-  const handleTempLocationSelectedRef = useRef<((coords: { lat: number; lng: number }, address: string) => Promise<void>) | null>(null);
-  const handleMarkerClickRef = useRef<((coords: { lat: number; lng: number }, address: string) => void) | null>(null);
+  const [routeCoordinates, setRouteCoordinates] = useState<{ lat: number; lng: number }[] | null>(null);
+  const mapRef = useRef<MapViewRef>(null);
   const { schoolInfo } = useSchoolInfo();
 
   const schoolLocation = useMemo(() => {
@@ -559,67 +586,39 @@ export default function MapScreen() {
   const getPlaceDetails = async (ref_id: string): Promise<{ lat: number; lng: number } | null> => {
     const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || '';
     if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
-      console.warn('VietMap API key not configured');
       return null;
     }
 
     try {
       const params = new URLSearchParams({
         apikey: apiKey,
-        ref_id: ref_id
+        refid: ref_id
       });
 
-      const response = await fetch(`https://maps.vietmap.vn/api/place/details?${params}`);
+      const response = await fetch(`https://maps.vietmap.vn/api/place/v3?${params}`);
       if (!response.ok) {
-        throw new Error(`Place details API error: ${response.status}`);
+        return null;
       }
 
       const data = await response.json();
 
       if (data && typeof data === 'object') {
-        // Handle multiple possible VietMap formats
-        let lat: number | null = null;
-        let lng: number | null = null;
+        const coords = extractCoordinates(data);
+        if (coords) {
+          return coords;
+        }
 
-        const coordsObj = (data as any).coordinates || (data as any).coord || (data as any).location || (data as any).geometry?.location;
-
-        // 1) Object with lat/lng or latitude/longitude
-        if (coordsObj && typeof coordsObj === 'object' && !Array.isArray(coordsObj)) {
-          if (
-            (coordsObj.lat !== undefined || coordsObj.latitude !== undefined) &&
-            (coordsObj.lng !== undefined || coordsObj.longitude !== undefined)
-          ) {
-            lat = coordsObj.lat ?? coordsObj.latitude;
-            lng = coordsObj.lng ?? coordsObj.longitude;
+        const nestedData = (data as any).data || (data as any).result || (data as any).place;
+        if (nestedData) {
+          const nestedCoords = extractCoordinates(nestedData);
+          if (nestedCoords) {
+            return nestedCoords;
           }
-        }
-
-        // 2) Array [lng, lat]
-        if ((lat === null || lng === null) && Array.isArray(coordsObj) && coordsObj.length >= 2) {
-          lng = Number(coordsObj[0]);
-          lat = Number(coordsObj[1]);
-        }
-
-        // 3) String "lat,lng" or "lng,lat" (try to detect)
-        if ((lat === null || lng === null) && typeof coordsObj === 'string') {
-          const parts = coordsObj.split(',');
-          if (parts.length >= 2) {
-            const a = Number(parts[0].trim());
-            const b = Number(parts[1].trim());
-            // Heuristic: VietMap docs commonly use "lat,lng"
-            lat = a;
-            lng = b;
-          }
-        }
-
-        if (lat !== null && lng !== null) {
-          return { lat, lng };
         }
       }
 
       return null;
     } catch (error) {
-      console.error('Error getting place details:', error);
       return null;
     }
   };
@@ -740,6 +739,11 @@ export default function MapScreen() {
     setSearchResults([]);
     setShowSearchResults(false);
     setError('');
+    setTempCoords(null);
+    setRouteCoordinates(null);
+    setDistance('');
+    setDuration('');
+    setFare('');
   }, []);
 
   // Handle temp location selection (when clicking on map or using "Get My Location")
@@ -780,6 +784,7 @@ export default function MapScreen() {
     setDistance('');
     setDuration('');
     setFare('');
+    setRouteCoordinates(null);
 
     // Validate school location as well
     if (
@@ -795,6 +800,11 @@ export default function MapScreen() {
 
     // Get actual route from VietMap Directions API
     // NOTE: origin = school, destination = selected/current location
+    console.log('[handleTempLocationSelected] Calling getRoute with:', {
+      schoolLocation: { lat: schoolLocation.lat, lng: schoolLocation.lng },
+      coords: { lat: coords.lat, lng: coords.lng },
+      apiKey: apiKey ? '***' : 'MISSING'
+    });
     const routeData = await getRoute(schoolLocation, coords, apiKey);
 
     if (routeData) {
@@ -818,16 +828,8 @@ export default function MapScreen() {
       // Calculate semester fee
       calculateSemesterFee(distanceKm);
 
-      // Draw route on map through WebView on all platforms
-      if (webViewRef.current) {
-        const coordinatesJson = JSON.stringify(routeData.coordinates);
-        const script = `
-          if (window.drawRoute) {
-            window.drawRoute(${coordinatesJson});
-          }
-        `;
-        webViewRef.current.injectJavaScript(script);
-      }
+      // Set route coordinates for rendering
+      setRouteCoordinates(routeData.coordinates);
     } else {
       // Fallback to Haversine distance if API fails
       const R = 6371;
@@ -860,29 +862,19 @@ export default function MapScreen() {
     setIsRouting(false);
   }, [unitPrice, calculateSemesterFee, schoolLocation]);
 
-  // Update ref when callback changes
-  useEffect(() => {
-    handleTempLocationSelectedRef.current = handleTempLocationSelected;
-  }, [handleTempLocationSelected]);
-
   useEffect(() => {
     if (!prefilledPickupPoint || !unitPriceReady || isLoading) {
       return;
     }
 
     const applyPrefill = async () => {
-      const latestHandleTempLocationSelected = handleTempLocationSelectedRef.current;
-      if (!latestHandleTempLocationSelected) {
-        return;
-      }
-
       const coords = {
         lat: prefilledPickupPoint.latitude,
         lng: prefilledPickupPoint.longitude,
       };
 
       try {
-        await latestHandleTempLocationSelected(coords, prefilledPickupPoint.addressText);
+        await handleTempLocationSelected(coords, prefilledPickupPoint.addressText);
         setSelectedCoords(coords);
         setTempCoords(null);
         setShowSubmitForm(true);
@@ -895,101 +887,51 @@ export default function MapScreen() {
     };
 
     applyPrefill();
-  }, [prefilledPickupPoint, unitPriceReady, isLoading]);
+  }, [prefilledPickupPoint, unitPriceReady, isLoading, handleTempLocationSelected]);
 
   // Handle search result selection
   const handleSearchResultSelect = useCallback(async (result: VietMapGeocodeResult) => {
     setShowSearchResults(false);
     setError('');
+    setIsSearching(true);
 
-    let coords = null;
+    let coords: { lat: number; lng: number } | null = null;
 
-    // Try to get coordinates from entry_points first (most accurate)
+    // Try to get coordinates from entry_points first (most accurate for navigation)
     if (result.entry_points && result.entry_points.length > 0 && result.entry_points[0].ref_id) {
-      try {
-        coords = await getPlaceDetails(result.entry_points[0].ref_id);
-      } catch (error) {
-        console.error('Error getting coordinates from entry_points:', error);
-      }
+      coords = await getPlaceDetails(result.entry_points[0].ref_id);
     }
 
     // Fallback to main ref_id
     if (!coords && result.ref_id) {
-      try {
-        coords = await getPlaceDetails(result.ref_id);
-      } catch (error) {
-        console.error('Error getting coordinates from ref_id:', error);
-      }
+      coords = await getPlaceDetails(result.ref_id);
     }
 
-    // If still no coordinates, try to extract from data_new or data_old
+    // If still no coordinates, try to extract from data_new using helper
     if (!coords && result.data_new) {
-      try {
-        const data = result.data_new as any;
-        if (data.coordinates || data.coord || data.location || data.geometry?.location) {
-          const coordData = data.coordinates || data.coord || data.location || data.geometry?.location;
-          if (coordData.lat !== undefined && coordData.lng !== undefined) {
-            coords = { lat: coordData.lat, lng: coordData.lng };
-          } else if (coordData.latitude !== undefined && coordData.longitude !== undefined) {
-            coords = { lat: coordData.latitude, lng: coordData.longitude };
-          }
-        }
-      } catch (error) {
-        console.error('Error extracting coordinates from data_new:', error);
-      }
+      coords = extractCoordinates(result.data_new);
     }
 
-    // Try data_old as last resort
+    // Try data_old as last resort using helper
     if (!coords && result.data_old) {
-      try {
-        const data = result.data_old as any;
-        if (data.coordinates || data.coord || data.location || data.geometry?.location) {
-          const coordData = data.coordinates || data.coord || data.location || data.geometry?.location;
-          if (coordData.lat !== undefined && coordData.lng !== undefined) {
-            coords = { lat: coordData.lat, lng: coordData.lng };
-          } else if (coordData.latitude !== undefined && coordData.longitude !== undefined) {
-            coords = { lat: coordData.latitude, lng: coordData.longitude };
-          }
-        }
-      } catch (error) {
-        console.error('Error extracting coordinates from data_old:', error);
-      }
+      coords = extractCoordinates(result.data_old);
     }
 
-    // Fallback to mock coordinates if needed (should not happen with proper API)
+    // Try to extract directly from result object (some API versions include coords at root level)
     if (!coords) {
-      console.warn('No coordinates found for result:', result);
-      coords = {
-        lat: 16.0544 + (Math.random() - 0.5) * 0.1,
-        lng: 108.2022 + (Math.random() - 0.5) * 0.1
-      };
+      coords = extractCoordinates(result);
+    }
+
+    setIsSearching(false);
+
+    // If no coordinates found, show error instead of using random fallback
+    if (!coords) {
+      setError('Không thể lấy tọa độ cho địa điểm này. Vui lòng thử lại hoặc chọn địa điểm khác.');
+      return;
     }
 
     setSearchQuery(result.display);
     setTempCoords(coords);
-
-    // Update map position and marker via WebView for all platforms
-    if (webViewRef.current) {
-      const script = `
-        (function() {
-          if (map && window.vietmapgl) {
-            const coords = [${coords.lng}, ${coords.lat}];
-            map.flyTo({ center: coords, zoom: 15 });
-            
-            if (marker) marker.remove();
-            clearRoute();
-            
-            marker = new vietmapgl.Marker({ color: '#FDC700' })
-              .setLngLat(coords)
-              .setPopup(new vietmapgl.Popup().setHTML('<b>${result.display.replace(/'/g, "\\'")}</b><br>Click marker to confirm'))
-              .addTo(map);
-            
-            marker.togglePopup();
-          }
-        })();
-      `;
-      webViewRef.current.injectJavaScript(script);
-    }
 
     // Calculate route for selected location
     handleTempLocationSelected(coords, result.display);
@@ -1011,35 +953,15 @@ export default function MapScreen() {
 
       const { latitude, longitude } = position.coords;
 
-      // Lấy địa chỉ cụ thể cho vị trí hiện tại
+      // Get address for current location
       const addressLabel = await reverseGeocode(
         { lat: latitude, lng: longitude },
         'My Current Location'
       );
 
-      // Update WebView map (fly, marker, popup) using these coordinates
-      if (webViewRef.current) {
-        const script = `
-          (function() {
-            const coords = [${longitude}, ${latitude}];
-            if (typeof map !== 'undefined' && map && window.vietmapgl) {
-              if (marker) marker.remove();
-              clearRoute && clearRoute();
-
-              marker = new vietmapgl.Marker({ color: '#FDC700' })
-                .setLngLat(coords)
-                .setPopup(new vietmapgl.Popup().setHTML('<b>${sanitizeHtml(
-          addressLabel
-        )}</b><br>Click marker to confirm'))
-                .addTo(map);
-
-              marker.togglePopup();
-              map.flyTo({ center: coords, zoom: 15 });
-            }
-          })();
-        `;
-        webViewRef.current.injectJavaScript(script);
-      }
+      // Set temp coords to show marker and calculate route
+      setTempCoords({ lat: latitude, lng: longitude });
+      setSearchQuery(addressLabel);
 
       // Reuse existing logic to compute route, distance, fare, semester fee
       handleTempLocationSelected(
@@ -1056,36 +978,102 @@ export default function MapScreen() {
   const handleMarkerClick = useCallback((coords: { lat: number; lng: number }, address: string) => {
     setSelectedCoords(coords);
     setTempCoords(null);
+    setRouteCoordinates(null);
     setShowSubmitForm(true);
   }, []);
 
-  // Update ref when callback changes
-  useEffect(() => {
-    handleMarkerClickRef.current = handleMarkerClick;
-  }, [handleMarkerClick]);
-
-  // Handle WebView messages (for mobile)
-  const handleWebViewMessage = async (event: any) => {
+  // Handle map press to select location
+  const handleMapPress = useCallback(async (feature: GeoJSON.Feature) => {
     try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'LOCATION_SELECTED') {
-        // Khi user click trên map: dùng reverse geocode để lấy địa chỉ cụ thể
-        const coords = { lat: data.lat, lng: data.lng };
-        const resolvedAddress = await reverseGeocode(coords, 'Selected location');
-        handleTempLocationSelected(
-          coords,
-          resolvedAddress
-        );
-      } else if (data.type === 'MARKER_CLICKED') {
-        handleMarkerClick(
-          { lat: data.lat, lng: data.lng },
-          data.address || 'Selected location'
-        );
+      let longitude: number | null = null;
+      let latitude: number | null = null;
+
+      // Try to get coordinates from geometry
+      // GeoJSON format is [longitude, latitude]
+      if (feature.geometry) {
+        if (feature.geometry.type === 'Point' && feature.geometry.coordinates) {
+          const coords = feature.geometry.coordinates;
+          if (Array.isArray(coords) && coords.length >= 2) {
+            // GeoJSON standard: [longitude, latitude]
+            const val0 = Number(coords[0]);
+            const val1 = Number(coords[1]);
+
+            // Heuristic: if first value > 90, it's likely longitude (Vietnam lng ~102-110)
+            if (Math.abs(val0) > 90) {
+              longitude = val0;
+              latitude = val1;
+            } else if (val0 >= 8 && val0 <= 24 && val1 >= 102 && val1 <= 110) {
+              // Likely [lat, lng] format - swap them
+              latitude = val0;
+              longitude = val1;
+            } else {
+              // Default to GeoJSON format [lng, lat]
+              longitude = val0;
+              latitude = val1;
+            }
+          }
+        }
+      }
+
+      // Try to get coordinates from properties
+      if ((!longitude || !latitude) && feature.properties) {
+        const props = feature.properties as any;
+        if (props.coordinates && Array.isArray(props.coordinates) && props.coordinates.length >= 2) {
+          longitude = props.coordinates[0];
+          latitude = props.coordinates[1];
+        } else if (props.longitude !== undefined && props.latitude !== undefined) {
+          longitude = props.longitude;
+          latitude = props.latitude;
+        } else if (props.lng !== undefined && props.lat !== undefined) {
+          longitude = props.lng;
+          latitude = props.lat;
+        }
+      }
+
+      if (longitude !== null && latitude !== null && !isNaN(longitude) && !isNaN(latitude)) {
+        // Validate coordinates are within reasonable bounds
+        // GeoJSON uses [lng, lat] format, so coords[0] is longitude, coords[1] is latitude
+        // But we need to check if they might be swapped (lat should be 8-24 for Vietnam, lng should be 102-110)
+        let finalLat = latitude;
+        let finalLng = longitude;
+
+        // Check if coordinates seem swapped based on Vietnam bounds
+        // Vietnam: lat ~8-24, lng ~102-110
+        const latInRange = latitude >= 8 && latitude <= 24;
+        const lngInRange = longitude >= 102 && longitude <= 110;
+        const latLooksLikeLng = latitude >= 102 && latitude <= 110;
+        const lngLooksLikeLat = longitude >= 8 && longitude <= 24;
+
+        if ((latLooksLikeLng && lngLooksLikeLat) || (!latInRange && !lngInRange && latLooksLikeLng)) {
+          // Likely swapped - swap them
+          console.log('[handleMapPress] ⚠️ Coordinates appear swapped, swapping...', { original: { lat: latitude, lng: longitude } });
+          finalLat = longitude;
+          finalLng = latitude;
+        }
+
+        // Final validation for Vietnam bounds
+        if (finalLat >= 8 && finalLat <= 24 && finalLng >= 102 && finalLng <= 110) {
+          console.log('[handleMapPress] ✅ Valid coordinates:', { lat: finalLat, lng: finalLng });
+          // Use reverse geocode to get address
+          const resolvedAddress = await reverseGeocode(
+            { lat: finalLat, lng: finalLng },
+            'Selected location'
+          );
+          handleTempLocationSelected(
+            { lat: finalLat, lng: finalLng },
+            resolvedAddress
+          );
+        } else {
+          console.error('[handleMapPress] ❌ Coordinates outside Vietnam bounds:', { lat: finalLat, lng: finalLng });
+          setError('Selected location is outside Vietnam. Please select a valid location.');
+        }
+      } else {
+        console.error('[handleMapPress] ❌ Invalid coordinates extracted:', { longitude, latitude });
       }
     } catch (error) {
-      console.error('Error parsing WebView message:', error);
+      console.error('Error handling map press:', error);
     }
-  };
+  }, [handleTempLocationSelected, reverseGeocode]);
 
   // NOTE: The original implementation included a large block of VietMap GL JS
   // initialization code for the web platform (using direct DOM APIs and a map
@@ -1146,260 +1134,57 @@ export default function MapScreen() {
     }
   };
 
-  // Generate HTML for WebView with simple map interface (for mobile)
-  // Use useMemo to cache HTML and prevent WebView reload
-  const mapHTML = useMemo(() => {
-    const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || 'YOUR_API_KEY_HERE';
-    const schoolLng = schoolLocation.lng;
-    const schoolLat = schoolLocation.lat;
-    const schoolNameHtml = sanitizeHtml(schoolName);
-    const schoolAddressHtml = schoolAddress ? sanitizeHtml(schoolAddress) : '';
-    const schoolPopupHtml =
-      schoolAddressHtml.length > 0
-        ? `<b>${schoolNameHtml}</b><br />${schoolAddressHtml}`
-        : `<b>${schoolNameHtml}</b>`;
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
-    #map { width: 100%; height: 100vh; }
-  </style>
-  <script src="https://unpkg.com/@vietmap/vietmap-gl-js@6.0.0/dist/vietmap-gl.js"></script>
-  <link href="https://unpkg.com/@vietmap/vietmap-gl-js@6.0.0/dist/vietmap-gl.css" rel="stylesheet">
-</head>
-<body>
-  <div id="map"></div>
-  <script>
-    const schoolLocation = [${schoolLng}, ${schoolLat}];
-    let map;
-    let marker = null;
-    let routeLayer = null;
-    let routeSource = null;
-    const apiKey = '${apiKey}';
-    
-    function showError(msg) {
-      const errorDiv = document.getElementById('error');
-      if (errorDiv) {
-        errorDiv.textContent = msg;
-      }
+  // Calculate map bounds to fit school and selected location
+  const getMapBounds = useCallback(() => {
+    const points: [number, number][] = [[schoolLocation.lng, schoolLocation.lat]];
+
+    if (tempCoords) {
+      points.push([tempCoords.lng, tempCoords.lat]);
     }
-    
-    function clearRoute() {
-      if (routeLayer && map && map.getLayer && map.getLayer(routeLayer)) {
-        map.removeLayer(routeLayer);
-      }
-      if (routeSource && map && map.getSource && map.getSource(routeSource)) {
-        map.removeSource(routeSource);
-      }
-      routeLayer = null;
-      routeSource = null;
-    }
-    
-    function drawRoute(coordinates) {
-      clearRoute();
-      
-      const sourceId = 'route-source';
-      const layerId = 'route-layer';
-      
-      const geoJsonData = {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: coordinates.map(coord => [coord.lng, coord.lat])
-        }
+
+    if (points.length === 1) {
+      return {
+        centerCoordinate: points[0] as [number, number],
+        zoomLevel: 14,
       };
-      
-      if (map.getSource(sourceId)) {
-        map.getSource(sourceId).setData(geoJsonData);
-      } else {
-        map.addSource(sourceId, {
-          type: 'geojson',
-          data: geoJsonData
-        });
-      }
-      
-      if (!map.getLayer(layerId)) {
-        map.addLayer({
-          id: layerId,
-          type: 'line',
-          source: sourceId,
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#0066CC',
-            'line-width': 4
-          }
-        });
-      }
-      
-      routeLayer = layerId;
-      routeSource = sourceId;
-
-      // Fit map to show the full route (from school to selected location)
-      try {
-        if (Array.isArray(coordinates) && coordinates.length > 1 && map && map.fitBounds) {
-          let minLat = coordinates[0].lat;
-          let maxLat = coordinates[0].lat;
-          let minLng = coordinates[0].lng;
-          let maxLng = coordinates[0].lng;
-
-          for (let i = 1; i < coordinates.length; i++) {
-            const c = coordinates[i];
-            if (c.lat < minLat) minLat = c.lat;
-            if (c.lat > maxLat) maxLat = c.lat;
-            if (c.lng < minLng) minLng = c.lng;
-            if (c.lng > maxLng) maxLng = c.lng;
-          }
-
-          const southWest = [minLng, minLat];
-          const northEast = [maxLng, maxLat];
-
-          map.fitBounds([southWest, northEast], {
-            padding: 60,
-            maxZoom: 16,
-          });
-        }
-      } catch (e) {
-        console.warn('Error fitting bounds for route:', e);
-      }
     }
-    
-    function initMap() {
-      if (apiKey === 'YOUR_API_KEY_HERE') {
-        showError('⚠️ VietMap API key not configured. Please set EXPO_PUBLIC_VIETMAP_API_KEY in your .env file.');
-        return;
-      }
-      
-      try {
-        map = new vietmapgl.Map({
-          container: 'map',
-          style: 'https://maps.vietmap.vn/maps/styles/tm/style.json?apikey=' + apiKey,
-          center: schoolLocation,
-          zoom: 14
-        });
-        
-        map.on('load', () => {
-          // Add school marker
-          new vietmapgl.Marker({ color: 'red' })
-            .setLngLat(schoolLocation)
-            .setPopup(new vietmapgl.Popup().setHTML('${schoolPopupHtml}'))
-            .addTo(map);
-        });
-        
-        // Handle map click
-        map.on('click', (e) => {
-          // Check if click is on marker
-          if (marker && e.originalEvent) {
-            const markerElement = marker.getElement();
-            if (markerElement && markerElement.contains(e.originalEvent.target)) {
-              // Click on marker - confirm location
-              const coords = marker.getLngLat();
-              if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'MARKER_CLICKED',
-                  lat: coords.lat,
-                  lng: coords.lng,
-                  address: 'Selected location'
-                }));
-              }
-              return;
-            }
-          }
-          
-          // Click on map - select new location
-          const coords = e.lngLat;
-          
-          if (marker) marker.remove();
-          clearRoute();
-          
-          marker = new vietmapgl.Marker({ color: '#FDC700' })
-            .setLngLat(coords)
-            // Nội dung popup sẽ được React Native cập nhật lại sau khi reverse geocode,
-            // nên tạm thời chỉ hiển thị text đơn giản.
-            .setPopup(new vietmapgl.Popup().setHTML('<b>Selected location</b><br>Calculating address...'))
-            .addTo(map);
-          
-          marker.togglePopup();
-          
-          // Send location to React Native
-          if (window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'LOCATION_SELECTED',
-              lat: coords.lat,
-              lng: coords.lng
-            }));
-          }
-        });
-        
-        // Expose drawRoute function for React Native to call
-        window.drawRoute = drawRoute;
-      } catch (error) {
-        showError('Error loading map: ' + error.message);
-        console.error('Map initialization error:', error);
-      }
+
+    const lngs = points.map(p => p[0]);
+    const lats = points.map(p => p[1]);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+
+    const centerLng = (minLng + maxLng) / 2;
+    const centerLat = (minLat + maxLat) / 2;
+
+    const lngDiff = maxLng - minLng;
+    const latDiff = maxLat - minLat;
+    const maxDiff = Math.max(lngDiff, latDiff);
+
+    let zoomLevel = 14;
+    if (maxDiff > 0.1) zoomLevel = 12;
+    else if (maxDiff > 0.05) zoomLevel = 13;
+    else if (maxDiff > 0.02) zoomLevel = 14;
+    else if (maxDiff > 0.01) zoomLevel = 15;
+    else zoomLevel = 16;
+
+    return {
+      centerCoordinate: [centerLng, centerLat] as [number, number],
+      zoomLevel,
+    };
+  }, [schoolLocation, tempCoords]);
+
+  const getCameraSettings = useCallback(() => {
+    if (tempCoords) {
+      return {
+        centerCoordinate: [tempCoords.lng, tempCoords.lat] as [number, number],
+        zoomLevel: 15,
+      };
     }
-    
-    function getCurrentLocation() {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const coords = [position.coords.longitude, position.coords.latitude];
-            if (map) {
-              map.flyTo({ center: coords, zoom: 15 });
-              
-              if (marker) marker.remove();
-              clearRoute();
-              
-              marker = new vietmapgl.Marker({ color: '#FDC700' })
-                .setLngLat(coords)
-                .setPopup(new vietmapgl.Popup().setHTML('<b>My location</b><br>Calculating address...'))
-                .addTo(map);
-              
-              marker.togglePopup();
-              
-              if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'LOCATION_SELECTED',
-                  lat: position.coords.latitude,
-                  lng: position.coords.longitude
-                }));
-              }
-            }
-          },
-          (error) => {
-            showError('Unable to get location: ' + error.message);
-          }
-        );
-      } else {
-        showError('Geolocation is not supported.');
-      }
-    }
-    
-    // Initialize map when page loads
-    if (typeof vietmapgl !== 'undefined') {
-      initMap();
-    } else {
-      window.addEventListener('load', () => {
-        setTimeout(() => {
-          if (typeof vietmapgl !== 'undefined') {
-            initMap();
-          } else {
-            showError('Failed to load VietMap library. Please check your API key.');
-          }
-        }, 1000);
-      });
-    }
-  </script>
-</body>
-</html>
-    `;
-  }, [schoolAddress, schoolLocation.lat, schoolLocation.lng, schoolName]);
+    return getMapBounds();
+  }, [tempCoords, getMapBounds]);
 
   if (isLoading) {
     return (
@@ -1430,7 +1215,7 @@ export default function MapScreen() {
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={['#FEFCE8', '#FFF085']}
+        colors={['#FFD700', '#FFEB3B']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}>
@@ -1438,13 +1223,13 @@ export default function MapScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backIcon}>
             <Ionicons name="arrow-back" size={24} color="#000000" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Find Route</Text>
+          <Text style={styles.headerTitle}>Select Pickup Point</Text>
           <View style={{ width: 44 }} />
         </View>
       </LinearGradient>
 
       {!showSubmitForm ? (
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Search Section */}
           <View style={styles.searchSection}>
             <View style={styles.searchContainer}>
@@ -1473,7 +1258,7 @@ export default function MapScreen() {
             {/* Search Results Dropdown */}
             {showSearchResults && searchResults.length > 0 && (
               <View style={styles.searchResults}>
-                <ScrollView style={styles.searchResultsList} nestedScrollEnabled>
+                <ScrollView style={styles.searchResultsList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                   {searchResults.map((result, index) => (
                     <TouchableOpacity
                       key={index}
@@ -1487,16 +1272,6 @@ export default function MapScreen() {
               </View>
             )}
 
-            {/* Get My Location Button */}
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                onPress={handleGetMyLocation}
-                style={styles.locationButton}
-                disabled={isLoading}>
-                <Ionicons name="location" size={24} color="#000000" />
-              </TouchableOpacity>
-            </View>
-
             {/* Error Message */}
             {error && (
               <View style={styles.errorContainer}>
@@ -1505,25 +1280,114 @@ export default function MapScreen() {
             )}
           </View>
 
-          {/* Map Container - now always rendered via WebView so it works consistently in Expo Go */}
-          <View style={styles.mapContainer}>
-            <WebView
-              ref={webViewRef}
-              source={{ html: mapHTML }}
-              style={styles.webview}
-              onMessage={handleWebViewMessage}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              geolocationEnabled={true}
-              startInLoadingState={true}
-              originWhitelist={['*']}
-              mixedContentMode="always"
-              renderLoading={() => (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#FDC700" />
-                </View>
-              )}
-            />
+          {/* Map Container */}
+          <View style={styles.mapWrapper}>
+            <View style={styles.mapContainer}>
+              {(() => {
+                const apiKey = process.env.EXPO_PUBLIC_VIETMAP_API_KEY || '';
+                const mapStyle = apiKey
+                  ? `https://maps.vietmap.vn/maps/styles/tm/style.json?apikey=${apiKey}`
+                  : undefined;
+
+                if (!mapStyle) {
+                  return (
+                    <View style={styles.mapError}>
+                      <Ionicons name="map-outline" size={48} color="#9E9E9E" />
+                      <Text style={styles.mapErrorText}>
+                        Map not available{'\n'}
+                        Please configure VietMap API key
+                      </Text>
+                    </View>
+                  );
+                }
+
+                return (
+                  <MapView
+                    ref={mapRef}
+                    style={styles.map}
+                    mapStyle={mapStyle}
+                    onPress={handleMapPress}
+                    logoEnabled={false}
+                  >
+                    <Camera
+                      defaultSettings={{
+                        centerCoordinate: [schoolLocation.lng, schoolLocation.lat] as [number, number],
+                        zoomLevel: 14,
+                        animationDuration: 0,
+                      }}
+                      centerCoordinate={getCameraSettings().centerCoordinate}
+                      zoomLevel={getCameraSettings().zoomLevel}
+                      animationDuration={tempCoords ? 500 : 0}
+                    />
+
+                    {/* Route from school to selected location */}
+                    {routeCoordinates && routeCoordinates.length > 0 && (
+                      <ShapeSource
+                        id="route-source"
+                        shape={{
+                          type: 'Feature',
+                          properties: {},
+                          geometry: {
+                            type: 'LineString',
+                            coordinates: routeCoordinates.map(coord => [coord.lng, coord.lat]),
+                          },
+                        }}
+                      >
+                        <LineLayer
+                          id="route-layer"
+                          style={{
+                            lineColor: '#0066CC',
+                            lineWidth: 4,
+                            lineCap: 'round',
+                            lineJoin: 'round',
+                          }}
+                        />
+                      </ShapeSource>
+                    )}
+
+                    {/* School marker */}
+                    <PointAnnotation
+                      id="school-location"
+                      coordinate={[schoolLocation.lng, schoolLocation.lat]}
+                      anchor={{ x: 0.5, y: 1 }}
+                    >
+                      <View style={styles.schoolMarkerContainer}>
+                        <Ionicons name="school" size={32} color="#FFFFFF" />
+                      </View>
+                    </PointAnnotation>
+
+                    {/* Selected location marker */}
+                    {tempCoords && (
+                      <PointAnnotation
+                        id="selected-location"
+                        coordinate={[tempCoords.lng, tempCoords.lat]}
+                        anchor={{ x: 0.5, y: 1 }}
+                        onSelected={() => {
+                          if (tempCoords) {
+                            handleMarkerClick(
+                              tempCoords,
+                              searchQuery || 'Selected location'
+                            );
+                          }
+                        }}
+                      >
+                        <View style={styles.selectedMarkerContainer}>
+                          <Ionicons name="location" size={40} color="#FDC700" />
+                        </View>
+                      </PointAnnotation>
+                    )}
+                  </MapView>
+                );
+              })()}
+            </View>
+
+            {/* Get My Location Button - Bottom Left */}
+            <TouchableOpacity
+              onPress={handleGetMyLocation}
+              style={styles.mapLocationButton}
+              disabled={isLoading}>
+              <Ionicons name="locate" size={24} color="#000000" />
+            </TouchableOpacity>
           </View>
 
           {/* Info Panel - Fee Calculation */}
@@ -1536,7 +1400,6 @@ export default function MapScreen() {
             ) : (
               <>
                 <View style={styles.feeCalculationHeader}>
-                  <Text style={styles.feeCalculationEmoji}>💰</Text>
                   <Text style={styles.feeCalculationTitle}>Fee Calculation</Text>
                 </View>
                 {tempCoords && (distance || duration) ? (
@@ -1549,9 +1412,22 @@ export default function MapScreen() {
                   </Text>
                 )}
 
+                {unitPrice > 0 && (
+                  <View style={styles.feeCalculationPricePerKm}>
+                    <Text style={styles.feeCalculationPricePerKmLabel}>Price per km:</Text>
+                    <Text style={styles.feeCalculationPricePerKmValue}>
+                      {new Intl.NumberFormat('vi-VN', {
+                        style: 'currency',
+                        currency: 'VND',
+                        minimumFractionDigits: 0,
+                      }).format(unitPrice)}
+                    </Text>
+                  </View>
+                )}
+
                 <View style={styles.feeCalculationGrid}>
                   <View style={styles.feeCalculationItem}>
-                    <Text style={styles.feeCalculationLabel}>Per Trip Cost</Text>
+                    <Text style={styles.feeCalculationLabel}>Per Day</Text>
                     {fare ? (
                       <Text style={styles.feeCalculationValue}>{fare}</Text>
                     ) : (
@@ -1563,7 +1439,10 @@ export default function MapScreen() {
                     <Text style={styles.feeCalculationLabel}>Semester Total</Text>
                     {semesterFeeInfo ? (
                       <Text style={styles.feeCalculationValue}>
-                        {semesterFeeInfo.totalFee.toLocaleString('vi-VN')}₫
+                        {new Intl.NumberFormat('vi-VN', {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        }).format(Math.round(semesterFeeInfo.totalFee / 1000) * 1000)}₫
                       </Text>
                     ) : semesterFeeLoading ? (
                       <Text style={styles.feeCalculationLoading}>🔄 Calculating...</Text>
@@ -1589,7 +1468,7 @@ export default function MapScreen() {
           </View>
         </ScrollView>
       ) : (
-        <ScrollView style={styles.scrollView}>
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.submitForm}>
             <Text style={styles.formTitle}>Submit Pickup Point Request</Text>
 
@@ -1626,9 +1505,21 @@ export default function MapScreen() {
               </View>
             )}
 
+            {unitPrice > 0 && (
+              <View style={styles.formSection}>
+                <Text style={styles.formLabel}>Price per km:</Text>
+                <Text style={styles.formValue}>
+                  {new Intl.NumberFormat('vi-VN', {
+                    style: 'currency',
+                    currency: 'VND',
+                    minimumFractionDigits: 0,
+                  }).format(unitPrice)}
+                </Text>
+              </View>
+            )}
+
             <View style={styles.formSection}>
-              <Text style={styles.formLabel}>Students:</Text>
-              <Text style={styles.formValue}>{students.length} student(s)</Text>
+              <Text style={styles.formLabel}>Children({students.length}):</Text>
               {students.map((s, idx) => (
                 <Text key={s.id || idx} style={styles.studentItem}>
                   • {s.firstName} {s.lastName}
@@ -1638,7 +1529,7 @@ export default function MapScreen() {
 
             {fare && (
               <View style={styles.formSection}>
-                <Text style={styles.formLabel}>Per Trip Cost:</Text>
+                <Text style={styles.formLabel}>Per Day:</Text>
                 <Text style={styles.formValue}>{fare}</Text>
               </View>
             )}
@@ -1647,7 +1538,10 @@ export default function MapScreen() {
               <View style={styles.formSection}>
                 <Text style={styles.formLabel}>Semester Total:</Text>
                 <Text style={styles.formValue}>
-                  {semesterFeeInfo.totalFee.toLocaleString('vi-VN')}₫
+                  {new Intl.NumberFormat('vi-VN', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  }).format(Math.round(semesterFeeInfo.totalFee / 1000) * 1000)}₫
                 </Text>
               </View>
             )}
@@ -1712,22 +1606,57 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#000000',
   },
+  mapWrapper: {
+    position: 'relative',
+    marginBottom: 8,
+    marginHorizontal: 12,
+  },
   mapContainer: {
-    height: 400,
-    marginBottom: 12,
+    height: 600,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  webview: {
+  map: {
     flex: 1,
+    backgroundColor: '#E5E7EB',
   },
-  loadingContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  mapError: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFEBEE',
+    padding: 20,
+  },
+  mapErrorText: {
+    color: '#C62828',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 12,
+    fontFamily: 'RobotoSlab-Regular',
+  },
+  schoolMarkerContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#1565C0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  selectedMarkerContainer: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   infoPanel: {
     backgroundColor: '#FEFCE8',
@@ -1743,6 +1672,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 24,
     marginBottom: 12,
+    marginHorizontal: 12,
     borderWidth: 2,
     borderColor: '#FDC700',
     shadowColor: '#000',
@@ -1771,6 +1701,23 @@ const styles = StyleSheet.create({
     color: '#666666',
     textAlign: 'center',
     marginBottom: 16,
+  },
+  feeCalculationPricePerKm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  feeCalculationPricePerKmLabel: {
+    fontSize: 14,
+    color: '#666666',
+    fontFamily: 'RobotoSlab-Regular',
+  },
+  feeCalculationPricePerKmValue: {
+    fontSize: 16,
+    fontFamily: 'RobotoSlab-Bold',
+    color: '#D08700',
   },
   feeCalculationGrid: {
     flexDirection: 'row',
@@ -1843,7 +1790,9 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   searchSection: {
-    padding: 20,
+    marginHorizontal: 12,
+    paddingTop: 20,
+    paddingBottom: 10,
     backgroundColor: '#FFFFFF',
   },
   searchContainer: {
@@ -1856,6 +1805,7 @@ const styles = StyleSheet.create({
     borderColor: '#FDC700',
     borderRadius: 16,
     padding: 16,
+    paddingRight: 50,
     fontSize: 16,
     fontFamily: 'RobotoSlab-Regular',
     color: '#000000',
@@ -1919,6 +1869,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
+  },
+  mapLocationButton: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FDC700',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1000,
   },
   errorContainer: {
     backgroundColor: '#FFE5E5',

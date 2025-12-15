@@ -50,21 +50,13 @@ export default function AbsenceReportScreen() {
   const navigation = useNavigation();
   const {
     children,
-    loading: childrenLoading,
     error: childrenError,
     refetch: refetchChildren,
   } = useChildrenList();
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: "Absence Report",
-      headerShown: true,
-      headerStyle: { backgroundColor: "#FFD700" },
-      headerTintColor: "#013440",
-      headerTitleStyle: {
-        fontFamily: "RobotoSlab-Bold",
-        color: "#013440",
-      },
+      headerShown: false,
     });
   }, [navigation]);
   const [parentId, setParentId] = useState<string | null>(null);
@@ -72,6 +64,7 @@ export default function AbsenceReportScreen() {
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [requestsError, setRequestsError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [paginationInfo, setPaginationInfo] = useState<PaginationInfo | null>(
     null,
   );
@@ -434,89 +427,6 @@ export default function AbsenceReportScreen() {
       );
     }
 
-    const renderPaginationControls = () => {
-      if (!paginationInfo) return null;
-
-      return (
-        <View
-          style={{
-            marginTop: 8,
-            paddingTop: 12,
-            borderTopWidth: 1,
-            borderTopColor: "#E2E8F0",
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <TouchableOpacity
-            disabled={!paginationInfo.hasPreviousPage || requestsLoading}
-            onPress={() =>
-              setCurrentPage((prev) => Math.max(1, prev - 1))
-            }
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 14,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: "#CBD5F5",
-              backgroundColor: paginationInfo.hasPreviousPage
-                ? "#FFFFFF"
-                : "#F1F5F9",
-              opacity: paginationInfo.hasPreviousPage ? 1 : 0.6,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: "RobotoSlab-Bold",
-                fontSize: 13,
-                color: "#1E293B",
-              }}
-            >
-              Previous
-            </Text>
-          </TouchableOpacity>
-          <Text
-            style={{
-              fontFamily: "RobotoSlab-Bold",
-              fontSize: 13,
-              color: "#122434",
-            }}
-          >
-            Page {paginationInfo.currentPage} / {paginationInfo.totalPages}
-          </Text>
-          <TouchableOpacity
-            disabled={!paginationInfo.hasNextPage || requestsLoading}
-            onPress={() =>
-              setCurrentPage((prev) =>
-                paginationInfo.hasNextPage ? prev + 1 : prev,
-              )
-            }
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 14,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: "#CBD5F5",
-              backgroundColor: paginationInfo.hasNextPage
-                ? "#FFFFFF"
-                : "#F1F5F9",
-              opacity: paginationInfo.hasNextPage ? 1 : 0.6,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: "RobotoSlab-Bold",
-                fontSize: 13,
-                color: "#1E293B",
-              }}
-            >
-              Next
-            </Text>
-          </TouchableOpacity>
-        </View>
-      );
-    };
 
     return (
       <View style={[{ gap: 14 }, responsiveCardStyle]}>
@@ -668,35 +578,62 @@ export default function AbsenceReportScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F6FCFF" }}>
-      <TouchableOpacity
-        onPress={toggleFilters}
-        style={[
-          {
-            width: 48,
-            height: 48,
-            borderRadius: 16,
-            backgroundColor: "#FFD700",
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 4,
-            elevation: 2,
-            position: "absolute",
-            top: 8,
-            right: 20,
-            zIndex: 10,
-          },
-          pointerStyle,
-        ]}
+      {/* Header */}
+      <View
+        style={{
+          backgroundColor: "#FFFFFF",
+          paddingTop: 50,
+          paddingBottom: 12,
+          paddingHorizontal: 20,
+        }}
       >
-        <Ionicons
-          name="funnel-outline"
-          size={22}
-            color="#013440"
-        />
-      </TouchableOpacity>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 0,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: "#FFD700",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#000000" />
+          </TouchableOpacity>
+
+          <Text
+            style={{
+              fontFamily: "RobotoSlab-Bold",
+              fontSize: 20,
+              color: "#000000",
+            }}
+          >
+            Absence Report
+          </Text>
+
+          <TouchableOpacity
+            onPress={toggleFilters}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: "#FFD700",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="funnel-outline" size={24} color="#000000" />
+          </TouchableOpacity>
+        </View>
+      </View>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={scrollContentStyle}

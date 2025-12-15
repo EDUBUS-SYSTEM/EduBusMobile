@@ -1,23 +1,24 @@
+import { API_CONFIG } from '@/constants/ApiConfig';
+import { apiService } from '@/lib/api';
+import { authApi } from '@/lib/auth/auth.api';
+import { childrenApi } from '@/lib/parent/children.api';
+import type { Child } from '@/lib/parent/children.type';
+import {
+  pickupPointApi,
+  REUSE_PICKUP_POINT_STORAGE_KEY,
+  type ParentRegistrationEligibilityDto,
+  type ParentRegistrationSemesterDto,
+  type ReusePickupPointPayload,
+  type StudentBriefDto,
+  type StudentCurrentPickupPointDto,
+} from '@/lib/parent/pickupPoint.api';
+import { formatDate } from '@/utils/date.utils';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authApi } from '@/lib/auth/auth.api';
-import { childrenApi } from '@/lib/parent/children.api';
-import { apiService } from '@/lib/api';
-import { API_CONFIG } from '@/constants/ApiConfig';
-import type { Child } from '@/lib/parent/children.type';
-import {
-  pickupPointApi,
-  type ParentRegistrationSemesterDto,
-  type ParentRegistrationEligibilityDto,
-  type ReusePickupPointPayload,
-  REUSE_PICKUP_POINT_STORAGE_KEY,
-  type StudentBriefDto,
-  type StudentCurrentPickupPointDto,
-} from '@/lib/parent/pickupPoint.api';
 
 function decodeJwtPayload<T = any>(token: string): T | null {
   try {
@@ -34,13 +35,6 @@ function decodeJwtPayload<T = any>(token: string): T | null {
     console.error('Error decoding JWT:', error);
     return null;
   }
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-US');
 }
 
 function isWithinRegistrationWindow(semester?: ParentRegistrationSemesterDto | null) {
@@ -161,7 +155,7 @@ export default function StudentSelectionScreen() {
 
         setParentEmail(email);
 
-        // Get students by parent ID
+        // Get children by parent ID
         const childrenData = await childrenApi.getChildrenByParent(userInfo.userId);
         
         // Convert to StudentBriefDto format
@@ -174,7 +168,7 @@ export default function StudentSelectionScreen() {
         }));
 
         if (studentsData.length === 0) {
-          setError('No students found for your account. Please contact the school.');
+          setError('No children found for your account. Please contact the school.');
           setStudents([]);
           return;
         }
@@ -217,7 +211,7 @@ export default function StudentSelectionScreen() {
         }
 
         if (filteredStudents.length === 0 && hiddenCount > 0 && !message) {
-          setInfoMessage('All of your students have already been registered for the upcoming semester.');
+          setInfoMessage('All of your children have already been registered for the upcoming semester.');
         }
 
         setStudents(filteredStudents);
@@ -225,7 +219,7 @@ export default function StudentSelectionScreen() {
       } catch (err: any) {
         console.error('Error loading data:', err);
         setError(
-          err.response?.data?.message || err.message || 'Failed to load student data. Please try again.'
+          err.response?.data?.message || err.message || 'Failed to load children data. Please try again.'
         );
       } finally {
         setLoading(false);
@@ -269,11 +263,11 @@ export default function StudentSelectionScreen() {
 
   const handleContinue = async () => {
     if (students.length === 0) {
-      Alert.alert('No eligible students', 'All of your students have already been registered for the upcoming semester.');
+      Alert.alert('No eligible children', 'All of your children have already been registered for the upcoming semester.');
       return;
     }
     if (selectedStudents.length === 0) {
-      Alert.alert('Selection Required', 'Please select at least one student to continue.');
+      Alert.alert('Selection Required', 'Please select at least one child to continue.');
       return;
     }
 
@@ -302,7 +296,7 @@ export default function StudentSelectionScreen() {
 
     Alert.alert(
       'Reuse current pickup point?',
-      'We found an existing pickup point for the selected students. Do you want to reuse this location for the new registration?',
+      'We found an existing pickup point for the selected children. Do you want to reuse this location for the new registration?',
       [
         {
           text: 'Choose a new location',
@@ -332,16 +326,16 @@ export default function StudentSelectionScreen() {
   const continueButtonLabel = !isRegistrationWindowActive
     ? 'Registration not open'
     : students.length === 0
-    ? 'No eligible students'
+    ? 'No eligible children'
     : selectedStudents.length === 0
-    ? 'Select at least 1 student'
-    : `Continue with ${selectedStudents.length} student(s)`;
+    ? 'Select at least 1 child'
+    : `Continue with ${selectedStudents.length} children`;
 
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#FDC700" />
-        <Text style={{ marginTop: 16, fontSize: 16, color: '#000000' }}>Loading students...</Text>
+        <Text style={{ marginTop: 16, fontSize: 16, color: '#000000' }}>Loading children...</Text>
       </View>
     );
   }
@@ -350,7 +344,7 @@ export default function StudentSelectionScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       {/* Header */}
       <LinearGradient
-        colors={['#FEFCE8', '#FFF085']}
+        colors={['#FFD700', '#FFEB3B']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
@@ -365,7 +359,7 @@ export default function StudentSelectionScreen() {
             <Ionicons name="arrow-back" size={24} color="#000000" />
           </TouchableOpacity>
           <Text style={{ fontFamily: 'RobotoSlab-Bold', fontSize: 20, color: '#000000' }}>
-            Select Students
+              Service Registration
           </Text>
           <View style={{ width: 44 }} />
         </View>
@@ -389,13 +383,13 @@ export default function StudentSelectionScreen() {
                 marginBottom: 10,
                 textAlign: 'center',
               }}>
-              Select Students for Registration
+              Select Children for Registration
             </Text>
             <Text style={{ fontSize: 14, color: '#666666', textAlign: 'center', marginBottom: 8 }}>
               Email: <Text style={{ fontFamily: 'RobotoSlab-Bold', color: '#D08700' }}>{parentEmail}</Text>
             </Text>
             <Text style={{ fontSize: 14, color: '#666666', textAlign: 'center' }}>
-              Please select the students you want to register for transportation service
+              Please select the children you want to register for transportation service
             </Text>
           </View>
 
@@ -429,7 +423,7 @@ export default function StudentSelectionScreen() {
             </View>
           ) : null}
 
-          {/* Students List */}
+          {/* Children List */}
           <View style={{ marginBottom: 20 }}>
             <Text
               style={{
@@ -439,7 +433,7 @@ export default function StudentSelectionScreen() {
                 marginBottom: 15,
                 textAlign: 'center',
               }}>
-              Student List ({students.length})
+              Your Children ({students.length})
             </Text>
 
             {blockedCount > 0 && students.length > 0 && (
@@ -453,7 +447,7 @@ export default function StudentSelectionScreen() {
                   borderColor: '#FFB74D',
                 }}>
                 <Text style={{ color: '#E65100', fontSize: 13, textAlign: 'center' }}>
-                  {blockedCount} student(s) are hidden because they are already registered for the upcoming semester.
+                  {blockedCount} children are hidden because they are already registered for the upcoming semester.
                 </Text>
               </View>
             )}
@@ -461,7 +455,7 @@ export default function StudentSelectionScreen() {
             {students.length === 0 ? (
               <View style={{ padding: 20, alignItems: 'center', gap: 16 }}>
                 <Text style={{ color: '#666666', fontSize: 16, textAlign: 'center' }}>
-                  {infoMessage || 'No eligible students available for registration at this time.'}
+                  {infoMessage || 'No eligible children available for registration at this time.'}
                 </Text>
                 <TouchableOpacity
                   onPress={handleGoHome}
@@ -490,7 +484,6 @@ export default function StudentSelectionScreen() {
                         borderColor: isSelected ? '#FDC700' : '#E0E0E0',
                         flexDirection: 'row',
                         alignItems: 'center',
-                        justifyContent: 'space-between',
                       }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                         <View
@@ -516,26 +509,7 @@ export default function StudentSelectionScreen() {
                             }}>
                             {student.firstName} {student.lastName}
                           </Text>
-                          <Text style={{ fontSize: 12, color: '#666666', marginTop: 4 }}>
-                            ID: {student.id}
-                          </Text>
                         </View>
-                      </View>
-                      <View
-                        style={{
-                          backgroundColor: isSelected ? '#FDC700' : '#F5F5F5',
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
-                          borderRadius: 12,
-                        }}>
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            color: isSelected ? '#FFFFFF' : '#666666',
-                            fontFamily: 'RobotoSlab-Medium',
-                          }}>
-                          {isSelected ? 'Selected' : 'Not Selected'}
-                        </Text>
                       </View>
                     </TouchableOpacity>
                   );
@@ -570,7 +544,7 @@ export default function StudentSelectionScreen() {
                 <Text style={{ fontFamily: 'RobotoSlab-Bold', color: '#D08700' }}>
                   {selectedStudents.length}
                 </Text>{' '}
-                student(s)
+                children
               </Text>
             </View>
           )}
@@ -642,13 +616,13 @@ export default function StudentSelectionScreen() {
                   </Text>
                 ) : null}
                 <Text style={{ fontSize: 14, color: '#1565C0' }}>
-                  • Tap on each student to select/deselect
+                  • Tap on each child to select/deselect
                 </Text>
                 <Text style={{ fontSize: 14, color: '#1565C0' }}>
-                  • You can select one or multiple students
+                  • You can select one or multiple children
                 </Text>
                 <Text style={{ fontSize: 14, color: '#1565C0' }}>
-                  • Must select at least 1 student to continue
+                  • Must select at least 1 child to continue
                 </Text>
               </View>
             </View>

@@ -4,6 +4,7 @@ import { authApi } from "@/lib/auth/auth.api";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
+import React from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 export default function SupervisorAccountScreen() {
@@ -17,10 +18,16 @@ export default function SupervisorAccountScreen() {
       description: "Account profile",
     },
     {
+      id: 5,
+      title: "Change Password",
+      icon: "lock-closed-outline",
+      description: "Change your password",
+    },
+    {
       id: 2,
-      title: "Settings",
-      icon: "settings-outline",
-      description: "Settings",
+      title: "Trip history",
+      icon: "map-outline",
+      description: "Trip history",
     },
     {
       id: 3,
@@ -255,6 +262,18 @@ export default function SupervisorAccountScreen() {
             onPress={async () => {
               if (item.id === 1) {
                 router.push("/account-profile" as any);
+                return;
+              }
+              if (item.id === 5) {
+                router.push("/change-password" as any);
+                return;
+              }
+              if (item.id === 3) {
+                router.push("/help" as any);
+                return;
+              }
+              if (item.id === 2) {
+                router.push("/trip-history-supervisor" as any);
                 return;
               }
               if (item.id === 4) {

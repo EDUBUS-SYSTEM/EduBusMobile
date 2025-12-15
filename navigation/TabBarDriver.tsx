@@ -1,3 +1,4 @@
+import { useAppSelector } from '@/store/hooks';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
@@ -40,19 +41,6 @@ export default function TabBarDriver() {
         }}
       />
       <Tabs.Screen
-        name="routes"
-        options={{
-          title: 'Routes',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name="map" 
-              size={24} 
-                     color={focused ? '#01CBCA' : color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="trip-schedule"
         options={{
           title: 'Schedule',
@@ -89,6 +77,21 @@ export default function TabBarDriver() {
               color={focused ? '#01CBCA' : color} 
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          // Keep route accessible but hide from bottom tabs; notifications via dashboard quick action
+          href: null,
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
+        name="trips-today"
+        options={{
+          href: null, // hidden; opened via dashboard quick action
+          headerShown: false,
         }}
       />
       <Tabs.Screen

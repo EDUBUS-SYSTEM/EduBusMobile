@@ -1,6 +1,7 @@
 import { authApi } from '@/lib/auth/auth.api';
 import { paymentApi } from '@/lib/payment/payment.api';
 import { signalRService } from '@/lib/signalr/notificationHub.service';
+import { pushNotificationService } from '@/lib/notification/pushNotification.service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
 import { router, useNavigation } from 'expo-router';
@@ -68,6 +69,17 @@ export default function LoginSuccessSplash() {
             // Don't fail the login flow if SignalR fails
             console.error('❌ [LOGIN-SPLASH] Failed to reinitialize SignalR:', signalRError);
             dispatch(setSignalRError(signalRError?.message || 'SignalR initialization failed'));
+          }
+
+          // Register push notification token after login
+          try {
+            console.log('📱 [LOGIN-SPLASH] Registering push notification token after login...');
+            await pushNotificationService.reinitializeToken();
+            // Note: reinitializeToken() will log its own success/error messages
+          } catch (pushError) {
+            console.error('❌ [LOGIN-SPLASH] Error registering push token:', pushError);
+            // Don't fail login if push notification fails
+            // This is expected on emulators or if permissions are denied
           }
 
           try {

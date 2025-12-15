@@ -10,21 +10,18 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 export default function ParentAccountScreen() {
   const { avatarUrl, loading: avatarLoading } = useUserAvatar();
 
-  // Debug logging
-  React.useEffect(() => {
-    console.log('[ParentAccountScreen] Avatar state:', {
-      hasUrl: !!avatarUrl,
-      url: avatarUrl?.substring(0, 50) + '...',
-      loading: avatarLoading,
-    });
-  }, [avatarUrl, avatarLoading]);
-
   const menuItems = [
     {
       id: 1,
       title: "Account profile",
       icon: "person-outline",
       description: "Account profile",
+    },
+    {
+      id: 8,
+      title: "Change Password",
+      icon: "lock-closed-outline",
+      description: "Change your password",
     },
     {
       id: 2,
@@ -43,6 +40,12 @@ export default function ParentAccountScreen() {
       title: "Register history",
       icon: "home-outline",
       description: "Register history",
+    },
+    {
+      id: 5,
+      title: "Trip report",
+      icon: "stats-chart-outline",
+      description: "Trips and attendance",
     },
     {
       id: 6,
@@ -291,8 +294,16 @@ export default function ParentAccountScreen() {
                 router.push("/register-history" as any);
                 return;
               }
+              if (item.id === 5) {
+                router.push("/trip-report" as any);
+                return;
+              }
               if (item.id === 6) {
                 router.push("/help" as any);
+                return;
+              }
+              if (item.id === 8) {
+                router.push("/change-password" as any);
                 return;
               }
               if (item.id === 7) {
@@ -302,7 +313,6 @@ export default function ParentAccountScreen() {
                 } finally {
                   router.replace("/login");
                 }
-                return;
               }
               // Add more navigation logic for other menu items here
             }}

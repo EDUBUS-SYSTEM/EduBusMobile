@@ -1,3 +1,4 @@
+import { useAppSelector } from '@/store/hooks';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
@@ -83,9 +84,24 @@ export default function TabBarSupervisor() {
         }}
       />
       <Tabs.Screen
+        name="notifications"
+        options={{
+          // Keep route accessible but hide from bottom tabs; moved to dashboard quick actions
+          href: null,
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
         name="trips"
         options={{
           href: null, 
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
+        name="trips-today"
+        options={{
+          href: null, // Hidden; opened via dashboard quick action
           headerShown: false,
         }}
       />

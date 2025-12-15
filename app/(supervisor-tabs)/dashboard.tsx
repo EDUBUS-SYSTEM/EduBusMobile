@@ -1,117 +1,27 @@
-import { getSupervisorTripsToday } from '@/lib/supervisor/supervisor.api';
-import { DriverTripDto } from '@/lib/trip/driverTrip.types';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { fetchDriverTripsToday } from '@/store/slices/driverTodaySlice';
-import { getTodayISOString, toHourMinute } from '@/utils/date.utils';
+import { fetchUnreadCount } from '@/store/slices/notificationsSlice';
+import { formatDateWithWeekday } from '@/utils/date.utils';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import React from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
-const getStatusBgColor = (status: string): string => {
-  const normalizedStatus = status?.toLowerCase() || '';
-  const colors: Record<string, string> = {
-    scheduled: '#D3E5FF',
-    inprogress: '#FEF3C7',
-    completed: '#E8F5E8',
-    delayed: '#FFEBEE',
-    cancelled: '#FFB8C2',
-  };
-  return colors[normalizedStatus] || '#F5F5F5';
-};
-
-const getStatusTextColor = (status: string): string => {
-  const normalizedStatus = status?.toLowerCase() || '';
-  const colors: Record<string, string> = {
-    scheduled: '#0D6EFD',
-    inprogress: '#F59E0B',
-    completed: '#4CAF50',
-    delayed: '#F44336',
-    cancelled: '#FF0000',
-  };
-  return colors[normalizedStatus] || '#757575';
-};
-
 export default function SupervisorDashboardScreen() {
   const dispatch = useAppDispatch();
-  const { trips: reduxTrips, status: reduxStatus } = useAppSelector((s) => s.driverToday);
-  const [trips, setTrips] = React.useState<DriverTripDto[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const unreadCount = useAppSelector((s) => s.notifications.unreadCount);
   
   const todayDisplay = React.useMemo(() => {
     const now = new Date();
-    try {
-      return now.toLocaleDateString('en-US', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      });
-    } catch {
-      return now.toDateString();
-    }
+    return formatDateWithWeekday(now);
   }, []);
 
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        setLoading(true);
-        const isoDate = getTodayISOString();
-        
-        // Get trips from supervisor API
-        try {
-          const supervisorTrips = await getSupervisorTripsToday();
-          if (mounted) {
-            // Map SupervisorTripListItemDto to DriverTripDto
-            const mappedTrips: DriverTripDto[] = supervisorTrips.map(trip => ({
-              id: trip.id,
-              routeId: '',
-              serviceDate: trip.serviceDate,
-              plannedStartAt: trip.plannedStartAt,
-              plannedEndAt: trip.plannedEndAt,
-              startTime: trip.startTime || undefined,
-              endTime: trip.endTime || undefined,
-              status: trip.status as DriverTripDto['status'],
-              scheduleName: trip.routeName,
-              totalStops: trip.totalStops,
-              completedStops: trip.completedStops,
-              stops: [],
-              isOverride: false,
-              overrideReason: '',
-              overrideCreatedBy: undefined,
-              overrideCreatedAt: undefined,
-              createdAt: undefined,
-              updatedAt: undefined,
-            }));
-            setTrips(mappedTrips);
-            setLoading(false);
-          }
-        } catch (apiError) {
-          console.warn('Supervisor API failed, using Redux:', apiError);
-          // Fallback to Redux store
-          if (mounted) {
-            dispatch(fetchDriverTripsToday({ dateISO: isoDate }));
-            setLoading(false);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading trips:', error);
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [dispatch]);
-
-  // Use supervisor trips if available, otherwise use Redux trips
-  const displayTrips = trips.length > 0 ? trips : reduxTrips;
-  const displayStatus = trips.length > 0 ? (loading ? 'loading' : 'idle') : reduxStatus;
+  useFocusEffect(
+    React.useCallback(() => {
+      dispatch(fetchUnreadCount());
+    }, [dispatch]),
+  );
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
@@ -302,92 +212,8 @@ export default function SupervisorDashboardScreen() {
       </View>
 
       <View style={{ padding: 20 }}>
-        <View style={{ marginBottom: 10 }}>
-          <Text style={{
-            fontFamily: 'RobotoSlab-Bold',
-            fontSize: 22,
-            color: '#111827',
-          }}>
-            Trips Today
-          </Text>
-        </View>
-
-        {displayStatus === 'loading' && (
-          <View style={{ backgroundColor: '#F3F4F6', padding: 16, borderRadius: 12 }}>
-            <Text style={{ fontFamily: 'RobotoSlab-Regular', color: '#6B7280' }}>Loading trips...</Text>
-          </View>
-        )}
-
-        {displayStatus !== 'loading' && displayTrips.length === 0 && (
-          <View style={{ backgroundColor: '#F8F9FA', padding: 20, borderRadius: 12, alignItems: 'center' }}>
-            <Ionicons name="calendar-outline" size={36} color="#9CA3AF" />
-            <Text style={{ marginTop: 8, fontFamily: 'RobotoSlab-Medium', color: '#6B7280' }}>No trips today</Text>
-          </View>
-        )}
-
-        {displayTrips.map((trip) => {
-          const handleTripPress = () => {
-            router.push(`/(supervisor-tabs)/trip/${trip.id}` as any);
-          };
-
-          const TripCardContent = () => (
-            <>
-              <View style={{ height: 6, backgroundColor: '#FFDD00' }} />
-              <View style={{ padding: 16 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flex: 1, paddingRight: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="time" size={16} color="#6B7280" />
-                      <Text style={{ marginLeft: 6, fontFamily: 'RobotoSlab-Medium', color: '#374151' }}>
-                        {toHourMinute(trip.plannedStartAt)} - {toHourMinute(trip.plannedEndAt)}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
-                      <Ionicons name="location" size={16} color="#6B7280" />
-                      <Text style={{ marginLeft: 6, fontFamily: 'RobotoSlab-Regular', color: '#4B5563' }}>{trip.scheduleName}</Text>
-                    </View>
-                  </View>
-                  <View style={{ backgroundColor: getStatusBgColor(trip.status), paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
-                    <Text style={{
-                      fontFamily: 'RobotoSlab-Bold',
-                      fontSize: 12,
-                      color: getStatusTextColor(trip.status)
-                    }}>{trip.status}</Text>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', marginTop: 12 }}>
-                  <View style={{ backgroundColor: '#F9FAFB', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8 }}>
-                    <Text style={{ fontFamily: 'RobotoSlab-Medium', color: '#6B7280', fontSize: 12 }}>Stops: {trip.totalStops}</Text>
-                  </View>
-                </View>
-              </View>
-            </>
-          );
-
-          return (
-            <TouchableOpacity
-              key={trip.id}
-              onPress={handleTripPress}
-              activeOpacity={0.7}
-              style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: 16,
-                marginBottom: 14,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.06,
-                shadowRadius: 6,
-                elevation: 2,
-                overflow: 'hidden'
-              }}>
-              <TripCardContent />
-            </TouchableOpacity>
-          );
-        })}
-
         {/* Quick Actions */}
-        <View style={{ marginTop: 30, marginBottom: 30 }}>
+        <View style={{ marginTop: 0, marginBottom: 30 }}>
           <Text style={{
             fontFamily: 'RobotoSlab-Bold',
             fontSize: 22,
@@ -399,18 +225,93 @@ export default function SupervisorDashboardScreen() {
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
             <TouchableOpacity 
+              onPress={() => router.push('/(supervisor-tabs)/trips-today' as any)}
+              style={{
+              backgroundColor: '#E0F7FA',
+              borderRadius: 15,
+              padding: 20,
+              width: '47%',
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 3
+              }}>
+              <Ionicons name="calendar" size={32} color="#01CBCA" />
+              <Text style={{
+                fontFamily: 'RobotoSlab-Medium',
+                fontSize: 14,
+                color: '#000000',
+                marginTop: 8,
+                textAlign: 'center'
+              }}>
+                Trips Today
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => router.push('/(supervisor-tabs)/notifications')}
+              style={{
+              backgroundColor: '#E0F7FA',
+              borderRadius: 15,
+              padding: 20,
+              width: '47%',
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 3
+              }}>
+              <View style={{ position: 'relative', alignItems: 'center' }}>
+                <Ionicons name="notifications" size={32} color="#01CBCA" />
+                {unreadCount > 0 && (
+                  <View style={{
+                    position: 'absolute',
+                    top: -6,
+                    right: -10,
+                    minWidth: 18,
+                    height: 18,
+                    paddingHorizontal: 5,
+                    borderRadius: 9,
+                    backgroundColor: '#EF4444',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Text style={{
+                      color: '#FFFFFF',
+                      fontSize: 11,
+                      fontFamily: 'RobotoSlab-Bold',
+                    }}>
+                      {unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text style={{
+                fontFamily: 'RobotoSlab-Medium',
+                fontSize: 14,
+                color: '#000000',
+                marginTop: 8,
+                textAlign: 'center'
+              }}>
+                Notifications
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
               onPress={() => router.push('/(supervisor-tabs)/trips')}
               style={{
-                backgroundColor: '#E0F7FA',
-                borderRadius: 15,
-                padding: 20,
-                width: '47%',
-                alignItems: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 4,
-                elevation: 3
+              backgroundColor: '#E0F7FA',
+              borderRadius: 15,
+              padding: 20,
+              width: '47%',
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 3
               }}>
               <Ionicons name="calendar" size={32} color="#01CBCA" />
               <Text style={{
@@ -421,32 +322,6 @@ export default function SupervisorDashboardScreen() {
                 textAlign: 'center'
               }}>
                 View Trips
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              onPress={() => router.push('/(supervisor-tabs)/account')}
-              style={{
-                backgroundColor: '#E0F7FA',
-                borderRadius: 15,
-                padding: 20,
-                width: '47%',
-                alignItems: 'center',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 4,
-                elevation: 3
-              }}>
-              <Ionicons name="person" size={32} color="#01CBCA" />
-              <Text style={{
-                fontFamily: 'RobotoSlab-Medium',
-                fontSize: 14,
-                color: '#000000',
-                marginTop: 8,
-                textAlign: 'center'
-              }}>
-                My Account
               </Text>
             </TouchableOpacity>
           </View>

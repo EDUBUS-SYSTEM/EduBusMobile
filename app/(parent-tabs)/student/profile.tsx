@@ -1,9 +1,9 @@
 import { apiService } from "@/lib/api"; // axios instance with interceptor
 import {
-    Entypo,
-    FontAwesome5,
-    Ionicons,
-    MaterialIcons,
+  Entypo,
+  FontAwesome5,
+  Ionicons,
+  MaterialIcons,
 } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";

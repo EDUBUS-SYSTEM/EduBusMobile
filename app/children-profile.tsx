@@ -111,11 +111,6 @@ function ChildrenProfileContent() {
     router.push("/(parent-tabs)/children-list");
   };
 
-  const handleNotification = () => {
-    // Handle notification logic
-    console.log("Notification pressed");
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -168,16 +163,6 @@ function ChildrenProfileContent() {
 
         {/* Information Cards */}
         <View style={styles.cardsContainer}>
-          {/* Student ID Card */}
-          <View style={styles.infoCard}>
-            <View style={styles.cardIconContainer}>
-              <Ionicons name="card" size={26} color="#FFFFFF" />
-            </View>
-            <View style={styles.cardTextContainer}>
-              <Text style={styles.cardText}>{childData.studentId}</Text>
-            </View>
-          </View>
-
           {/* Class Card */}
           <View style={styles.infoCard}>
             <View style={styles.cardIconContainer}>

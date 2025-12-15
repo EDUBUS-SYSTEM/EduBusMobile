@@ -7,6 +7,17 @@ import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { hideCurrentAlert, showNextAlert } from '../../store/slices/notificationAlertSlice';
 import { markNotificationAsRead } from '../../store/slices/notificationsSlice';
 
+// Helper function to format time as hh:mm
+const formatTime = (dateString?: string): string => {
+  if (!dateString) return '';
+
+  const date = new Date(dateString);
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+
+  return `${hours}:${minutes}`;
+};
+
 export const NotificationAlert = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -15,7 +26,7 @@ export const NotificationAlert = () => {
   const slideAnim = useRef(new Animated.Value(-100)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [shouldRender, setShouldRender] = useState(false);
-  const [cachedContent, setCachedContent] = useState<{ notificationId?: string; title?: string; message?: string; tripId?: string }>({});
+  const [cachedContent, setCachedContent] = useState<{ notificationId?: string; title?: string; message?: string; tripId?: string; createdAt?: string }>({});
   const isHidingRef = useRef(false);
   const soundRef = useRef<Audio.Sound | null>(null);
 
@@ -55,6 +66,7 @@ export const NotificationAlert = () => {
         title: current.title,
         message: current.message,
         tripId: current.tripId,
+        createdAt: current.createdAt,
       });
     }
   }, [isVisible, current]);
@@ -187,6 +199,9 @@ export const NotificationAlert = () => {
             <Text style={styles.subtitle}>
               {current?.message || cachedContent.message || ''}
             </Text>
+            <Text style={styles.timestamp}>
+              {formatTime(current?.createdAt || cachedContent.createdAt)}
+            </Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -223,4 +238,11 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 16, fontWeight: '600', color: '#111' },
   subtitle: { marginTop: 4, fontSize: 14, color: '#555' },
+  timestamp: {
+    marginTop: 6,
+    marginRight: 12,
+    fontSize: 11,
+    color: '#999',
+    textAlign: 'right',
+  },
 });

@@ -10,12 +10,13 @@ import {
   View
 } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
-import DayModal from '../../features/driverSchedule/components/DayModal';
+import DayModal from '@/components/driverSchedule/DayModal';
 import { academicCalendarApi, AcademicSemester } from '../../lib/academicCalendar/academicCalendar.api';
 import { authApi } from '../../lib/auth/auth.api';
 import { getSupervisorScheduleByRangeAsDriverTrip } from '../../lib/supervisor/supervisor.api';
 import { DriverSchedule, DriverTrip } from '../../lib/trip-mock-data/driverSchedule';
 import { DriverTripDto } from '../../lib/trip/driverTrip.types';
+import { formatDateWithWeekday } from '@/utils/date.utils';
 
 export default function SupervisorScheduleScreen() {
   const [schedule, setSchedule] = useState<DriverSchedule>({ dots: [], byDate: {} });
@@ -78,11 +79,11 @@ export default function SupervisorScheduleScreen() {
                 endTime: trip.plannedEndAt.split('T')[1]?.split('.')[0] || '08:30',
                 rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'
               },
-              stops: trip.stops.map(stop => ({
-                stopId: stop.pickupPointId,
-                name: stop.pickupPointName || stop.address,
+              stops: trip.stops.map((stop) => ({
+                stopId: stop.stopPointId,
+                name: stop.stopPointName || stop.address,
                 plannedArrival: stop.plannedAt,
-                status: stop.departedAt ? 'completed' : 'pending'
+                status: stop.departedAt ? 'completed' : 'pending',
               })),
               isOverride: trip.isOverride,
               overrideReason: trip.overrideReason,
@@ -413,17 +414,12 @@ export default function SupervisorScheduleScreen() {
         </View>
 
         {/* Selected Date Info */}
-        {/* {Boolean(selectedDate && schedule.byDate[selectedDate]) && (
+        {Boolean(selectedDate && schedule.byDate[selectedDate]) && (
           <View style={styles.selectedDateInfo}>
             <View style={styles.selectedDateHeader}>
               <Ionicons name="calendar" size={20} color="#F9A826" />
               <Text style={styles.selectedDateTitle}>
-                {new Date(selectedDate).toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric'
-                })}
+                {formatDateWithWeekday(selectedDate)}
               </Text>
             </View>
             <View style={styles.tripCountContainer}>
@@ -433,7 +429,7 @@ export default function SupervisorScheduleScreen() {
               </Text>
             </View>
           </View>
-        )} */}
+        )}
 
         {/* Empty State */}
         {!loading && semesters.length === 0 && (
