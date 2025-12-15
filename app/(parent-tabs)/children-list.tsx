@@ -3,17 +3,17 @@ import { StudentAvatar } from "@/components/StudentAvatar";
 import { useChildrenList } from "@/hooks/useChildren";
 import { childrenApi } from "@/lib/parent/children.api";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Image,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ChildrenListScreen() {
   const router = useRouter();
@@ -22,7 +22,20 @@ export default function ChildrenListScreen() {
   const [selectedChildForFace, setSelectedChildForFace] = useState<any>(null);
 
   // Use API hook to fetch children data
-  const { children: apiChildren, loading, error } = useChildrenList();
+  const { children: apiChildren, loading, error, refetch } = useChildrenList();
+
+  // Refetch children data when screen comes into focus (e.g., returning from enrollment)
+  useFocusEffect(
+    React.useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
+
+  // Helper function to check if student has enrolled face
+  const hasEnrolledFace = (child: any): boolean => {
+    // Check if student has a studentImageId (indicates enrolled)
+    return child.studentImageId != null && child.studentImageId !== '';
+  };
 
   // Format API data for UI or use fallback data
   const childrenData =
@@ -128,6 +141,22 @@ export default function ChildrenListScreen() {
   if (error) {
     console.error("API Error:", error);
     // Continue with fallback data instead of showing error
+  }
+
+  // Safety check: if no currentChild, show loading or empty state
+  if (!currentChild) {
+    return (
+      <SafeAreaView
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <Text style={{ fontSize: 18, color: "#000000" }}>
+          No children found
+        </Text>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -276,8 +305,8 @@ export default function ChildrenListScreen() {
             style={{ alignItems: "center", width: "80%" }}
           >
             <StudentAvatar
-              studentId={currentChild.studentId}
-              studentName={currentChild.name}
+              studentId={currentChild.studentId || currentChild.id}
+              studentName={currentChild.name || 'Unknown'}
               studentImageId={currentChild.studentImageId}
               size={240}
               showBorder={false}
@@ -298,30 +327,55 @@ export default function ChildrenListScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Face Register button */}
-            <TouchableOpacity
-              style={{
-                backgroundColor: "#01CBCA",
-                borderRadius: 12,
-                paddingVertical: 12,
-                alignItems: "center",
-                justifyContent: "center",
-                flexDirection: "row",
-              }}
-              onPress={() => handleFaceRegister(currentChild)}
-            >
-              <Ionicons name="camera" size={18} color="#FFFFFF" />
-              <Text
+            {/* Conditional Face Register button */}
+            {!hasEnrolledFace(currentChild) ? (
+              <TouchableOpacity
                 style={{
-                  fontFamily: "RobotoSlab-Medium",
-                  fontSize: 14,
-                  color: "#FFFFFF",
-                  marginLeft: 8,
+                  backgroundColor: "#01CBCA",
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "row",
+                }}
+                onPress={() => handleFaceRegister(currentChild)}
+              >
+                <Ionicons name="camera" size={18} color="#FFFFFF" />
+                <Text
+                  style={{
+                    fontFamily: "RobotoSlab-Medium",
+                    fontSize: 14,
+                    color: "#FFFFFF",
+                    marginLeft: 8,
+                  }}
+                >
+                  Face Register
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View
+                style={{
+                  backgroundColor: "#4CAF50",
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  alignItems: "center",
+                  flexDirection: "row",
+                  justifyContent: "center",
                 }}
               >
-                Face Register
-              </Text>
-            </TouchableOpacity>
+                <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                <Text
+                  style={{
+                    fontFamily: "RobotoSlab-Medium",
+                    fontSize: 14,
+                    color: "#FFFFFF",
+                    marginLeft: 8,
+                  }}
+                >
+                  Face Enrolled
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -367,10 +421,6 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   childImage: {
-    width: 240,
-    height: 240,
-    borderRadius: 12,
-    resizeMode: "cover",
     marginBottom: 12,
   },
   childName: {

@@ -32,8 +32,9 @@ export function StudentAvatar({
   };
 
   const initials = getInitials(studentName);
-  // Always try to get photo URL - AuthenticatedImage will handle 404 and fallback to initials
-  const avatarUrl = studentApi.getPhotoUrl(studentId);
+  
+
+  const avatarUrl = studentApi.getStudentPhotoUrl(studentId);
 
   return (
     <View
@@ -49,10 +50,10 @@ export function StudentAvatar({
       ]}
     >
       <AuthenticatedImage
-        key={`student-${studentId}`}
+        key={`student-${studentId}-${studentImageId || 'no-photo'}`}
         uri={avatarUrl}
         size={size}
-        style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
         contentFit="cover"
         fallbackIcon="person"
         fallbackColor="#01CBCA"

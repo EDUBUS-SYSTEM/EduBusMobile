@@ -3,6 +3,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image as RNImage,
@@ -12,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { faceEnrollmentApi } from '@/lib/parent/faceEnrollment.api';
 
 type FaceAngle = 'front' | 'left' | 'right' | 'up' | 'down';
 
@@ -38,8 +40,9 @@ export default function FaceRegistrationScreen() {
   });
   const [showGallery, setShowGallery] = useState(false);
   const [capturedImages, setCapturedImages] = useState<{uri: string, timestamp: number}[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const TOTAL_IMAGES = 70;
+  const TOTAL_IMAGES = 15;  // Reduced from 70 to 15 for faster enrollment
   const ANGLES: FaceAngle[] = ['front', 'left', 'right', 'up', 'down'];
   const IMAGES_PER_ANGLE = Math.ceil(TOTAL_IMAGES / ANGLES.length);
 
@@ -53,7 +56,7 @@ export default function FaceRegistrationScreen() {
   // Auto-capture from camera
   useEffect(() => {
     if (!isCapturing || capturedCount >= TOTAL_IMAGES) {
-      // Stop capturing when reached 70 images
+      // Stop capturing when reached target images
       if (capturedCount >= TOTAL_IMAGES) {
         setIsCapturing(false);
         setFaceDetected(false);
@@ -67,7 +70,7 @@ export default function FaceRegistrationScreen() {
         try {
           // Capture photo from camera
           const photo = await cameraRef.current.takePictureAsync({
-            quality: 0.7,
+            quality: 0.6,  // Increased from 0.7 for smaller file size
             base64: false,
           });
           
@@ -87,12 +90,12 @@ export default function FaceRegistrationScreen() {
           console.error('❌ Failed to capture photo:', error);
         }
       }
-    }, 400); // Faster capture - every 400ms (was 800ms)
+    }, 600); // Increased interval from 400ms to 600ms for better stability
 
     return () => clearInterval(captureInterval);
   }, [isCapturing, capturedCount, isAligned, faceDetected]);
 
-  // Rotate angle every 14 images and track progress
+  // Rotate angle every 3 images and track progress
   useEffect(() => {
     const angleIndex = Math.floor(capturedCount / IMAGES_PER_ANGLE);
     if (angleIndex < ANGLES.length) {
@@ -139,49 +142,182 @@ export default function FaceRegistrationScreen() {
     }
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     console.log('🔵 Complete button pressed! capturedCount:', capturedCount);
     
-    if (capturedCount < 50) {
+    if (capturedCount < 10) {
       Alert.alert(
         'Insufficient Images',
-        `You need at least 50 images. Current: ${capturedCount}`,
+        `You need at least 10 images. Current: ${capturedCount}`,
         [{ text: 'Continue', onPress: () => {} }]
       );
       return;
     }
 
-    console.log('✅ Navigating to success page');
-    // Navigate directly to success page without alert
-    submitFaceData();
-    router.push({
-      pathname: '/face-registration-success',
-      params: {
-        capturedCount: capturedCount,
-        childName: childName,
-      },
-    } as any);
+    // Wait for server response before showing success UI
+    await submitFaceData();
   };
 
   const submitFaceData = async () => {
+    setIsSubmitting(true);
     try {
       setIsCapturing(false);
-      console.log('Submitting', capturedCount, 'images for', childId);
+      console.log('🚀 Starting face enrollment for', childId);
+      
+      // Step 1: Validate we have enough images
+      const totalImages = capturedImages.length;
+      if (totalImages < 3) {
+        Alert.alert('Error', 'Need at least 3 images to enroll. Please capture more photos.');
+        setIsSubmitting(false);
+        return;
+      }
 
+      console.log(`📸 Total captured: ${totalImages} images`);
+
+      // Step 2: Select best images (evenly distributed)
+      // With 15 total images, we submit 3-5 images
+      const numImagesToSubmit = Math.min(5, Math.max(3, Math.floor(totalImages / 3)));
+      const step = Math.floor(totalImages / numImagesToSubmit);
+      const selectedImages = [];
+      
+      for (let i = 0; i < numImagesToSubmit; i++) {
+        const index = i * step;
+        if (index < totalImages) {
+          selectedImages.push(capturedImages[index]);
+        }
+      }
+
+      console.log(`✅ Selected ${selectedImages.length} images for submission`);
+
+      // Step 3: Convert to Base64
+      const base64Photos: string[] = [];
+      for (let i = 0; i < selectedImages.length; i++) {
+        const imageData = selectedImages[i];
+        try {
+          console.log(`Converting image ${i + 1}/${selectedImages.length}...`);
+          const base64 = await faceEnrollmentApi.convertImageToBase64(imageData.uri);
+          base64Photos.push(base64);
+        } catch (error) {
+          console.error('Failed to convert image:', error);
+        }
+      }
+
+      if (base64Photos.length < 3) {
+        Alert.alert('Error', 'Failed to process enough images. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      console.log(`📤 Submitting ${base64Photos.length} images to server...`);
+
+      // Step 4: Submit to API
+      const response = await faceEnrollmentApi.enrollChildFace(
+        childId as string,
+        base64Photos
+      );
+
+      console.log('🎉 Enrollment successful:', response);
+
+      // Step 5: Navigate to success page with studentImageId
+      router.push({
+        pathname: '/face-registration-success',
+        params: {
+          capturedCount: capturedCount,
+          childName: childName,
+          submittedCount: base64Photos.length,
+          embeddingId: response.embeddingId,
+          studentId: childId,
+          studentImageId: response.studentImageId || null,
+        },
+      } as any);
+
+    } catch (error: any) {
+      console.error('❌ Enrollment error:', error);
+      
+      // Friendlier, actionable error mapping
+      const errorDetails: Record<string, { title: string; message: string; tip: string }> = {
+        no_face: {
+          title: 'Face Not Found',
+          message: 'We could not detect a face in the photo.',
+          tip: 'Keep your face fully in the oval and retry.',
+        },
+        multiple_faces: {
+          title: 'Multiple Faces Detected',
+          message: 'Only one person is allowed in the frame.',
+          tip: 'Ask others to step out of frame and retry.',
+        },
+        face_too_small: {
+          title: 'Face Too Small',
+          message: 'Your face is too far from the camera.',
+          tip: 'Move closer so your face fills the oval.',
+        },
+        low_confidence: {
+          title: 'Low Quality',
+          message: 'The photo quality is not good enough.',
+          tip: 'Hold still and ensure the camera is steady.',
+        },
+        blurry: {
+          title: 'Photo Is Blurry',
+          message: 'The image is too blurry to use.',
+          tip: 'Hold the phone steady and retry.',
+        },
+        too_dark: {
+          title: 'Too Dark',
+          message: 'The lighting is too low.',
+          tip: 'Move to a brighter spot or turn on more light.',
+        },
+        too_bright: {
+          title: 'Too Bright',
+          message: 'There is too much direct light.',
+          tip: 'Avoid backlight or direct sunlight.',
+        },
+      };
+      
+      const fallback = {
+        title: 'Face Registration Failed',
+        message: 'Enrollment failed. Please try again.',
+        tip: 'Keep your face centered, steady, and in good light.',
+      };
+      
+      let errorTitle = fallback.title;
+      let errorMessage = fallback.message;
+      let tip = fallback.tip;
+      
+      if (error.response?.data) {
+        const { quality_issue, error: serverError } = error.response.data;
+        const mapped = quality_issue ? errorDetails[quality_issue] : undefined;
+        errorTitle = mapped?.title || fallback.title;
+        errorMessage = mapped?.message || serverError || fallback.message;
+        tip = mapped?.tip || fallback.tip;
+      } else if (error.message) {
+        errorTitle = 'Connection Error';
+        errorMessage = error.message;
+      }
+      
       Alert.alert(
-        'Success',
-        'Face registration completed successfully!',
+        errorTitle,
+        `${errorMessage}\n\nTip: ${tip}`,
         [
           {
-            text: 'OK',
+            text: 'Try Again',
             onPress: () => {
-              router.back();
+              setCapturedImages([]);
+              setCapturedCount(0);
+              setIsCapturing(false);
             },
+            style: 'default',
           },
-        ]
+          {
+            text: 'Back',
+            onPress: () => router.back(),
+            style: 'cancel',
+          },
+        ],
+        { cancelable: true }
       );
-    } catch (error) {
-      Alert.alert('Error', 'Failed to submit face data');
+
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -439,20 +575,32 @@ export default function FaceRegistrationScreen() {
                 <Text style={styles.retakeButtonText}>Retake</Text>
               </TouchableOpacity>
 
-              {capturedCount >= 50 ? (
+              {capturedCount >= 10 ? (
                 <TouchableOpacity
-                  style={styles.completeButton}
+                  style={[
+                    styles.completeButton,
+                    isSubmitting && styles.completeButtonDisabled
+                  ]}
                   onPress={handleComplete}
                   activeOpacity={0.7}
-                  disabled={false}
+                  disabled={isSubmitting}
                 >
-                  <Ionicons name="checkmark" size={24} color="#FFFFFF" />
-                  <Text style={styles.completeButtonText}>Complete</Text>
+                  {isSubmitting ? (
+                    <>
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                      <Text style={styles.completeButtonText}>Uploading...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark" size={24} color="#FFFFFF" />
+                      <Text style={styles.completeButtonText}>Complete</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               ) : null}
             </View>
 
-            {capturedCount < 50 && (
+            {capturedCount < 10 && (
               <Text style={styles.hintText}>
                 Press the play button to start auto-capture
               </Text>
@@ -785,6 +933,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     zIndex: 10,
+  },
+  completeButtonDisabled: {
+    backgroundColor: '#9E9E9E',
+    opacity: 0.7,
   },
   completeButtonText: {
     fontFamily: 'RobotoSlab-Medium',

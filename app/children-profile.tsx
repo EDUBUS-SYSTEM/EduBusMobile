@@ -121,8 +121,14 @@ function ChildrenProfileContent() {
           <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Student Profile</Text>
-        <View style={{ width: 44 }} />
+        <Text style={styles.headerTitle}>Children Profile</Text>
+
+        <TouchableOpacity
+          onPress={handleNotification}
+          style={styles.headerButton}
+        >
+          <Ionicons name="notifications" size={24} color="#000000" />
+        </TouchableOpacity>
       </View>
 
       {/* Scrollable Content */}

@@ -221,7 +221,7 @@ export const getSupervisorTripDetailAsDriverTrip = async (tripId: string): Promi
 
 export const submitManualAttendance = async (
   tripId: string,
-  stopSequence: number,
+  pickupPointId: string,
   studentId: string,
   boardStatus?: 'Present' | 'Absent' | null,
   alightStatus?: 'Present' | 'Absent' | null
@@ -233,7 +233,7 @@ export const submitManualAttendance = async (
       studentId: string;
       timestamp: string;
     }>(`/Trip/${tripId}/attendance/manual`, {
-      stopId: stopSequence,
+      pickupPointId: pickupPointId,
       studentId: studentId,
       boardStatus: boardStatus || null,
       alightStatus: alightStatus || null,
