@@ -298,22 +298,12 @@ export default function ParentTripTrackingScreen() {
     try {
       setLoading(true);
 
-      // First, check if trip exists in Redux store
-      let tripData: ParentTripDto | null | undefined = tripsFromStore.find(t => t.id === tripId);
-
-      // If not in store OR store data is missing schoolLocation (needed for departure trips),
-      // fetch from API to get complete data
-      if (!tripData || !tripData.schoolLocation) {
-        const freshData = await getParentTripDetail(tripId);
-        if (freshData) {
-          tripData = freshData;
-          // Cache trip detail in Redux store
-          dispatch(updateTrip(freshData));
-        }
-      }
+      const tripData = await getParentTripDetail(tripId);
 
       if (tripData) {
         setTrip(tripData);
+        // Update Redux store for real-time sync
+        dispatch(updateTrip(tripData));
       } else {
         Alert.alert('Error', 'Trip not found', [
           { text: 'OK', onPress: () => router.replace('/(parent-tabs)/trips/today') },
@@ -330,7 +320,7 @@ export default function ParentTripTrackingScreen() {
     } finally {
       setLoading(false);
     }
-  }, [tripId, tripsFromStore, dispatch]);
+  }, [tripId, dispatch]);
 
   // Load trip on mount
   useEffect(() => {
@@ -1373,26 +1363,19 @@ export default function ParentTripTrackingScreen() {
               {/* All Stops Markers */}
               {trip.stops && trip.stops.map((stop) => {
                 if (!stop.latitude || !stop.longitude) return null;
-                
-                const isCompleted = !!stop.actualDeparture;
-                const isArrived = !!stop.actualArrival && !isCompleted;
-                
+
                 return (
                   <PointAnnotation
                     key={`stop-${stop.id}`}
                     id={`stop-${stop.id}`}
                     coordinate={[stop.longitude, stop.latitude]}
                     anchor={{ x: 0.5, y: 1 }}>
-                    <View style={[
-                      styles.stopMarker,
-                      isCompleted && styles.stopMarkerCompleted,
-                      isArrived && styles.stopMarkerArrived,
-                    ]}>
-                      <Ionicons
-                        name="location"
-                        size={36}
-                        color="#4CAF50"
+                    <View style={styles.stopMarkerContainer} collapsable={false}>
+                      <View
+                        style={[styles.stopMarkerBadge, { backgroundColor: '#C41E3A' }]}
+                        collapsable={false}
                       />
+                      <View style={[styles.stopMarkerPin, { borderTopColor: '#C41E3A' }]} />
                     </View>
                   </PointAnnotation>
                 );
@@ -1480,11 +1463,11 @@ export default function ParentTripTrackingScreen() {
             {trip.supervisor && (
               <View style={styles.modalBody}>
                 <View style={styles.modalDriverAvatarContainer}>
-                  <UserAvatar 
+                  <UserAvatar
                     userId={trip.supervisor?.id}
                     userName={trip.supervisor?.fullName}
-                    size={120} 
-                    showBorder={false} 
+                    size={120}
+                    showBorder={false}
                   />
                 </View>
 
@@ -1985,6 +1968,39 @@ const styles = StyleSheet.create({
   },
   stopMarkerArrived: {
     backgroundColor: '#FF9800',
+  },
+  stopMarkerContainer: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  stopMarkerBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  stopMarkerNumber: {
+    fontFamily: 'RobotoSlab-Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  stopMarkerPin: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderTopWidth: 14,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    marginTop: -2,
   },
   schoolMarker: {
     width: 48,

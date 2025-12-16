@@ -297,76 +297,51 @@ export default function TripDetailScreen() {
         // Only keep stops that are not completed yet (no departedAt)
         const activeStops = sortedStops.filter((stop) => !stop.departedAt);
 
-        // If there are no active stops, check if we need route to school
+        // Check if vehicle location exists
+        if (!busCoordinate) {
+          setRouteSegments([]);
+          console.log('ℹ️ No bus coordinate, clearing route segments');
+          return;
+        }
+
+        const [longitude, latitude] = busCoordinate;
+
+        // If all stops are completed
         if (activeStops.length === 0) {
-          // For departure trip, still show route from vehicle to school
-          if (trip.tripType === 1 && trip.schoolLocation && busCoordinate) {
-            const [longitude, latitude] = busCoordinate;
+          // For Departure trip only: show route from vehicle to school
+          if (trip.tripType === 1 && trip.schoolLocation) {
             const routeToSchool = await getRoute(
               { lat: latitude, lng: longitude },
               { lat: trip.schoolLocation.latitude, lng: trip.schoolLocation.longitude },
               apiKey
             );
-            
+
             if (routeToSchool && routeToSchool.coordinates.length > 0) {
               segments.push(routeToSchool.coordinates);
               console.log('✅ Route from vehicle to school (all stops completed)');
             }
           } else {
+            // For Return trip: no route when all stops completed
             setRouteSegments([]);
-            console.log('ℹ️ No active stops, clearing route segments');
+            console.log('ℹ️ All stops completed (Return trip), clearing route segments');
             return;
           }
         } else {
-          // Calculate route from vehicle to first active stop (if vehicle location exists)
-          if (busCoordinate) {
-            const firstPendingStop = activeStops[0];
-            if (firstPendingStop) {
-              const [longitude, latitude] = busCoordinate;
-              const routeData = await getRoute(
-                { lat: latitude, lng: longitude },
-                { lat: firstPendingStop.latitude, lng: firstPendingStop.longitude },
-                apiKey
-              );
-              if (routeData && routeData.coordinates.length > 0) {
-                segments.push(routeData.coordinates);
-                console.log('✅ Route from vehicle to stop', firstPendingStop.sequenceOrder);
-              }
-            }
+          // Only connect vehicle to the FIRST incomplete stop (next stop to visit)
+          const nextStop = activeStops[0];
+          const routeData = await getRoute(
+            { lat: latitude, lng: longitude },
+            { lat: nextStop.latitude, lng: nextStop.longitude },
+            apiKey
+          );
+
+          if (routeData && routeData.coordinates.length > 0) {
+            segments.push(routeData.coordinates);
+            console.log('✅ Route from vehicle to next stop:', nextStop.sequenceOrder);
           }
 
-          // Calculate routes between consecutive *active* stops
-          for (let i = 0; i < activeStops.length - 1; i++) {
-            const currentStop = activeStops[i];
-            const nextStop = activeStops[i + 1];
-
-            const routeData = await getRoute(
-              { lat: currentStop.latitude, lng: currentStop.longitude },
-              { lat: nextStop.latitude, lng: nextStop.longitude },
-              apiKey
-            );
-
-            if (routeData && routeData.coordinates.length > 0) {
-              segments.push(routeData.coordinates);
-              console.log(`✅ Route from stop ${currentStop.sequenceOrder} to stop ${nextStop.sequenceOrder}`);
-            }
-          }
-
-          // For departure trip, connect last active stop to school location
-          if (trip.tripType === 1 && trip.schoolLocation && activeStops.length > 0) {
-            const lastActiveStop = activeStops[activeStops.length - 1];
-
-            const routeToSchool = await getRoute(
-              { lat: lastActiveStop.latitude, lng: lastActiveStop.longitude },
-              { lat: trip.schoolLocation.latitude, lng: trip.schoolLocation.longitude },
-              apiKey
-            );
-
-            if (routeToSchool && routeToSchool.coordinates.length > 0) {
-              segments.push(routeToSchool.coordinates);
-              console.log('✅ Route from last stop to school added');
-            }
-          }
+          // NO stop-to-stop connections
+          // NO connection to school while stops are still active
         }
 
         setRouteSegments(segments);
@@ -459,7 +434,7 @@ export default function TripDetailScreen() {
               await endTrip(tripId);
               await fetchTripDetail();
               Alert.alert('Success', 'Trip completed successfully', [
-                { text: 'OK', onPress: () => router.replace('/(driver-tabs)/dashboard') },
+                { text: 'OK', onPress: () => router.replace('/(driver-tabs)/trips-today') },
               ]);
             } catch (error: any) {
               console.error('Error ending trip:', error);
@@ -648,7 +623,7 @@ export default function TripDetailScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient colors={['#FFDD00', '#FFDD00']} style={styles.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/(driver-tabs)/trips-today')}>
           <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Trip Progress</Text>
@@ -707,6 +682,8 @@ export default function TripDetailScreen() {
               ref={mapRef}
               style={styles.map}
               mapStyle={mapStyle}
+              logoEnabled={false}
+              attributionEnabled={false}
             >
               <Camera
                 key={cameraKey}
@@ -736,7 +713,7 @@ export default function TripDetailScreen() {
                   />
                 </ShapeSource>
               ))}
-              {/* Display all stop markers */}
+              {/* Display all stop markers with sequence numbers */}
               {trip.stops.map((stop) => {
                 return (
                   <PointAnnotation
@@ -745,8 +722,19 @@ export default function TripDetailScreen() {
                     coordinate={[stop.longitude, stop.latitude]}
                     anchor={{ x: 0.5, y: 1 }}
                   >
-                    <View style={styles.stopMarkerContainer}>
-                      <Ionicons name="location" size={40} color="#C41E3A" />
+                    <View style={styles.stopMarkerContainer} collapsable={false}>
+                      <View
+                        style={[styles.stopMarkerBadge, { backgroundColor: '#C41E3A' }]}
+                        collapsable={false}
+                      >
+                        <Text
+                          style={[styles.stopMarkerNumber, { color: '#FFFFFF' }]}
+                          allowFontScaling={false}
+                        >
+                          {stop.sequenceOrder}
+                        </Text>
+                      </View>
+                      <View style={[styles.stopMarkerPin, { borderTopColor: '#C41E3A' }]} />
                     </View>
                   </PointAnnotation>
                 );
@@ -1182,9 +1170,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   stopMarkerBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
