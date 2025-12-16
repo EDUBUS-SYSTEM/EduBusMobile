@@ -114,9 +114,9 @@ export default function SupervisorTripDetailScreen() {
   const scrollRef = React.useRef<ScrollView | null>(null);
   const insets = useSafeAreaInsets();
 
-  const loadTripData = React.useCallback(async () => {
+  const loadTripData = React.useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       // Get trip detail from supervisor API
       if (!tripId) return;
@@ -167,7 +167,7 @@ export default function SupervisorTripDetailScreen() {
         { text: 'OK', onPress: () => router.back() },
       ]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [tripId]);
 
@@ -197,7 +197,7 @@ export default function SupervisorTripDetailScreen() {
   // Refresh handler
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadTripData(), loadIncidents()]);
+    await Promise.all([loadTripData(true), loadIncidents()]);
     setRefreshing(false);
     // Haptic feedback on refresh complete
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -308,8 +308,34 @@ export default function SupervisorTripDetailScreen() {
     setShowBoardingDropdown(null);
 
     try {
-      await submitManualAttendance(tripId, pickupPointId, studentId, status, null);
-      await loadTripData();
+      const response = await submitManualAttendance(tripId, pickupPointId, studentId, status, null);
+      
+      // Update local trip state with new timestamp for this student
+      if (response && response.timestamp) {
+        setTrip(currentTrip => {
+          if (!currentTrip) return null;
+          
+          const updatedStops = currentTrip.stops.map(stop => {
+            if (stop.pickupPointId === pickupPointId) {
+              // Update attendance for this stop
+              const updatedAttendance = stop.attendance?.map(record => {
+                if (record.studentId === studentId) {
+                  return {
+                    ...record,
+                    boardedAt: response.timestamp,
+                    boardStatus: status
+                  };
+                }
+                return record;
+              });
+              return { ...stop, attendance: updatedAttendance };
+            }
+            return stop;
+          });
+          
+          return { ...currentTrip, stops: updatedStops };
+        });
+      }
     } catch (error: any) {
       console.error('Error updating boarding:', error);
       setBoardingStatus(prev => ({
@@ -333,8 +359,34 @@ export default function SupervisorTripDetailScreen() {
     setShowAlightingDropdown(null);
 
     try {
-      await submitManualAttendance(tripId, pickupPointId, studentId, null, status);
-      await loadTripData();
+      const response = await submitManualAttendance(tripId, pickupPointId, studentId, null, status);
+      
+      // Update local trip state with new timestamp for this student
+      if (response && response.timestamp) {
+        setTrip(currentTrip => {
+          if (!currentTrip) return null;
+          
+          const updatedStops = currentTrip.stops.map(stop => {
+            if (stop.pickupPointId === pickupPointId) {
+              // Update attendance for this stop
+              const updatedAttendance = stop.attendance?.map(record => {
+                if (record.studentId === studentId) {
+                  return {
+                    ...record,
+                    alightedAt: response.timestamp,
+                    alightStatus: status
+                  };
+                }
+                return record;
+              });
+              return { ...stop, attendance: updatedAttendance };
+            }
+            return stop;
+          });
+          
+          return { ...currentTrip, stops: updatedStops };
+        });
+      }
     } catch (error: any) {
       console.error('Error updating alighting:', error);
       setAlightingStatus(prev => ({
