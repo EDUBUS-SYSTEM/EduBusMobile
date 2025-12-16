@@ -394,29 +394,151 @@ export const getParentTripsByDate = async (dateISO?: string | null): Promise<Par
   }
 };
 
-/**
- * Get trips for current parent by date range (inclusive).
- * Note: This calls the existing single-day API per day; suitable for moderate ranges.
- * @param startDateISO - YYYY-MM-DD
- * @param endDateISO   - YYYY-MM-DD
- */
 export const getParentTripsByDateRange = async (
   startDateISO: string,
   endDateISO: string
 ): Promise<ParentTripDto[]> => {
-  const start = new Date(startDateISO);
-  const end = new Date(endDateISO);
-  const all: ParentTripDto[] = [];
+  try {
+    const response = await apiService.get<ParentTripDtoResponse[]>('/trip/parent/date-range', {
+      startDate: startDateISO,
+      endDate: endDateISO
+    });
 
-  const toDateStr = (d: Date) => d.toISOString().split('T')[0];
+    if (!Array.isArray(response) || response.length === 0) {
+      return [];
+    }
 
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = toDateStr(d);
-    const trips = await getParentTripsByDate(dateStr);
-    all.push(...trips);
+    const parentTrips: ParentTripDto[] = [];
+
+    for (const trip of response) {
+      if (!trip.stops || trip.stops.length === 0) {
+        continue;
+      }
+
+      const children = extractChildrenFromStops(trip.stops);
+
+      let childId: Guid | undefined = children[0]?.id;
+      let childName: string | undefined = children[0]?.name;
+
+      if (!childId || !childName) {
+        try {
+          const userInfo = await authApi.getUserInfo();
+          if (userInfo.userId) {
+            const children = await childrenApi.getChildrenByParent(userInfo.userId);
+            if (children.length > 0) {
+              childId = children[0].id;
+              childName = `${children[0].firstName} ${children[0].lastName}`;
+            }
+          }
+        } catch (error) {
+          console.warn('Could not fetch parent children:', error);
+        }
+      }
+
+      if (!childId || !childName) {
+        continue;
+      }
+
+      const completedStops = trip.stops.filter(s => s.actualDeparture).length;
+
+      const parentTrip: ParentTripDto = {
+        id: trip.id,
+        routeId: trip.routeId,
+        serviceDate: trip.serviceDate,
+        plannedStartAt: trip.plannedStartAt,
+        plannedEndAt: trip.plannedEndAt,
+        startTime: trip.startTime,
+        endTime: trip.endTime,
+        status: trip.status as DriverTripStatus,
+        scheduleName: trip.scheduleSnapshot?.name || 'Unknown Schedule',
+        tripType: trip.scheduleSnapshot?.tripType,
+        childId: childId,
+        childName: childName,
+        childAvatar: undefined,
+        childClassName: undefined,
+        schoolLocation: trip.schoolLocation
+          ? {
+            latitude: trip.schoolLocation.latitude,
+            longitude: trip.schoolLocation.longitude,
+            address: trip.schoolLocation.address,
+          }
+          : undefined,
+        children,
+        stops: trip.stops.map(stop => ({
+          id: stop.id,
+          name: stop.name,
+          sequence: stop.sequence,
+          plannedArrival: stop.plannedArrival,
+          actualArrival: stop.actualArrival,
+          plannedDeparture: stop.plannedDeparture,
+          actualDeparture: stop.actualDeparture,
+          address: stop.location.address,
+          latitude: stop.location.latitude,
+          longitude: stop.location.longitude,
+          attendance: stop.attendance?.map(att => ({
+            id: att.studentId,
+            name: att.studentName,
+            studentImageId: att.studentImageId ?? null,
+            state: att.state,
+            boardedAt: att.boardedAt ?? null,
+            boardStatus: att.boardStatus ?? null,
+            alightStatus: att.alightStatus ?? null,
+          })) || [],
+        })),
+        totalStops: trip.stops.length,
+        completedStops: completedStops,
+        driver: trip.driver
+          ? {
+            id: trip.driver.id,
+            fullName: trip.driver.fullName,
+            phone: trip.driver.phone,
+            isPrimary: trip.driver.isPrimary,
+          }
+          : undefined,
+        supervisor: (trip as any).supervisor
+          ? {
+            id: (trip as any).supervisor.id,
+            fullName: (trip as any).supervisor.fullName,
+            phone: (trip as any).supervisor.phone,
+          }
+          : undefined,
+        vehicle: trip.vehicle ? {
+          id: trip.vehicle.id,
+          maskedPlate: trip.vehicle.maskedPlate,
+          capacity: trip.vehicle.capacity,
+          status: trip.vehicle.status,
+        } : undefined,
+        currentLocation: trip.currentLocation
+          ? {
+            latitude: trip.currentLocation.latitude,
+            longitude: trip.currentLocation.longitude,
+            recordedAt: trip.currentLocation.recordedAt,
+            speed: trip.currentLocation.speed,
+            accuracy: trip.currentLocation.accuracy,
+            isMoving: trip.currentLocation.isMoving,
+          }
+          : undefined,
+        createdAt: trip.createdAt,
+        updatedAt: trip.updatedAt,
+      };
+
+      parentTrips.push(parentTrip);
+    }
+
+    return parentTrips;
+  } catch (error: any) {
+    console.error('Error fetching parent trips by date range:', error);
+
+    if (error.response?.status === 401) {
+      throw new Error('UNAUTHORIZED');
+    }
+
+    if (error.response?.status === 404) {
+      return [];
+    }
+
+    throw new Error(error.response?.data?.message || 'Failed to load trips. Please try again.');
   }
-
-  return all;
 };
 
 /**

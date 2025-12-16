@@ -190,7 +190,7 @@ export const getSupervisorTripDetailAsDriverTrip = async (tripId: string): Promi
 
         return {
           sequenceOrder: stop.sequence,
-          stopPointId: stop.id,
+          stopPointId: stop.pickupPointId,
           stopPointName: stop.name,
           plannedAt: stop.plannedArrival,
           arrivedAt: stop.actualArrival || undefined,
