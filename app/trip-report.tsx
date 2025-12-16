@@ -19,7 +19,6 @@ export default function TripReportScreen() {
   const [selectedSemester, setSelectedSemester] = useState<AcademicSemester | null>(null);
   const [report, setReport] = useState<ParentTripReportResponse | null>(null);
   const [loadingSemesters, setLoadingSemesters] = useState(false);
-  const [loadingReport, setLoadingReport] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
@@ -41,7 +40,6 @@ export default function TripReportScreen() {
 
   const loadReport = useCallback(
     async (semesterId: string) => {
-      setLoadingReport(true);
       setError(null);
       setDebugInfo(null);
       try {
@@ -70,7 +68,6 @@ export default function TripReportScreen() {
           )
         );
       } finally {
-        setLoadingReport(false);
       }
     },
     []
@@ -411,7 +408,7 @@ export default function TripReportScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
               {report?.studentStatistics?.map((student: StudentTripStatistics) => (
                 <View
-                  key={`${student.studentId}-${student.semesterCode}`}
+                  key={student.studentId}
                   style={{
                     width: 220,
                     marginRight: 12,
@@ -425,12 +422,12 @@ export default function TripReportScreen() {
                 >
                   <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 14, color: "#111827" }}>{student.studentName}</Text>
                   <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#6B7280" }}>
-                    {student.semesterName || student.semesterCode}
+                    {student.grade}
                   </Text>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
                     <View style={{ alignItems: "center" }}>
                       <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#6B7280" }}>Trips</Text>
-                      <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 16, color: "#111827" }}>{student.totalTrips}</Text>
+                      <Text style={{ fontFamily: "RobotoSlab-Bold", fontSize: 16, color: "#111827" }}>{student.totalTripsForStudent}</Text>
                     </View>
                     <View style={{ alignItems: "center" }}>
                       <Text style={{ fontFamily: "RobotoSlab-Regular", fontSize: 12, color: "#6B7280" }}>Present</Text>
