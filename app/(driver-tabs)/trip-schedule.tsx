@@ -1,3 +1,5 @@
+import DayModal from '@/components/driverSchedule/DayModal';
+import { formatDateWithWeekday } from '@/utils/date.utils';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useCallback, useState } from 'react';
@@ -10,11 +12,9 @@ import {
   View,
 } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
-import DayModal from '@/components/driverSchedule/DayModal';
 import { academicCalendarApi, AcademicSemester } from '../../lib/academicCalendar/academicCalendar.api';
 import { authApi } from '../../lib/auth/auth.api';
 import { DriverSchedule, driverScheduleApi } from '../../lib/trip-mock-data/driverSchedule';
-import { formatDateWithWeekday } from '@/utils/date.utils';
 
 export default function DriverScheduleScreen() {
   const [schedule, setSchedule] = useState<DriverSchedule>({ dots: [], byDate: {} });
@@ -29,7 +29,6 @@ export default function DriverScheduleScreen() {
       const loadedSemesters = await academicCalendarApi.getActiveSemesters();
       setSemesters(loadedSemesters);
     } catch {
-      // Handle error silently
     }
   }, []);
 
@@ -49,7 +48,6 @@ export default function DriverScheduleScreen() {
 
       setSchedule(scheduleData);
     } catch {
-      // Handle error silently
     } finally {
       setLoading(false);
     }

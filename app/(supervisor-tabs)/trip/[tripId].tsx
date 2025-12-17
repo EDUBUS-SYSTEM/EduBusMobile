@@ -118,25 +118,18 @@ export default function SupervisorTripDetailScreen() {
     try {
       if (!silent) setLoading(true);
 
-      // Get trip detail from supervisor API
       if (!tripId) return;
       const tripData = await getSupervisorTripDetail(tripId);
 
       setTrip(tripData);
-
-      // Load driver avatar URL directly (UserAvatar component will handle authentication and fallback)
       if (tripData.driver?.id) {
-        // Directly use getAvatarUrl - UserAvatar component will handle the case when no avatar exists
         setDriverAvatarUrl(userAccountApi.getAvatarUrl(tripData.driver.id));
       }
-
-      // Initialize boarding and alighting status for all students from stops
       const initialBoarding: Record<string, 'Present' | 'Absent' | null> = {};
       const initialAlighting: Record<string, 'Present' | 'Absent' | null> = {};
 
       tripData.stops.forEach(stop => {
         if (stop.attendance && Array.isArray(stop.attendance)) {
-          // Group by studentId to handle merged records from backend
           const studentAttendanceMap = new Map<string, typeof stop.attendance[0]>();
 
           stop.attendance.forEach((attendance) => {
@@ -224,7 +217,7 @@ export default function SupervisorTripDetailScreen() {
       try {
         const token = await AsyncStorage.getItem('accessToken');
         if (!token) {
-          console.warn('⚠️ No access token found');
+          console.warn('No access token found');
           return;
         }
 
@@ -235,24 +228,20 @@ export default function SupervisorTripDetailScreen() {
 
         // Join trip group to receive events
         await tripHubService.joinTrip(tripId);
-        console.log('✅ Joined trip group:', tripId);
+        console.log('Joined trip group:', tripId);
 
         // Subscribe to stops reordered event
         tripHubService.on<StopsReorderedEvent>('StopsReordered', (data) => {
-          console.log('🔔 Supervisor - Stops reordered:', JSON.stringify(data, null, 2));
-
           if (data.tripId === tripId && trip) {
-            // Update stops order based on new sequence
+
             setTrip((currentTrip) => {
               if (!currentTrip) return currentTrip;
 
-              // Create a map of pickupPointId to new sequence order
               const sequenceMap = new Map<string, number>();
               data.stops.forEach((stop) => {
                 sequenceMap.set(stop.pickupPointId, stop.sequenceOrder);
               });
 
-              // Update stops with new sequence order
               const updatedStops = currentTrip.stops.map((stop) => {
                 const newSequence = sequenceMap.get(stop.pickupPointId);
                 if (newSequence !== undefined) {
@@ -264,10 +253,9 @@ export default function SupervisorTripDetailScreen() {
                 return stop;
               });
 
-              // Sort stops by new sequence order
               updatedStops.sort((a, b) => a.sequence - b.sequence);
 
-              console.log('✅ Supervisor - Updated stops order');
+              console.log('Supervisor - Updated stops order');
               return {
                 ...currentTrip,
                 stops: updatedStops,
@@ -275,10 +263,8 @@ export default function SupervisorTripDetailScreen() {
             });
           }
         });
-
-        console.log('✅ TripHub initialized for supervisor trip:', tripId);
       } catch (error) {
-        console.error('❌ Error initializing TripHub:', error);
+        console.error(' Error initializing TripHub:', error);
       }
     };
 
@@ -289,7 +275,7 @@ export default function SupervisorTripDetailScreen() {
       tripHubService.off('StopsReordered');
       if (tripId) {
         tripHubService.leaveTrip(tripId).catch((error) => {
-          console.error('❌ Error leaving trip:', error);
+          console.error('Error leaving trip:', error);
         });
       }
     };
@@ -309,12 +295,12 @@ export default function SupervisorTripDetailScreen() {
 
     try {
       const response = await submitManualAttendance(tripId, pickupPointId, studentId, status, null);
-      
+
       // Update local trip state with new timestamp for this student
       if (response && response.timestamp) {
         setTrip(currentTrip => {
           if (!currentTrip) return null;
-          
+
           const updatedStops = currentTrip.stops.map(stop => {
             if (stop.pickupPointId === pickupPointId) {
               // Update attendance for this stop
@@ -332,7 +318,7 @@ export default function SupervisorTripDetailScreen() {
             }
             return stop;
           });
-          
+
           return { ...currentTrip, stops: updatedStops };
         });
       }
@@ -360,12 +346,12 @@ export default function SupervisorTripDetailScreen() {
 
     try {
       const response = await submitManualAttendance(tripId, pickupPointId, studentId, null, status);
-      
+
       // Update local trip state with new timestamp for this student
       if (response && response.timestamp) {
         setTrip(currentTrip => {
           if (!currentTrip) return null;
-          
+
           const updatedStops = currentTrip.stops.map(stop => {
             if (stop.pickupPointId === pickupPointId) {
               // Update attendance for this stop
@@ -383,7 +369,7 @@ export default function SupervisorTripDetailScreen() {
             }
             return stop;
           });
-          
+
           return { ...currentTrip, stops: updatedStops };
         });
       }
@@ -484,7 +470,7 @@ export default function SupervisorTripDetailScreen() {
       setReportModalVisible(false);
       // Haptic feedback on success
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('✅ Report sent', 'The incident report has been sent to the dispatcher.');
+      Alert.alert('Report sent', 'The incident report has been sent to the dispatcher.');
     } catch (error: any) {
       // Haptic feedback on error
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -780,196 +766,196 @@ export default function SupervisorTripDetailScreen() {
                       index === self.findIndex(s => s.studentId === student.studentId)
                     )
                     .map((student) => {
-                    const boardingStatusValue = boardingStatus[student.studentId];
-                    const alightingStatusValue = alightingStatus[student.studentId];
-                    const isBoarded = boardingStatusValue !== null && boardingStatusValue !== undefined;
-                    const isAlighted = alightingStatusValue !== null && alightingStatusValue !== undefined;
-                    
-                    const boardedAt = student.boardedAt ? formatTime(student.boardedAt) : null;
-                    const alightedAt = student.alightedAt ? formatTime(student.alightedAt) : null;
-                    
-                    let statusText = 'Not Checked';
-                    if (isAlighted) {
-                      statusText = alightingStatusValue === 'Present' 
-                        ? `Alighted${alightedAt ? ` (${alightedAt})` : ''}` 
-                        : `Absent (Alighting)${alightedAt ? ` (${alightedAt})` : ''}`;
-                    } else if (isBoarded) {
-                      statusText = boardingStatusValue === 'Present' 
-                        ? `Boarded${boardedAt ? ` (${boardedAt})` : ''}` 
-                        : `Absent (Boarding)${boardedAt ? ` (${boardedAt})` : ''}`;
-                    }
-                    
-                    const uniqueKey = `${stop.pickupPointId}-${student.studentId}`;
-                    let boardingButtonRef: View | null = null;
-                    let alightingButtonRef: View | null = null;
+                      const boardingStatusValue = boardingStatus[student.studentId];
+                      const alightingStatusValue = alightingStatus[student.studentId];
+                      const isBoarded = boardingStatusValue !== null && boardingStatusValue !== undefined;
+                      const isAlighted = alightingStatusValue !== null && alightingStatusValue !== undefined;
 
-                    const boardingIconColor =
-                      (isBoarded && boardingStatusValue === 'Present') || boardingStatusValue === 'Absent'
-                        ? '#FFFFFF'
-                        : '#2E7D32';
-                    
-                    return (
-                      <View
-                        key={uniqueKey}
-                        style={[
-                          styles.studentCard,
-                          isBoarded && boardingStatusValue === 'Present' && styles.studentCardPresent,
-                          isAlighted && alightingStatusValue === 'Present' && styles.studentCardAlighted,
-                          (boardingStatusValue === 'Absent' || alightingStatusValue === 'Absent') && styles.studentCardAbsent
-                        ]}
-                      >
-                        <View style={styles.studentHeader}>
-                          <StudentAvatar
-                            studentId={student.studentId}
-                            studentName={student.studentName}
-                            studentImageId={student.studentImageId}
-                            size={48}
-                            showBorder={false}
-                          />
-                          <View style={styles.studentInfo}>
-                            <Text style={styles.studentName} numberOfLines={1}>
-                              {student.studentName}
-                            </Text>
-                            <Text style={styles.studentMeta} numberOfLines={1}>
-                              {(student.className || 'No class info') + ` • Stop ${stop.sequence + 1}`}
-                            </Text>
-                            {/* Show boarding/alighting status with times */}
-                            {(isBoarded || isAlighted) && (
-                              <View style={styles.attendanceStatusRow}>
-                                {isBoarded && boardingStatusValue && (
-                                  <Text style={styles.attendanceStatusText}>
-                                    Boarding: {boardingStatusValue}
-                                    {student.boardedAt && ` • ${formatTime(student.boardedAt)}`}
+                      const boardedAt = student.boardedAt ? formatTime(student.boardedAt) : null;
+                      const alightedAt = student.alightedAt ? formatTime(student.alightedAt) : null;
+
+                      let statusText = 'Not Checked';
+                      if (isAlighted) {
+                        statusText = alightingStatusValue === 'Present'
+                          ? `Alighted${alightedAt ? ` (${alightedAt})` : ''}`
+                          : `Absent (Alighting)${alightedAt ? ` (${alightedAt})` : ''}`;
+                      } else if (isBoarded) {
+                        statusText = boardingStatusValue === 'Present'
+                          ? `Boarded${boardedAt ? ` (${boardedAt})` : ''}`
+                          : `Absent (Boarding)${boardedAt ? ` (${boardedAt})` : ''}`;
+                      }
+
+                      const uniqueKey = `${stop.pickupPointId}-${student.studentId}`;
+                      let boardingButtonRef: View | null = null;
+                      let alightingButtonRef: View | null = null;
+
+                      const boardingIconColor =
+                        (isBoarded && boardingStatusValue === 'Present') || boardingStatusValue === 'Absent'
+                          ? '#FFFFFF'
+                          : '#2E7D32';
+
+                      return (
+                        <View
+                          key={uniqueKey}
+                          style={[
+                            styles.studentCard,
+                            isBoarded && boardingStatusValue === 'Present' && styles.studentCardPresent,
+                            isAlighted && alightingStatusValue === 'Present' && styles.studentCardAlighted,
+                            (boardingStatusValue === 'Absent' || alightingStatusValue === 'Absent') && styles.studentCardAbsent
+                          ]}
+                        >
+                          <View style={styles.studentHeader}>
+                            <StudentAvatar
+                              studentId={student.studentId}
+                              studentName={student.studentName}
+                              studentImageId={student.studentImageId}
+                              size={48}
+                              showBorder={false}
+                            />
+                            <View style={styles.studentInfo}>
+                              <Text style={styles.studentName} numberOfLines={1}>
+                                {student.studentName}
+                              </Text>
+                              <Text style={styles.studentMeta} numberOfLines={1}>
+                                {(student.className || 'No class info') + ` • Stop ${stop.sequence + 1}`}
+                              </Text>
+                              {/* Show boarding/alighting status with times */}
+                              {(isBoarded || isAlighted) && (
+                                <View style={styles.attendanceStatusRow}>
+                                  {isBoarded && boardingStatusValue && (
+                                    <Text style={styles.attendanceStatusText}>
+                                      Boarding: {boardingStatusValue}
+                                      {student.boardedAt && ` • ${formatTime(student.boardedAt)}`}
+                                    </Text>
+                                  )}
+                                  {isAlighted && alightingStatusValue && (
+                                    <Text style={styles.attendanceStatusText}>
+                                      Alighting: {alightingStatusValue}
+                                      {student.alightedAt && ` • ${formatTime(student.alightedAt)}`}
+                                    </Text>
+                                  )}
+                                </View>
+                              )}
+                            </View>
+                            <View
+                              style={[
+                                styles.statusPill,
+                                isAlighted
+                                  ? styles.statusPillAlighted
+                                  : isBoarded
+                                    ? styles.statusPillPresent
+                                    : styles.statusPillPending
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.statusPillText,
+                                  (isBoarded || isAlighted) && styles.statusPillTextActive
+                                ]}
+                              >
+                                {statusText}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {trip.status === 'InProgress' && (
+                            <View style={styles.attendanceButtons}>
+                              {/* Boarding Button with Dropdown */}
+                              <View
+                                style={styles.dropdownContainer}
+                                ref={(ref) => { boardingButtonRef = ref; }}
+                              >
+                                <TouchableOpacity
+                                  style={[
+                                    styles.attendanceBtn,
+                                    styles.boardingBtn,
+                                    isBoarded && boardingStatusValue === 'Present' && styles.boardingBtnActive,
+                                    boardingStatusValue === 'Absent' && styles.boardingBtnAbsent
+                                  ]}
+                                  onPress={() => {
+                                    if (showBoardingDropdown?.studentId === student.studentId) {
+                                      setShowBoardingDropdown(null);
+                                    } else {
+                                      boardingButtonRef?.measureInWindow((x, y, width, height) => {
+                                        setShowBoardingDropdown({
+                                          studentId: student.studentId,
+                                          pickupPointId: stop.pickupPointId,
+                                          position: { x, y: y + height, width }
+                                        });
+                                        setShowAlightingDropdown(null);
+                                      });
+                                    }
+                                  }}
+                                  disabled={false}
+                                >
+                                  <Ionicons
+                                    name={isBoarded ? 'checkmark-circle' : 'arrow-up-circle-outline'}
+                                    size={18}
+                                    color={boardingIconColor}
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.attendanceBtnText,
+                                      (isBoarded && boardingStatusValue === 'Present') || boardingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    Boarding {isBoarded && boardingStatusValue ? `(${boardingStatusValue})` : ''}
                                   </Text>
-                                )}
-                                {isAlighted && alightingStatusValue && (
-                                  <Text style={styles.attendanceStatusText}>
-                                    Alighting: {alightingStatusValue}
-                                    {student.alightedAt && ` • ${formatTime(student.alightedAt)}`}
-                                  </Text>
-                                )}
+                                  <Ionicons name="chevron-down" size={14} color={isBoarded && boardingStatusValue === 'Present' ? '#FFFFFF' : boardingStatusValue === 'Absent' ? '#FFFFFF' : '#2E7D32'} />
+                                </TouchableOpacity>
                               </View>
-                            )}
-                          </View>
-                          <View
-                            style={[
-                              styles.statusPill,
-                              isAlighted
-                                ? styles.statusPillAlighted
-                                : isBoarded
-                                ? styles.statusPillPresent
-                                : styles.statusPillPending
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.statusPillText,
-                                (isBoarded || isAlighted) && styles.statusPillTextActive
-                              ]}
-                            >
-                              {statusText}
-                            </Text>
-                          </View>
+
+                              {/* Alighting Button with Dropdown */}
+                              <View
+                                style={styles.dropdownContainer}
+                                ref={(ref) => { alightingButtonRef = ref; }}
+                              >
+                                <TouchableOpacity
+                                  style={[
+                                    styles.attendanceBtn,
+                                    styles.alightingBtn,
+                                    isAlighted && alightingStatusValue === 'Present' && styles.alightingBtnActive,
+                                    alightingStatusValue === 'Absent' && styles.alightingBtnAbsent,
+                                    ((!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress') && styles.attendanceBtnDisabled
+                                  ]}
+                                  onPress={() => {
+                                    if (showAlightingDropdown?.studentId === student.studentId) {
+                                      setShowAlightingDropdown(null);
+                                    } else {
+                                      alightingButtonRef?.measureInWindow((x, y, width, height) => {
+                                        setShowAlightingDropdown({
+                                          studentId: student.studentId,
+                                          pickupPointId: stop.pickupPointId,
+                                          position: { x, y: y + height, width }
+                                        });
+                                        setShowBoardingDropdown(null);
+                                      });
+                                    }
+                                  }}
+                                  disabled={(!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress'}
+                                >
+                                  <Ionicons
+                                    name={isAlighted ? 'checkmark-circle' : 'arrow-down-circle-outline'}
+                                    size={18}
+                                    color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'}
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.attendanceBtnText,
+                                      (isAlighted && alightingStatusValue === 'Present') || alightingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    Alighting {isAlighted && alightingStatusValue ? `(${alightingStatusValue})` : ''}
+                                  </Text>
+                                  <Ionicons name="chevron-down" size={14} color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'} />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          )}
                         </View>
-
-                        {trip.status === 'InProgress' && (
-                        <View style={styles.attendanceButtons}>
-                          {/* Boarding Button with Dropdown */}
-                          <View 
-                            style={styles.dropdownContainer}
-                            ref={(ref) => { boardingButtonRef = ref; }}
-                          >
-                            <TouchableOpacity
-                              style={[
-                                styles.attendanceBtn,
-                                styles.boardingBtn,
-                                isBoarded && boardingStatusValue === 'Present' && styles.boardingBtnActive,
-                                boardingStatusValue === 'Absent' && styles.boardingBtnAbsent
-                              ]}
-                              onPress={() => {
-                                if (showBoardingDropdown?.studentId === student.studentId) {
-                                  setShowBoardingDropdown(null);
-                                } else {
-                                  boardingButtonRef?.measureInWindow((x, y, width, height) => {
-                                    setShowBoardingDropdown({
-                                      studentId: student.studentId,
-                                      pickupPointId: stop.pickupPointId,
-                                      position: { x, y: y + height, width }
-                                    });
-                                    setShowAlightingDropdown(null);
-                                  });
-                                }
-                              }}
-                              disabled={false}
-                            >
-                              <Ionicons
-                                name={isBoarded ? 'checkmark-circle' : 'arrow-up-circle-outline'}
-                                size={18}
-                                color={boardingIconColor}
-                              />
-                              <Text
-                                style={[
-                                  styles.attendanceBtnText,
-                                  (isBoarded && boardingStatusValue === 'Present') || boardingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
-                                ]}
-                                numberOfLines={1}
-                              >
-                                Boarding {isBoarded && boardingStatusValue ? `(${boardingStatusValue})` : ''}
-                              </Text>
-                              <Ionicons name="chevron-down" size={14} color={isBoarded && boardingStatusValue === 'Present' ? '#FFFFFF' : boardingStatusValue === 'Absent' ? '#FFFFFF' : '#2E7D32'} />
-                            </TouchableOpacity>
-                          </View>
-
-                          {/* Alighting Button with Dropdown */}
-                          <View 
-                            style={styles.dropdownContainer}
-                            ref={(ref) => { alightingButtonRef = ref; }}
-                          >
-                            <TouchableOpacity
-                              style={[
-                                styles.attendanceBtn,
-                                styles.alightingBtn,
-                                isAlighted && alightingStatusValue === 'Present' && styles.alightingBtnActive,
-                                alightingStatusValue === 'Absent' && styles.alightingBtnAbsent,
-                                ((!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress') && styles.attendanceBtnDisabled
-                              ]}
-                              onPress={() => {
-                                if (showAlightingDropdown?.studentId === student.studentId) {
-                                  setShowAlightingDropdown(null);
-                                } else {
-                                  alightingButtonRef?.measureInWindow((x, y, width, height) => {
-                                    setShowAlightingDropdown({
-                                      studentId: student.studentId,
-                                      pickupPointId: stop.pickupPointId,
-                                      position: { x, y: y + height, width }
-                                    });
-                                    setShowBoardingDropdown(null);
-                                  });
-                                }
-                              }}
-                              disabled={(!isBoarded || boardingStatusValue === 'Absent') && trip.status === 'InProgress'}
-                            >
-                              <Ionicons
-                                name={isAlighted ? 'checkmark-circle' : 'arrow-down-circle-outline'}
-                                size={18}
-                                color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'}
-                              />
-                              <Text
-                                style={[
-                                  styles.attendanceBtnText,
-                                  (isAlighted && alightingStatusValue === 'Present') || alightingStatusValue === 'Absent' ? styles.attendanceBtnTextActive : {}
-                                ]}
-                                numberOfLines={1}
-                              >
-                                Alighting {isAlighted && alightingStatusValue ? `(${alightingStatusValue})` : ''}
-                              </Text>
-                              <Ionicons name="chevron-down" size={14} color={isAlighted && alightingStatusValue === 'Present' ? '#FFFFFF' : alightingStatusValue === 'Absent' ? '#FFFFFF' : '#1976D2'} />
-                            </TouchableOpacity>
-                          </View>
-                          </View>
-                        )}
-                      </View>
-                    );
+                      );
                     })
                 ) : (
                   <Text style={styles.noStudentsText}>No students</Text>
@@ -1175,54 +1161,54 @@ export default function SupervisorTripDetailScreen() {
           >
             {selectedIncident && (
               <View style={styles.detailCard}>
-                    <View style={styles.detailHeader}>
-                      <View style={{ flex: 1, gap: 4 }}>
-                        <Text style={styles.detailTitle}>
-                          {selectedIncident.reason === 'Other'
-                            ? selectedIncident.title || 'Other'
-                            : incidentReasonLabel[selectedIncident.reason] || selectedIncident.title || 'Incident'}
-                        </Text>
-                        <Text style={styles.detailSubtitle}>{formatDateTime(selectedIncident.createdAt)}</Text>
-                        <View style={styles.detailTagRow}>
-                          <View style={styles.incidentReasonChip}>
-                            <Ionicons name="flag" size={12} color="#92400E" />
-                            <Text style={styles.incidentReasonText}>{incidentReasonLabel[selectedIncident.reason]}</Text>
-                          </View>
-                        </View>
+                <View style={styles.detailHeader}>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.detailTitle}>
+                      {selectedIncident.reason === 'Other'
+                        ? selectedIncident.title || 'Other'
+                        : incidentReasonLabel[selectedIncident.reason] || selectedIncident.title || 'Incident'}
+                    </Text>
+                    <Text style={styles.detailSubtitle}>{formatDateTime(selectedIncident.createdAt)}</Text>
+                    <View style={styles.detailTagRow}>
+                      <View style={styles.incidentReasonChip}>
+                        <Ionicons name="flag" size={12} color="#92400E" />
+                        <Text style={styles.incidentReasonText}>{incidentReasonLabel[selectedIncident.reason]}</Text>
                       </View>
-                      <View style={[styles.incidentStatusBadge, { backgroundColor: incidentStatusColors[String(selectedIncident.status || '').toLowerCase() || 'open']?.bg || '#FFF4E5' }]}>
-                        <Text style={[styles.incidentStatusText, { color: incidentStatusColors[String(selectedIncident.status || '').toLowerCase() || 'open']?.text || '#D97706' }]}>
-                          {selectedIncident.status}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.closeButton, { marginLeft: 8 }]}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        onPress={() => setIncidentDetailVisible(false)}
-                      >
-                        <Ionicons name="close" size={20} color="#6B7280" />
-                      </TouchableOpacity>
                     </View>
+                  </View>
+                  <View style={[styles.incidentStatusBadge, { backgroundColor: incidentStatusColors[String(selectedIncident.status || '').toLowerCase() || 'open']?.bg || '#FFF4E5' }]}>
+                    <Text style={[styles.incidentStatusText, { color: incidentStatusColors[String(selectedIncident.status || '').toLowerCase() || 'open']?.text || '#D97706' }]}>
+                      {selectedIncident.status}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.closeButton, { marginLeft: 8 }]}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    onPress={() => setIncidentDetailVisible(false)}
+                  >
+                    <Ionicons name="close" size={20} color="#6B7280" />
+                  </TouchableOpacity>
+                </View>
 
-                    <View style={styles.detailRow}>
-                      <Ionicons name="bus" size={16} color="#6B7280" />
-                      <Text style={styles.detailValue}>Vehicle: {selectedIncident.vehiclePlate || '-'}</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <Ionicons name="calendar" size={16} color="#6B7280" />
-                      <Text style={styles.detailValue}>Service: {formatDateTime(selectedIncident.serviceDate)}</Text>
-                    </View>
+                <View style={styles.detailRow}>
+                  <Ionicons name="bus" size={16} color="#6B7280" />
+                  <Text style={styles.detailValue}>Vehicle: {selectedIncident.vehiclePlate || '-'}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Ionicons name="calendar" size={16} color="#6B7280" />
+                  <Text style={styles.detailValue}>Service: {formatDateTime(selectedIncident.serviceDate)}</Text>
+                </View>
 
-                    <View style={styles.detailDescriptionBox}>
-                      <Text style={styles.detailSectionTitle}>Description</Text>
-                      {incidentDetailLoading ? (
-                        <ActivityIndicator size="small" color="#0EA5E9" />
-                      ) : (
-                        <Text style={styles.detailDescriptionText}>
-                          {selectedIncident.description || 'No description provided.'}
-                        </Text>
-                      )}
-                    </View>
+                <View style={styles.detailDescriptionBox}>
+                  <Text style={styles.detailSectionTitle}>Description</Text>
+                  {incidentDetailLoading ? (
+                    <ActivityIndicator size="small" color="#0EA5E9" />
+                  ) : (
+                    <Text style={styles.detailDescriptionText}>
+                      {selectedIncident.description || 'No description provided.'}
+                    </Text>
+                  )}
+                </View>
               </View>
             )}
           </KeyboardAvoidingView>

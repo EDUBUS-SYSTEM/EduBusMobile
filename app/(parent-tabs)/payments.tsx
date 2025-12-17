@@ -25,7 +25,7 @@ import {
 export default function PaymentsScreen() {
   const { refresh } = useLocalSearchParams<{ refresh?: string }>();
   const {
-    filteredTransactions: transactions,  
+    filteredTransactions: transactions,
     totalCount,
     filter,
     loadingList: loading,
@@ -41,21 +41,21 @@ export default function PaymentsScreen() {
 
   useEffect(() => {
     loadTransactions(1);
-  }, [filter, loadTransactions]);  
-  
+  }, [filter, loadTransactions]);
+
   useEffect(() => {
     if (refresh === 'true') {
-      refreshTransactions();  
+      refreshTransactions();
     }
   }, [refresh, refreshTransactions]);
 
   const handleRefresh = () => {
-    refreshTransactions();  
+    refreshTransactions();
   };
-  
+
   const handleLoadMore = () => {
     if (!loading && hasMore) {
-      loadTransactions(page + 1);  
+      loadTransactions(page + 1);
     }
   };
 
@@ -68,10 +68,10 @@ export default function PaymentsScreen() {
       {/* Status Badge at Top */}
       <View style={styles.cardHeader}>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Ionicons 
-            name={item.status === TransactionStatus.Paid ? "checkmark-circle" : "time"} 
-            size={14} 
-            color="#FFFFFF" 
+          <Ionicons
+            name={item.status === TransactionStatus.Paid ? "checkmark-circle" : "time"}
+            size={14}
+            color="#FFFFFF"
           />
           <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
         </View>
@@ -85,13 +85,13 @@ export default function PaymentsScreen() {
         <View style={styles.iconContainer}>
           <Ionicons name="wallet" size={32} color="#01CBCA" />
         </View>
-        
+
         <View style={styles.transactionInfo}>
           <Text style={styles.transactionTitle} numberOfLines={1}>
             {item.description || 'Bus Fee Payment'}
           </Text>
           <Text style={styles.transactionCode}>#{item.transactionCode}</Text>
-          
+
           <View style={styles.detailsRow}>
             <View style={styles.detailItem}>
               <Ionicons name="calendar-outline" size={14} color="#666" />
@@ -128,38 +128,38 @@ export default function PaymentsScreen() {
         style={[styles.filterTab, filter === 'all' && styles.filterTabActive]}
         onPress={() => changeFilter('all')}
       >
-        <Ionicons 
-          name="list" 
-          size={18} 
-          color={filter === 'all' ? '#FFFFFF' : '#666'} 
+        <Ionicons
+          name="list"
+          size={18}
+          color={filter === 'all' ? '#FFFFFF' : '#666'}
         />
         <Text style={[styles.filterTabText, filter === 'all' && styles.filterTabTextActive]}>
           All
         </Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity
         style={[styles.filterTab, filter === 'pending' && styles.filterTabActive]}
         onPress={() => changeFilter('pending')}
       >
-        <Ionicons 
-          name="time" 
-          size={18} 
-          color={filter === 'pending' ? '#FFFFFF' : '#666'} 
+        <Ionicons
+          name="time"
+          size={18}
+          color={filter === 'pending' ? '#FFFFFF' : '#666'}
         />
         <Text style={[styles.filterTabText, filter === 'pending' && styles.filterTabTextActive]}>
           Pending
         </Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity
         style={[styles.filterTab, filter === 'paid' && styles.filterTabActive]}
         onPress={() => changeFilter('paid')}
       >
-        <Ionicons 
-          name="checkmark-circle" 
-          size={18} 
-          color={filter === 'paid' ? '#FFFFFF' : '#666'} 
+        <Ionicons
+          name="checkmark-circle"
+          size={18}
+          color={filter === 'paid' ? '#FFFFFF' : '#666'}
         />
         <Text style={[styles.filterTabText, filter === 'paid' && styles.filterTabTextActive]}>
           Paid
@@ -246,10 +246,10 @@ export default function PaymentsScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={handleRefresh} 
-            colors={['#01CBCA']} 
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#01CBCA']}
             tintColor="#01CBCA"
           />
         }
@@ -268,18 +268,18 @@ export default function PaymentsScreen() {
               <Ionicons name="wallet-outline" size={80} color="#E0E0E0" />
             </View>
             <Text style={styles.emptyTitle}>
-              {filter === 'pending' 
-                ? 'No Pending Payments' 
+              {filter === 'pending'
+                ? 'No Pending Payments'
                 : filter === 'paid'
-                ? 'No Payment History'
-                : 'No Transactions Yet'}
+                  ? 'No Payment History'
+                  : 'No Transactions Yet'}
             </Text>
             <Text style={styles.emptyText}>
-              {filter === 'pending' 
-                ? 'You have no payments waiting' 
+              {filter === 'pending'
+                ? 'You have no payments waiting'
                 : filter === 'paid'
-                ? 'Your payment history will appear here'
-                : 'Your transactions will appear here'}
+                  ? 'Your payment history will appear here'
+                  : 'Your transactions will appear here'}
             </Text>
           </View>
         }

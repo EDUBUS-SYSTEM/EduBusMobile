@@ -1,23 +1,23 @@
+import { leaveApi } from '@/lib/driver/leave.api';
+import { CreateLeaveRequest, LeaveType, getLeaveTypeIcon, getLeaveTypeName } from '@/lib/driver/leave.type';
+import { formatDate as formatDateDisplay } from '@/utils/date.utils';
+import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Switch,
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator
+  ScrollView,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { leaveApi } from '@/lib/driver/leave.api';
-import { CreateLeaveRequest, LeaveType, getLeaveTypeName, getLeaveTypeIcon } from '@/lib/driver/leave.type';
-import { formatDate as formatDateDisplay } from '@/utils/date.utils';
 
 export default function LeaveRequestFormScreen() {
   const [leaveType, setLeaveType] = useState<LeaveType | null>(null);
@@ -27,11 +27,11 @@ export default function LeaveRequestFormScreen() {
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [autoReplacementEnabled, setAutoReplacementEnabled] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Date picker states
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  
+
   // Show leave type picker modal
   const [showLeaveTypePicker, setShowLeaveTypePicker] = useState(false);
 
@@ -69,7 +69,7 @@ export default function LeaveRequestFormScreen() {
 
     try {
       setIsSubmitting(true);
-      
+
       const request: CreateLeaveRequest = {
         leaveType: leaveType!,
         startDate: startDate.toISOString(),
@@ -80,7 +80,7 @@ export default function LeaveRequestFormScreen() {
       };
 
       await leaveApi.createLeaveRequest(request);
-      
+
       Alert.alert(
         'Success',
         'Your leave request has been submitted successfully!',
@@ -93,16 +93,13 @@ export default function LeaveRequestFormScreen() {
       );
     } catch (error: any) {
       console.error('Error submitting leave request:', error);
-      
-      // Extract error message and status code
+
       const statusCode = error?.response?.status;
       const errorData = error?.response?.data;
       const errorMessage = errorData?.message || error?.message || 'Failed to submit leave request. Please try again.';
       const errorType = errorData?.errorType;
-      
-      // Handle different error types
+
       if (statusCode === 409 && errorType === 'OverlappingLeaveRequest') {
-        // Show detailed error for overlapping leave requests
         Alert.alert(
           'Leave Request Conflict',
           errorMessage,
@@ -114,13 +111,11 @@ export default function LeaveRequestFormScreen() {
           ]
         );
       } else if (statusCode === 400 && errorType === 'ValidationError') {
-        // Show validation error
         Alert.alert(
           'Validation Error',
           errorMessage
         );
       } else {
-        // Show generic error for other cases
         Alert.alert(
           'Error',
           errorMessage

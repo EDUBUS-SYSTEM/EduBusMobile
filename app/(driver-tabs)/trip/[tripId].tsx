@@ -122,7 +122,7 @@ export default function TripDetailScreen() {
           Boolean(speed && speed > 0)
         );
       } catch (error) {
-        console.error('❌ Error sending device location:', error);
+        console.error('Error sending device location:', error);
       }
     };
 
@@ -130,7 +130,7 @@ export default function TripDetailScreen() {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          console.warn('⚠️ Location permission not granted');
+          console.warn('Location permission not granted');
           return;
         }
 
@@ -145,7 +145,7 @@ export default function TripDetailScreen() {
 
         locationIntervalRef.current = setInterval(sendCurrentLocation, 5000);
       } catch (error) {
-        console.error('❌ Error initializing location updates:', error);
+        console.error('Error initializing location updates:', error);
       }
     };
 
@@ -187,11 +187,11 @@ export default function TripDetailScreen() {
 
         // Join trip group to receive events
         await tripHubService.joinTrip(tripId);
-        console.log('✅ Joined trip group:', tripId);
+        console.log('Joined trip group:', tripId);
 
         // Subscribe to attendance update events
         tripHubService.on<AttendanceUpdatedEvent>('AttendanceUpdated', (data) => {
-          console.log('🔔 Driver - Attendance updated:', JSON.stringify(data, null, 2));
+          console.log(' Driver - Attendance updated:', JSON.stringify(data, null, 2));
 
           if (data.tripId === tripId) {
             // Use functional state update to avoid stale closure
@@ -243,9 +243,8 @@ export default function TripDetailScreen() {
                 // Recalculate completedStops based on departedAt
                 const completedCount = updatedTrip.stops.filter((s) => s.departedAt).length;
                 updatedTrip.completedStops = completedCount;
-                // Do NOT auto-complete trip here; completion is handled via endTrip flow
                 console.log(
-                  '✅ Driver - Attendance update applied with completedStops:',
+                  'Driver - Attendance update applied with completedStops:',
                   completedCount
                 );
                 return updatedTrip;
@@ -255,9 +254,9 @@ export default function TripDetailScreen() {
             });
           }
         });
-        console.log('✅ TripHub initialized for trip:', tripId);
+        console.log('TripHub initialized for trip:', tripId);
       } catch (error) {
-        console.error('❌ Error initializing TripHub:', error);
+        console.error('Error initializing TripHub:', error);
       }
     };
 
@@ -268,7 +267,7 @@ export default function TripDetailScreen() {
       tripHubService.off('AttendanceUpdated');
       if (tripId) {
         tripHubService.leaveTrip(tripId).catch((error) => {
-          console.error('❌ Error leaving trip:', error);
+          console.error('Error leaving trip:', error);
         });
       }
     };
@@ -290,17 +289,13 @@ export default function TripDetailScreen() {
           return;
         }
 
-        // Sort stops by sequence order
         const sortedStops = [...trip.stops].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
         const segments: [number, number][][] = [];
-
-        // Only keep stops that are not completed yet (no departedAt)
         const activeStops = sortedStops.filter((stop) => !stop.departedAt);
 
-        // Check if vehicle location exists
         if (!busCoordinate) {
           setRouteSegments([]);
-          console.log('ℹ️ No bus coordinate, clearing route segments');
+          console.log('No bus coordinate, clearing route segments');
           return;
         }
 
@@ -318,12 +313,12 @@ export default function TripDetailScreen() {
 
             if (routeToSchool && routeToSchool.coordinates.length > 0) {
               segments.push(routeToSchool.coordinates);
-              console.log('✅ Route from vehicle to school (all stops completed)');
+              console.log('Route from vehicle to school (all stops completed)');
             }
           } else {
             // For Return trip: no route when all stops completed
             setRouteSegments([]);
-            console.log('ℹ️ All stops completed (Return trip), clearing route segments');
+            console.log('All stops completed (Return trip), clearing route segments');
             return;
           }
         } else {
@@ -337,17 +332,14 @@ export default function TripDetailScreen() {
 
           if (routeData && routeData.coordinates.length > 0) {
             segments.push(routeData.coordinates);
-            console.log('✅ Route from vehicle to next stop:', nextStop.sequenceOrder);
+            console.log('Route from vehicle to next stop:', nextStop.sequenceOrder);
           }
-
-          // NO stop-to-stop connections
-          // NO connection to school while stops are still active
         }
 
         setRouteSegments(segments);
-        console.log('✅ Total route segments:', segments.length);
+        console.log('Total route segments:', segments.length);
       } catch (error) {
-        console.error('❌ Error calculating routes:', error);
+        console.error('Error calculating routes:', error);
         setRouteSegments([]);
       }
     };
@@ -359,10 +351,8 @@ export default function TripDetailScreen() {
     if (!trip) return;
 
     try {
-      // Call API to notify parents
       await confirmArrival(trip.id, stop.stopPointId);
 
-      // Update local state
       const now = new Date().toISOString();
       const updatedStops = trip.stops.map((s) =>
         s.sequenceOrder === stop.sequenceOrder
@@ -453,71 +443,57 @@ export default function TripDetailScreen() {
 
   const handleDragEnd = async ({ data }: { data: DriverTripStopDto[] }) => {
     if (!trip) return;
-
-    // Save original order to revert if needed
     const originalStops = [...trip.stops].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
 
     try {
-      // Create a map of original stop positions by stopPointId
       const originalStopMap = new Map(
         trip.stops.map((stop, index) => [stop.stopPointId, { stop, originalIndex: index }])
       );
-
-      // Check if any arrived stops changed position
       const arrivedStopsChanged = data.some((stop, newIndex) => {
-        if (!stop.arrivedAt) return false; // Skip non-arrived stops
+        if (!stop.arrivedAt) return false;
 
         const original = originalStopMap.get(stop.stopPointId);
         if (!original) return false;
 
-        // Check if the arrived stop's position changed
+
         return original.originalIndex !== newIndex;
       });
 
       if (arrivedStopsChanged) {
-        // Revert state back to original to force re-render DraggableFlatList
+
         setTrip({
           ...trip,
           stops: originalStops,
         });
-        // Force re-render DraggableFlatList by changing key
         setListKey(prev => prev + 1);
         Alert.alert('Warning', 'Cannot reorder stops that have already been visited.');
         return;
       }
-
-      // Update sequenceOrder for all stops based on new order
       const updatedStops = data.map((stop, index) => ({
         ...stop,
-        sequenceOrder: index + 1, // sequenceOrder is 1-based
+        sequenceOrder: index + 1,
       }));
 
-      // Prepare API request - only include non-arrived stops
       const stopsForAPI = updatedStops
         .filter(stop => !stop.arrivedAt)
         .map(stop => ({
           pickupPointId: stop.stopPointId,
-          sequenceOrder: stop.sequenceOrder - 1, // Backend uses 0-based index
+          sequenceOrder: stop.sequenceOrder - 1,
         }));
 
-      // Only call API if there are stops to update
       if (stopsForAPI.length > 0) {
-        // Call API to update sequence
         await updateMultipleStopsSequence(trip.id, stopsForAPI);
-
-        // Update local state
         const updatedTrip: DriverTripDto = {
           ...trip,
           stops: updatedStops,
         };
 
         setTrip(updatedTrip);
-        console.log('✅ Stops sequence updated successfully');
+        console.log(' Stops sequence updated successfully');
       }
     } catch (error: any) {
       console.error('Error updating stops sequence:', error);
       Alert.alert('Warning', error.message || 'Failed to update stops sequence');
-      // Revert to original order by refetching
       await fetchTripDetail();
     }
   };
@@ -528,12 +504,10 @@ export default function TripDetailScreen() {
   const mapStyle = apiKey
     ? `https://maps.vietmap.vn/maps/styles/tm/style.json?apikey=${apiKey}`
     : undefined;
-
-  // Calculate map bounds to fit all stops
   const getMapBounds = React.useCallback(() => {
     if (!trip || !trip.stops || trip.stops.length === 0) {
       return {
-        centerCoordinate: [108.2022, 16.0544] as [number, number], // Default Da Nang
+        centerCoordinate: [108.2022, 16.0544] as [number, number],
         zoomLevel: 12,
       };
     }
@@ -542,7 +516,6 @@ export default function TripDetailScreen() {
       (stop) => [stop.longitude, stop.latitude] as [number, number]
     );
 
-    // Include school location for departure trip only
     if (trip.tripType === 1 && trip.schoolLocation) {
       coordinates.push([
         trip.schoolLocation.longitude,
@@ -550,7 +523,6 @@ export default function TripDetailScreen() {
       ]);
     }
 
-    // Calculate bounds
     const lngs = coordinates.map((c) => c[0]);
     const lats = coordinates.map((c) => c[1]);
 
@@ -559,16 +531,13 @@ export default function TripDetailScreen() {
     const minLat = Math.min(...lats);
     const maxLat = Math.max(...lats);
 
-    // Calculate center
     const centerLng = (minLng + maxLng) / 2;
     const centerLat = (minLat + maxLat) / 2;
 
-    // Calculate zoom level (simple approximation)
     const lngDiff = maxLng - minLng;
     const latDiff = maxLat - minLat;
     const maxDiff = Math.max(lngDiff, latDiff);
 
-    // Increased zoom levels for closer view
     let zoomLevel = 14;
     if (maxDiff > 0.1) zoomLevel = 12;
     else if (maxDiff > 0.05) zoomLevel = 13;
@@ -689,7 +658,7 @@ export default function TripDetailScreen() {
                 key={cameraKey}
                 defaultSettings={cameraSettings || initialMapBounds}
               />
-              {/* Routes between all stops in sequence - placed before markers to avoid covering them */}
+
               {routeSegments.map((segment, index) => (
                 <ShapeSource
                   key={`route-segment-${index}`}
@@ -713,7 +682,6 @@ export default function TripDetailScreen() {
                   />
                 </ShapeSource>
               ))}
-              {/* Display all stop markers with sequence numbers */}
               {trip.stops.map((stop) => {
                 return (
                   <PointAnnotation
@@ -739,7 +707,7 @@ export default function TripDetailScreen() {
                   </PointAnnotation>
                 );
               })}
-              {/* School marker - only for departure trip (tripType === 1) */}
+
               {trip.tripType === 1 && trip.schoolLocation && (
                 <PointAnnotation
                   id="school-location"
@@ -775,7 +743,6 @@ export default function TripDetailScreen() {
             </View>
           )}
 
-          {/* Center on Bus Button */}
           {busCoordinate && trip.status === 'InProgress' && (
             <TouchableOpacity
               style={[
@@ -796,7 +763,6 @@ export default function TripDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Floating Pickup Points Button */}
       <TouchableOpacity
         style={styles.floatingPickupButton}
         onPress={() => setShowStopsModal(true)}
@@ -807,7 +773,7 @@ export default function TripDetailScreen() {
         </View>
       </TouchableOpacity>
 
-      {/* Stops List Modal */}
+
       <Modal
         visible={showStopsModal}
         animationType="slide"
@@ -946,7 +912,7 @@ export default function TripDetailScreen() {
                       </View>
                       <View style={styles.studentDetails}>
                         <Text style={styles.studentName}>{student.studentName}</Text>
-                        {/* Display both board and alight status */}
+
                         <View style={{ flexDirection: 'column', gap: 4 }}>
                           {student.boardStatus && (
                             <View style={[

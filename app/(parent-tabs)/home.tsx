@@ -34,7 +34,7 @@ export default function ParentHomeScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-      {/* Header Section with Yellow Circles Background */}
+
       <View
         style={{
           paddingTop: 40,
@@ -45,7 +45,7 @@ export default function ParentHomeScreen() {
           backgroundColor: "transparent",
         }}
       >
-        {/* Yellow Circles Background */}
+
         <View
           style={{
             position: "absolute",
@@ -55,7 +55,7 @@ export default function ParentHomeScreen() {
             bottom: 0,
           }}
         >
-          {/* Circle 1 - Top Left */}
+
           <View
             style={{
               position: "absolute",
@@ -69,7 +69,7 @@ export default function ParentHomeScreen() {
             }}
           />
 
-          {/* Circle 2 - Top Right */}
+
           <View
             style={{
               position: "absolute",
@@ -83,7 +83,7 @@ export default function ParentHomeScreen() {
             }}
           />
 
-          {/* Circle 3 - Bottom Left */}
+
           <View
             style={{
               position: "absolute",
@@ -109,7 +109,7 @@ export default function ParentHomeScreen() {
             }}
           />
 
-          {/* Circle 4 - Bottom Right */}
+
           <View
             style={{
               position: "absolute",
@@ -122,7 +122,7 @@ export default function ParentHomeScreen() {
               opacity: 1,
             }}
           />
-          {/* Circle 5 - Bottom Right */}
+
           <View
             style={{
               position: "absolute",
@@ -135,7 +135,7 @@ export default function ParentHomeScreen() {
               opacity: 1,
             }}
           />
-          {/* Circle 6 - Bottom Right */}
+
           <View
             style={{
               position: "absolute",
@@ -162,7 +162,6 @@ export default function ParentHomeScreen() {
           />
         </View>
 
-        {/* Logo */}
         <View
           style={{ alignItems: "flex-start", marginBottom: 0, marginTop: 0 }}
         >
@@ -173,7 +172,6 @@ export default function ParentHomeScreen() {
           />
         </View>
 
-        {/* Curved White Border */}
         <View
           style={{
             position: "absolute",
@@ -188,7 +186,6 @@ export default function ParentHomeScreen() {
         />
       </View>
 
-      {/* Welcome Section */}
       <View
         style={{
           alignItems: "center",

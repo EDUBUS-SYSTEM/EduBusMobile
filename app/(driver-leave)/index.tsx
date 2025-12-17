@@ -1,19 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  TouchableOpacity, 
-  RefreshControl,
-  ActivityIndicator,
-  Alert
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
+import LeaveRequestCard from '@/components/driver/LeaveRequestCard';
 import { leaveApi } from '@/lib/driver/leave.api';
 import { LeaveRequestResponse, LeaveStatus, PaginationInfo } from '@/lib/driver/leave.type';
-import LeaveRequestCard from '@/components/driver/LeaveRequestCard';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 type TabFilter = 'all' | 'pending' | 'approved' | 'rejected';
 
@@ -28,7 +28,6 @@ export default function LeaveRequestsScreen() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Convert tab filter to status number for API
   const getStatusFromTab = (tab: TabFilter): number | undefined => {
     switch (tab) {
       case 'pending':
@@ -52,23 +51,22 @@ export default function LeaveRequestsScreen() {
       } else {
         setIsLoadingMore(true);
       }
-      
+
       const statusFilter = getStatusFromTab(activeTab);
       const response = await leaveApi.getMyLeaveRequests(
-        undefined, // fromDate
-        undefined, // toDate
-        statusFilter, // status
-        page, // page
-        20 // perPage
+        undefined,
+        undefined,
+        statusFilter,
+        page,
+        20
       );
-      
-      // If loading first page or refreshing, replace data. Otherwise append.
+
       if (page === 1) {
         setLeaveRequests(response.data);
       } else {
         setLeaveRequests(prev => [...prev, ...response.data]);
       }
-      
+
       setPagination(response.pagination);
       setPendingCount(response.pendingLeavesCount);
       setCurrentPage(page);
@@ -87,7 +85,7 @@ export default function LeaveRequestsScreen() {
   };
 
   const handleTabChange = (tab: TabFilter) => {
-    if (tab === activeTab) return; // Don't reload if same tab
+    if (tab === activeTab) return;
     setActiveTab(tab);
   };
 
@@ -102,13 +100,11 @@ export default function LeaveRequestsScreen() {
     loadLeaveRequests(true, 1);
   }, [activeTab]);
 
-  // Load data when component mounts or when activeTab changes
   useEffect(() => {
     setCurrentPage(1);
     loadLeaveRequests(false, 1);
   }, [activeTab]);
 
-  // Handle refresh parameter from navigation
   useEffect(() => {
     if (refresh === 'true') {
       setCurrentPage(1);
@@ -116,13 +112,12 @@ export default function LeaveRequestsScreen() {
     }
   }, [refresh]);
 
-  // Get total counts from pagination info (includes all pages, not just loaded data)
   const getCounts = () => {
     return {
       all: pagination?.totalItems || leaveRequests.length,
       pending: pendingCount,
-      approved: 0, // Backend doesn't provide approved count separately
-      rejected: 0  // Backend doesn't provide rejected count separately
+      approved: 0,
+      rejected: 0
     };
   };
 
@@ -214,8 +209,8 @@ export default function LeaveRequestsScreen() {
 
       {/* Filter Tabs */}
       <View style={{ paddingVertical: 15, paddingHorizontal: 20 }}>
-        <ScrollView 
-          horizontal 
+        <ScrollView
+          horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingRight: 20 }}
         >
@@ -231,8 +226,8 @@ export default function LeaveRequestsScreen() {
         style={{ flex: 1, paddingHorizontal: 20 }}
         contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
-          <RefreshControl 
-            refreshing={isRefreshing} 
+          <RefreshControl
+            refreshing={isRefreshing}
             onRefresh={onRefresh}
             tintColor="#01CBCA"
             colors={['#01CBCA']}
@@ -248,9 +243,9 @@ export default function LeaveRequestsScreen() {
         scrollEventThrottle={400}
       >
         {isLoading ? (
-          <View style={{ 
-            flex: 1, 
-            alignItems: 'center', 
+          <View style={{
+            flex: 1,
+            alignItems: 'center',
             justifyContent: 'center',
             paddingTop: 60
           }}>
@@ -265,8 +260,8 @@ export default function LeaveRequestsScreen() {
             </Text>
           </View>
         ) : leaveRequests.length === 0 ? (
-          <View style={{ 
-            alignItems: 'center', 
+          <View style={{
+            alignItems: 'center',
             justifyContent: 'center',
             paddingTop: 80,
             paddingHorizontal: 40
@@ -288,7 +283,7 @@ export default function LeaveRequestsScreen() {
               marginTop: 8,
               textAlign: 'center'
             }}>
-              {activeTab === 'all' 
+              {activeTab === 'all'
                 ? "Tap '+' button to create your first request"
                 : `You don't have any ${activeTab} leave requests`}
             </Text>
@@ -296,8 +291,8 @@ export default function LeaveRequestsScreen() {
         ) : (
           <>
             {leaveRequests.map((request) => (
-              <LeaveRequestCard 
-                key={request.id} 
+              <LeaveRequestCard
+                key={request.id}
                 leaveRequest={request}
                 onPress={() => router.push({
                   pathname: '/(driver-leave)/[id]',
@@ -305,7 +300,7 @@ export default function LeaveRequestsScreen() {
                 })}
               />
             ))}
-            
+
             {/* Load More Indicator */}
             {isLoadingMore && (
               <View style={{ paddingVertical: 20, alignItems: 'center' }}>
@@ -320,7 +315,7 @@ export default function LeaveRequestsScreen() {
                 </Text>
               </View>
             )}
-            
+
             {/* Pagination Info */}
             {pagination && !isLoadingMore && (
               <View style={{ paddingVertical: 20, alignItems: 'center' }}>
@@ -329,7 +324,7 @@ export default function LeaveRequestsScreen() {
                   fontSize: 12,
                   color: '#999'
                 }}>
-                  {pagination.hasNextPage 
+                  {pagination.hasNextPage
                     ? `Showing ${leaveRequests.length} of ${pagination.totalItems} • Scroll for more`
                     : `Showing all ${pagination.totalItems} requests`}
                 </Text>
