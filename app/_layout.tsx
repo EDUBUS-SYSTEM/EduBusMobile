@@ -4,20 +4,19 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
+import { NotificationAlert } from '@/components/alerts/NotificationAlert';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useNotificationAlert } from '@/hooks/useNotificationAlert';
+import { pushNotificationService } from '@/lib/notification/pushNotification.service';
+import { signalRService } from '@/lib/signalr/notificationHub.service';
 import { store } from '@/store';
 import { useAppDispatch } from '@/store/hooks';
-import { Provider } from 'react-redux';
-import { useEffect } from 'react';
-import { signalRService } from '@/lib/signalr/notificationHub.service';
+import { setSignalRConnected, setSignalRConnecting, setSignalRError } from '@/store/slices/signalRSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NotificationAlert } from '@/components/alerts/NotificationAlert';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useNotificationAlert } from '@/hooks/useNotificationAlert';
-import { setSignalRConnecting, setSignalRConnected, setSignalRError } from '@/store/slices/signalRSlice';
-import { pushNotificationService } from '@/lib/notification/pushNotification.service';
 import { useRouter } from 'expo-router';
-import * as Notifications from 'expo-notifications';
+import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Provider } from 'react-redux';
 
 // Component to subscribe to arrival notifications
 // ✅ Fixed: call the hook unconditionally; it manages its own logic
@@ -159,7 +158,7 @@ function PushNotificationInitializer() {
           (response) => {
             console.log('👆 User tapped notification:', response);
             const data = response.notification.request.content.data;
-            
+
             if (data) {
               const notificationId = data.notificationId as string | undefined;
               const tripId = data.tripId as string | undefined;
@@ -218,8 +217,10 @@ function RootLayoutWithNotifications() {
   return (
     <>
       <RootLayoutContent />
-      <ArrivalNotificationsSubscriber />
-      <SignalRInitializer />
+      {/* === IN-APP NOTIFICATIONS DISABLED === */}
+      {/* <ArrivalNotificationsSubscriber /> */}
+      {/* <SignalRInitializer /> */}
+      {/* Push Notification (device notifications) - ENABLED */}
       <PushNotificationInitializer />
     </>
   );
