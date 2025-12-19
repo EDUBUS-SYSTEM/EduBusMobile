@@ -42,7 +42,7 @@ export default function FaceRegistrationScreen() {
   const [capturedImages, setCapturedImages] = useState<{uri: string, timestamp: number}[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const TOTAL_IMAGES = 15;  // Reduced from 70 to 15 for faster enrollment
+  const TOTAL_IMAGES = 10;  // Optimized for best UX and performance balance
   const ANGLES: FaceAngle[] = ['front', 'left', 'right', 'up', 'down'];
   const IMAGES_PER_ANGLE = Math.ceil(TOTAL_IMAGES / ANGLES.length);
 
@@ -175,7 +175,7 @@ export default function FaceRegistrationScreen() {
       console.log(`📸 Total captured: ${totalImages} images`);
 
       // Step 2: Select best images (evenly distributed)
-      // With 15 total images, we submit 3-5 images
+      // With 10 total images, we submit 3 images (floor(10/3) = 3)
       const numImagesToSubmit = Math.min(5, Math.max(3, Math.floor(totalImages / 3)));
       const step = Math.floor(totalImages / numImagesToSubmit);
       const selectedImages = [];
