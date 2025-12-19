@@ -51,7 +51,7 @@ export default function DriverAccountScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-      {/* Header Section with Yellow Circles Background */}
+
       <View style={{
         paddingTop: 40,
         paddingBottom: 40,
@@ -61,7 +61,7 @@ export default function DriverAccountScreen() {
         backgroundColor: 'transparent'
       }}>
 
-        {/* Yellow Circles Background */}
+
         <View style={{
           position: 'absolute',
           top: 0,
@@ -69,7 +69,7 @@ export default function DriverAccountScreen() {
           right: 0,
           bottom: 0,
         }}>
-          {/* Circle 1 - Top Left */}
+
           <View style={{
             position: 'absolute',
             top: -40,
@@ -81,7 +81,7 @@ export default function DriverAccountScreen() {
             opacity: 1
           }} />
 
-          {/* Circle 2 - Top Right */}
+
           <View style={{
             position: 'absolute',
             top: -30,
@@ -93,7 +93,7 @@ export default function DriverAccountScreen() {
             opacity: 1
           }} />
 
-          {/* Circle 3 - Bottom Left */}
+
           <View style={{
             position: 'absolute',
             top: -30,
@@ -115,7 +115,7 @@ export default function DriverAccountScreen() {
             opacity: 1
           }} />
 
-          {/* Circle 4 - Bottom Right */}
+
           <View style={{
             position: 'absolute',
             top: -90,
@@ -126,7 +126,7 @@ export default function DriverAccountScreen() {
             backgroundColor: '#FCCF08',
             opacity: 1
           }} />
-          {/* Circle 5 - Bottom Right */}
+
           <View style={{
             position: 'absolute',
             top: -90,
@@ -137,7 +137,7 @@ export default function DriverAccountScreen() {
             backgroundColor: '#FCCF08',
             opacity: 1
           }} />
-          {/* Circle 6 - Bottom Right */}
+
           <View style={{
             position: 'absolute',
             top: -90,
@@ -160,7 +160,7 @@ export default function DriverAccountScreen() {
           }} />
         </View>
 
-        {/* Logo */}
+
         <View style={{ alignItems: 'flex-start', marginBottom: 0, marginTop: 0 }}>
           <Image
             source={require('@/assets/images/edubus_logo.png')}
@@ -169,7 +169,7 @@ export default function DriverAccountScreen() {
           />
         </View>
 
-        {/* Curved White Border */}
+
         <View style={{
           position: 'absolute',
           bottom: -30,
@@ -182,13 +182,13 @@ export default function DriverAccountScreen() {
         }} />
       </View>
 
-      {/* Profile Section */}
+
       <View style={{
         alignItems: 'center',
         marginTop: -45,
         marginBottom: 20
       }}>
-        {/* Avatar */}
+
         <View style={{ marginBottom: 12 }}>
           {!avatarLoading && <UserAvatar avatarUrl={avatarUrl} size={120} />}
           {avatarLoading && (
@@ -205,7 +205,7 @@ export default function DriverAccountScreen() {
           )}
         </View>
 
-        {/* Driver Account Text */}
+
         <Text style={{
           fontFamily: 'RobotoSlab-Bold',
           fontSize: 18,
@@ -216,7 +216,7 @@ export default function DriverAccountScreen() {
         </Text>
       </View>
 
-      {/* Menu Items */}
+
       <ScrollView style={{ flex: 1, paddingHorizontal: 20, paddingTop: 8 }}>
         {menuItems.map((item, index) => (
           <TouchableOpacity
@@ -266,7 +266,7 @@ export default function DriverAccountScreen() {
                   router.replace('/login');
                 }
               }
-              // Add more navigation logic for other menu items here
+
             }}
           >
             <View style={{
@@ -302,7 +302,7 @@ export default function DriverAccountScreen() {
         ))}
       </ScrollView>
 
-      {/* Bottom Navigation Bar Background */}
+
       <View style={{
         height: 80,
         backgroundColor: '#FFF9C4',
@@ -314,7 +314,7 @@ export default function DriverAccountScreen() {
         right: 0,
         zIndex: -1
       }}>
-        {/* Curved Pattern */}
+
         <View style={{
           position: 'absolute',
           top: -20,

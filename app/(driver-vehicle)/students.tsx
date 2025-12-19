@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  ActivityIndicator,
-  Alert,
-  TextInput
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StudentAvatar } from '@/components/StudentAvatar';
 import { getMyVehicleStudents } from '@/lib/driverVehicle/driverVehicle.api';
 import type { VehicleStudentInfo, VehicleStudentsData } from '@/lib/driverVehicle/driverVehicle.types';
-import { StudentAvatar } from '@/components/StudentAvatar';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 export default function VehicleStudentsScreen() {
   const [vehicleData, setVehicleData] = useState<VehicleStudentsData | null>(null);
@@ -30,7 +30,7 @@ export default function VehicleStudentsScreen() {
       }
 
       const response = await getMyVehicleStudents();
-      
+
       if (response.success && response.data) {
         setVehicleData(response.data);
       } else {
@@ -141,7 +141,7 @@ export default function VehicleStudentsScreen() {
           </View>
         </View>
 
-        {/* Students List */}
+
         {filteredStudents.length === 0 ? (
           <View style={{
             backgroundColor: '#F8F9FA',
@@ -206,23 +206,23 @@ export default function VehicleStudentsScreen() {
                     }}>
                       {student.firstName} {student.lastName}
                     </Text>
-                  {student.gradeLevel && (
-                    <View style={{
-                      backgroundColor: '#4CAF5020',
-                      borderRadius: 8,
-                      paddingHorizontal: 8,
-                      paddingVertical: 2,
-                      alignSelf: 'flex-start'
-                    }}>
-                      <Text style={{
-                        fontFamily: 'RobotoSlab-Medium',
-                        fontSize: 12,
-                        color: '#4CAF50'
+                    {student.gradeLevel && (
+                      <View style={{
+                        backgroundColor: '#4CAF5020',
+                        borderRadius: 8,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        alignSelf: 'flex-start'
                       }}>
-                        {student.gradeLevel}
-                      </Text>
-                    </View>
-                  )}
+                        <Text style={{
+                          fontFamily: 'RobotoSlab-Medium',
+                          fontSize: 12,
+                          color: '#4CAF50'
+                        }}>
+                          {student.gradeLevel}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </View>
                 <View style={{

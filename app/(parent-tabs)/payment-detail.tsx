@@ -54,74 +54,74 @@ export default function PaymentDetailScreen() {
       clearInterval(qrExpiryTimerRef.current);
       qrExpiryTimerRef.current = null;
     }
-    setQrTimeRemaining(0);  
+    setQrTimeRemaining(0);
   }, [setQrTimeRemaining]);
 
   const handleGenerateQr = useCallback(async () => {
     if (!id || !transaction) return;
-    
+
     try {
-      // Clear timers directly instead of calling clearTimers()
+
       if (qrExpiryTimerRef.current) {
         clearInterval(qrExpiryTimerRef.current);
         qrExpiryTimerRef.current = null;
       }
       setQrTimeRemaining(0);
-      
+
       await generateQr(id);
     } catch (err: any) {
       Alert.alert("Error", err.response?.data?.message || "Unable to generate QR code");
     }
   }, [id, transaction, generateQr, setQrTimeRemaining]);
 
-  // Use ref to avoid recreating useEffect when handleGenerateQr changes
+
   const handleGenerateQrRef = useRef(handleGenerateQr);
   useEffect(() => {
     handleGenerateQrRef.current = handleGenerateQr;
   }, [handleGenerateQr]);
-  
+
 
   useEffect(() => {
     if (!qrCode?.expiresAt) return;
-    
-    // Clear existing timer
+
+
     if (qrExpiryTimerRef.current) {
       clearInterval(qrExpiryTimerRef.current);
       qrExpiryTimerRef.current = null;
     }
-    
+
     const expiryTime = new Date(qrCode.expiresAt).getTime();
     const now = Date.now();
     const remainingMs = expiryTime - now;
-  
+
     if (remainingMs > 0) {
       setQrTimeRemaining(Math.floor(remainingMs / 1000));
-      
+
       const qrTimer = setInterval(() => {
         const currentTime = Date.now();
         const remaining = Math.floor((expiryTime - currentTime) / 1000);
-        
+
         if (remaining <= 0) {
           clearInterval(qrTimer);
           qrExpiryTimerRef.current = null;
           clearQr();
-          // Use ref to avoid dependency on handleGenerateQr
+
           handleGenerateQrRef.current();
         } else {
           setQrTimeRemaining(remaining);
         }
       }, 1000) as unknown as NodeJS.Timeout;
-      
+
       qrExpiryTimerRef.current = qrTimer;
     }
-    
+
     return () => {
       if (qrExpiryTimerRef.current) {
         clearInterval(qrExpiryTimerRef.current);
         qrExpiryTimerRef.current = null;
       }
     };
-  }, [qrCode, clearQr, setQrTimeRemaining]); 
+  }, [qrCode, clearQr, setQrTimeRemaining]);
 
 
   const handleOpenCheckoutUrl = () => {
@@ -133,13 +133,13 @@ export default function PaymentDetailScreen() {
   };
 
   const handleRefresh = () => {
-    // Clear all states using Redux actions
+
     clearQr();
     setPaymentSuccess(false);
-    setQrTimeRemaining(0);  // If you keep this local state
+    setQrTimeRemaining(0);
     clearTimers();
-  
-    //Reload transaction detail using Redux
+
+
     loadTransactionDetail(id);
   };
 
@@ -152,7 +152,7 @@ export default function PaymentDetailScreen() {
     try {
       setSavingQr(true);
 
-      // Request permission
+
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
@@ -162,25 +162,25 @@ export default function PaymentDetailScreen() {
         return;
       }
 
-      // Capture QR code as image
+
       const uri = await captureRef(qrCodeRef, {
         format: "png",
         quality: 1,
       });
 
-      // Save to media library
+
       const asset = await MediaLibrary.createAssetAsync(uri);
       await MediaLibrary.createAlbumAsync("EduBus Payments", asset, false);
 
       Alert.alert(
-        "Success! ✅",
+        "Success! ",
         "QR code saved to your photo library. You can now open it in your banking app to scan.",
         [{ text: "OK" }]
       );
     } catch (error: any) {
       console.error("Save QR error:", error);
       Alert.alert(
-        "Error",
+        "Warning",
         "Unable to save QR code. Please try again or take a screenshot instead."
       );
     } finally {
@@ -193,121 +193,106 @@ export default function PaymentDetailScreen() {
       loadTransactionDetail(id);
     }
 
-    // Cleanup timers on unmount
+
     return () => {
       clearTimers();
     };
   }, [id]);
 
-  // Listen for real-time payment updates
+
   useEffect(() => {
     if (!id || !signalRService) return;
 
     const handlePaymentUpdate = (data: any) => {
-      console.log('💰 Real-time payment update received in payment-detail:', data);
-      
-      // If this is the current transaction, update directly from SignalR data
-      // NOTE: Server sends camelCase (transactionId, transaction), not PascalCase
+      console.log('Real-time payment update received in payment-detail:', data);
+
       if (data.transactionId === id && data.transaction) {
-        console.log('✅ Updating transaction detail from real-time data');
+        console.log(' Updating transaction detail from real-time data');
         console.log('Transaction data:', JSON.stringify(data.transaction, null, 2));
-        
-        // Transform data: Server sends paidAtUtc, but frontend expects paidAt
+
+
         const transformedTransaction = {
           ...data.transaction,
           paidAt: data.transaction.paidAtUtc || data.transaction.paidAt,
           createdAt: data.transaction.createdAtUtc || data.transaction.createdAt,
         };
-        
-        console.log('📝 Transformed paidAtUtc:', data.transaction.paidAtUtc, '→ paidAt:', transformedTransaction.paidAt);
-        
-        // Dispatch action to update Redux state directly (no API call needed!)
+
+        console.log(' Transformed paidAtUtc:', data.transaction.paidAtUtc, '→ paidAt:', transformedTransaction.paidAt);
         dispatch(updateTransactionDetail(transformedTransaction));
       }
     };
 
-    // Wait a bit for SignalR connection if needed
     const subscribeWithRetry = async () => {
       let retries = 0;
-      const maxRetries = 10; // Increased to 10 to allow more time for reconnection
-      
+      const maxRetries = 10;
+
       while (retries < maxRetries) {
         const state = signalRService.getState();
-        console.log(`⏳ SignalR state: ${state} (attempt ${retries + 1}/${maxRetries})`);
-        
-        // If already connected, subscribe immediately
+        console.log(`SignalR state: ${state} (attempt ${retries + 1}/${maxRetries})`);
         if (signalRService.isConnected()) {
           console.log('📡 Subscribing to TransactionStatusUpdated event');
           signalRService.on('TransactionStatusUpdated', handlePaymentUpdate);
           return; // Success!
         }
-        
-        // If connecting or reconnecting, wait for it to complete
+
         if (state === 'Reconnecting' || state === 'Connecting') {
           console.log(`⏳ SignalR is ${state}, waiting for connection...`);
           await new Promise(resolve => setTimeout(resolve, 1000));
           retries++;
           continue;
         }
-        
-        // If disconnected, try to reconnect manually
+
         if (state === 'Disconnected' || !state) {
-          console.log('🔄 SignalR disconnected, attempting to reconnect...');
+          console.log(' SignalR disconnected, attempting to reconnect...');
           try {
             const token = await AsyncStorage.getItem('accessToken');
             if (token) {
               await signalRService.initialize(token);
-              console.log('✅ SignalR reconnected successfully');
-              continue; // Try to subscribe in the next iteration
+              console.log('SignalR reconnected successfully');
+              continue;
             } else {
-              console.warn('⚠️ No token found, cannot reconnect SignalR');
+              console.warn('No token found, cannot reconnect SignalR');
               break;
             }
           } catch (error) {
-            console.error('❌ Failed to reconnect SignalR:', error);
+            console.error('Failed to reconnect SignalR:', error);
             retries++;
             await new Promise(resolve => setTimeout(resolve, 1000));
             continue;
           }
         }
-        
-        // Default wait
+
         await new Promise(resolve => setTimeout(resolve, 1000));
         retries++;
       }
-      
-      console.error('❌ SignalR not connected after retries. Real-time updates will not work.');
-      console.log('💡 You can still refresh manually to see payment updates.');
+
+      console.error('SignalR not connected after retries. Real-time updates will not work.');
+      console.log('You can still refresh manually to see payment updates.');
     };
 
     subscribeWithRetry();
 
-    // Cleanup
+
     return () => {
       try {
         signalRService.off('TransactionStatusUpdated');
       } catch (error) {
-        // Ignore cleanup errors
       }
     };
   }, [id, dispatch]);
 
-  // Clear QR state when transaction ID changes
   useEffect(() => {
     if (previousTransactionId.current !== id) {
       console.log("Clearing QR state for transaction ID:", id);
-      clearQr();  
+      clearQr();
       setPaymentSuccess(false);
       clearTimers();
       previousTransactionId.current = id;
     }
   }, [id]);
 
-  // Auto-generate QR when entering the page for pending transactions
   useFocusEffect(
     useCallback(() => {
-      // REMOVED: Auto-generate QR on page load
-      // Now QR will only be generated when user clicks the button
     }, [])
   );
 
@@ -325,10 +310,10 @@ export default function PaymentDetailScreen() {
       <View style={styles.centerContainer}>
         <Ionicons name="alert-circle" size={64} color="#FF9800" />
         <Text style={styles.errorText}>{error || "Transaction not found"}</Text>
-         <TouchableOpacity
-           onPress={() => router.push("/(parent-tabs)/payments?refresh=true")}
-           style={styles.backButton}
-         >
+        <TouchableOpacity
+          onPress={() => router.push("/(parent-tabs)/payments?refresh=true")}
+          style={styles.backButton}
+        >
           <Text style={styles.backButtonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -604,35 +589,35 @@ export default function PaymentDetailScreen() {
           {/* Payment Success Message */}
           {(transaction.status === TransactionStatus.Paid ||
             paymentSuccess) && (
-            <View style={styles.paidCard}>
-              <View style={styles.successIconContainer}>
-                <Ionicons name="checkmark-circle" size={64} color="#6bcb00" />
-              </View>
-              <Text style={styles.paidTitle}>Payment Successful!</Text>
-              <Text style={styles.paidMessage}>
-                Your payment has been processed successfully
-              </Text>
-              {transaction.paidAt && (
-                <Text style={styles.paidDate}>
-                  Paid on {formatDate(transaction.paidAt)}
+              <View style={styles.paidCard}>
+                <View style={styles.successIconContainer}>
+                  <Ionicons name="checkmark-circle" size={64} color="#6bcb00" />
+                </View>
+                <Text style={styles.paidTitle}>Payment Successful!</Text>
+                <Text style={styles.paidMessage}>
+                  Your payment has been processed successfully
                 </Text>
-              )}
-              <View style={styles.successDetails}>
-                <View style={styles.successDetailRow}>
-                  <Ionicons name="receipt" size={20} color="#F59E0B" />
-                  <Text style={styles.successDetailText}>
-                    Transaction Code: {transaction.transactionCode}
+                {transaction.paidAt && (
+                  <Text style={styles.paidDate}>
+                    Paid on {formatDate(transaction.paidAt)}
                   </Text>
-                </View>
-                <View style={styles.successDetailRow}>
-                  <Ionicons name="card" size={20} color="#F59E0B" />
-                  <Text style={styles.successDetailText}>
-                    Amount: {formatCurrency(transaction.amount)}
-                  </Text>
+                )}
+                <View style={styles.successDetails}>
+                  <View style={styles.successDetailRow}>
+                    <Ionicons name="receipt" size={20} color="#F59E0B" />
+                    <Text style={styles.successDetailText}>
+                      Transaction Code: {transaction.transactionCode}
+                    </Text>
+                  </View>
+                  <View style={styles.successDetailRow}>
+                    <Ionicons name="card" size={20} color="#F59E0B" />
+                    <Text style={styles.successDetailText}>
+                      Amount: {formatCurrency(transaction.amount)}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          )}
+            )}
         </View>
       </ScrollView>
     </View>

@@ -4,23 +4,21 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
+import { NotificationAlert } from '@/components/alerts/NotificationAlert';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useNotificationAlert } from '@/hooks/useNotificationAlert';
+import { pushNotificationService } from '@/lib/notification/pushNotification.service';
+import { signalRService } from '@/lib/signalr/notificationHub.service';
 import { store } from '@/store';
 import { useAppDispatch } from '@/store/hooks';
-import { Provider } from 'react-redux';
-import { useEffect } from 'react';
-import { signalRService } from '@/lib/signalr/notificationHub.service';
+import { setSignalRConnected, setSignalRConnecting, setSignalRError } from '@/store/slices/signalRSlice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NotificationAlert } from '@/components/alerts/NotificationAlert';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useNotificationAlert } from '@/hooks/useNotificationAlert';
-import { setSignalRConnecting, setSignalRConnected, setSignalRError } from '@/store/slices/signalRSlice';
-import { pushNotificationService } from '@/lib/notification/pushNotification.service';
 import { useRouter } from 'expo-router';
-import * as Notifications from 'expo-notifications';
+import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Provider } from 'react-redux';
 
-// Component to subscribe to arrival notifications
-// ✅ Fixed: call the hook unconditionally; it manages its own logic
+
 function ArrivalNotificationsSubscriber() {
   useNotificationAlert();
   return null;
@@ -67,7 +65,7 @@ function SignalRInitializer() {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    console.log('📍 App Layout mounted, initializing SignalR...');
+    console.log('App Layout mounted, initializing SignalR...');
 
     const initSignalRWithRetry = async () => {
       let retries = 0;
@@ -76,22 +74,22 @@ function SignalRInitializer() {
 
       while (retries < maxRetries) {
         try {
-          console.log(`📍 SignalR init attempt ${retries + 1}/${maxRetries}`);
+          console.log(`SignalR init attempt ${retries + 1}/${maxRetries}`);
 
           const token = await AsyncStorage.getItem('accessToken');
 
           if (token && !signalRService.isConnected()) {
-            console.log('🔌 Initializing SignalR connection from App Layout');
+            console.log('Initializing SignalR connection from App Layout');
             dispatch(setSignalRConnecting());
             await signalRService.initialize(token);
             dispatch(setSignalRConnected());
-            console.log('✅ SignalR connection established');
+            console.log('SignalR connection established');
             return;
           } else if (!token) {
-            console.log('⚠️ No token found, skipping SignalR init');
+            console.log('No token found, skipping SignalR init');
             return;
           } else if (signalRService.isConnected()) {
-            console.log('✅ SignalR already connected');
+            console.log('SignalR already connected');
             dispatch(setSignalRConnected());
             return;
           }
@@ -105,9 +103,9 @@ function SignalRInitializer() {
             error?.message?.includes('negotiation');
 
           if (!isNetworkError) {
-            console.error(`❌ SignalR init attempt ${retries} failed:`, error);
+            console.error(`SignalR init attempt ${retries} failed:`, error);
           } else if (retries === maxRetries) {
-            console.warn('⚠️ SignalR connection unavailable (server may be offline or network issue)');
+            console.warn('SignalR connection unavailable (server may be offline or network issue)');
           }
 
           if (retries < maxRetries) {
@@ -116,14 +114,14 @@ function SignalRInitializer() {
         }
       }
 
-      console.warn('⚠️ SignalR initialization skipped (optional feature)');
+      console.warn('SignalR initialization skipped (optional feature)');
     };
 
     let cancelled = false;
 
     initSignalRWithRetry().catch(error => {
       if (!cancelled) {
-        console.error('❌ Fatal SignalR initialization error:', error);
+        console.error('Fatal SignalR initialization error:', error);
         dispatch(setSignalRError(error?.message || 'Fatal SignalR error'));
       }
     });
@@ -142,11 +140,11 @@ function PushNotificationInitializer() {
   useEffect(() => {
     const initializePushNotifications = async () => {
       try {
-        console.log('📱 Initializing push notifications...');
+        console.log(' Initializing push notifications...');
 
         const token = await AsyncStorage.getItem('accessToken');
         if (!token) {
-          console.log('⚠️ No access token found, skipping push notification init');
+          console.log(' No access token found, skipping push notification init');
           return;
         }
 
@@ -154,12 +152,12 @@ function PushNotificationInitializer() {
 
         pushNotificationService.setupNotificationListeners(
           (notification) => {
-            console.log('📬 Notification received while app is open:', notification);
+            console.log(' Notification received while app is open:', notification);
           },
           (response) => {
-            console.log('👆 User tapped notification:', response);
+            console.log('User tapped notification:', response);
             const data = response.notification.request.content.data;
-            
+
             if (data) {
               const notificationId = data.notificationId as string | undefined;
               const tripId = data.tripId as string | undefined;
@@ -197,9 +195,9 @@ function PushNotificationInitializer() {
           }
         );
 
-        console.log('✅ Push notifications initialized');
+        console.log(' Push notifications initialized');
       } catch (error) {
-        console.error('❌ Error initializing push notifications:', error);
+        console.error(' Error initializing push notifications:', error);
       }
     };
 
@@ -218,8 +216,10 @@ function RootLayoutWithNotifications() {
   return (
     <>
       <RootLayoutContent />
-      <ArrivalNotificationsSubscriber />
-      <SignalRInitializer />
+      {/* === IN-APP NOTIFICATIONS DISABLED === */}
+      {/* <ArrivalNotificationsSubscriber /> */}
+      {/* <SignalRInitializer /> */}
+      {/* Push Notification (device notifications) - ENABLED */}
       <PushNotificationInitializer />
     </>
   );

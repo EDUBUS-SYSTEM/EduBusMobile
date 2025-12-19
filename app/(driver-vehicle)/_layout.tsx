@@ -16,19 +16,19 @@ export default function DriverVehicleLayout() {
         contentStyle: { backgroundColor: '#FFFFFF' }
       }}
     >
-      <Stack.Screen 
-        name="index" 
-        options={{ 
+      <Stack.Screen
+        name="index"
+        options={{
           title: 'Vehicle',
-          headerShown: false // Custom header in component
-        }} 
+          headerShown: false
+        }}
       />
-      <Stack.Screen 
-        name="students" 
-        options={{ 
+      <Stack.Screen
+        name="students"
+        options={{
           title: 'Students',
           presentation: 'card'
-        }} 
+        }}
       />
     </Stack>
   );

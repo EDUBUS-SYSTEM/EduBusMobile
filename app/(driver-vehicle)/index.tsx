@@ -1,25 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  ActivityIndicator,
-  Alert
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { getMyVehicle } from '@/lib/driverVehicle/driverVehicle.api';
-import { 
-  VehicleStatus, 
-  VehicleStatusLabels, 
+import {
   DriverVehicleStatus,
   DriverVehicleStatusLabels,
-  type VehicleData 
+  VehicleStatus,
+  VehicleStatusLabels,
+  type VehicleData
 } from '@/lib/driverVehicle/driverVehicle.types';
 import { formatDate } from '@/utils/date.utils';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
 export default function VehicleOverviewScreen() {
   const [vehicleData, setVehicleData] = useState<VehicleData | null>(null);
@@ -35,7 +35,7 @@ export default function VehicleOverviewScreen() {
       }
 
       const response = await getMyVehicle();
-      
+
       if (response.success && response.data) {
         setVehicleData(response.data);
       } else {
@@ -58,12 +58,12 @@ export default function VehicleOverviewScreen() {
     loadVehicleData(true);
   };
 
-  // Convert VehicleStatus enum (from API) to display text
+
   const getVehicleStatusText = (status: VehicleStatus): string => {
     return VehicleStatusLabels[status] || 'Unknown';
   };
 
-  // Convert DriverVehicleStatus enum (from API) to display text
+
   const getAssignmentStatusText = (status: DriverVehicleStatus): string => {
     return DriverVehicleStatusLabels[status] || 'Unknown';
   };
@@ -151,10 +151,10 @@ export default function VehicleOverviewScreen() {
           borderBottomRightRadius: 30,
         }}>
         {/* Top Row - Back Button and Title */}
-        <View style={{ 
-          flexDirection: 'row', 
-          alignItems: 'center', 
-          marginBottom: 20 
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginBottom: 20
         }}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -170,7 +170,7 @@ export default function VehicleOverviewScreen() {
           >
             <Ionicons name="arrow-back" size={24} color="#000000" />
           </TouchableOpacity>
-          
+
           <View style={{ flex: 1 }}>
             <Text style={{
               fontFamily: 'RobotoSlab-Bold',
@@ -214,7 +214,7 @@ export default function VehicleOverviewScreen() {
           }}>
             <Ionicons name="car" size={36} color="#000000" />
           </View>
-          
+
           <View style={{ flex: 1 }}>
             <Text style={{
               fontFamily: 'RobotoSlab-Bold',
@@ -279,30 +279,30 @@ export default function VehicleOverviewScreen() {
                 <Ionicons name="calendar-outline" size={20} color="#000" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ 
-                  fontFamily: 'RobotoSlab-Regular', 
-                  fontSize: 12, 
+                <Text style={{
+                  fontFamily: 'RobotoSlab-Regular',
+                  fontSize: 12,
                   color: '#666',
                   marginBottom: 4
                 }}>
                   Start Date
                 </Text>
-                <Text style={{ 
-                  fontFamily: 'RobotoSlab-Bold', 
-                  fontSize: 16, 
+                <Text style={{
+                  fontFamily: 'RobotoSlab-Bold',
+                  fontSize: 16,
                   color: '#000000'
                 }}>
                   {formatDate(vehicleData.assignmentStartTime)}
                 </Text>
               </View>
             </View>
-            
+
             {vehicleData.assignmentEndTime && (
               <>
-                <View style={{ 
-                  height: 1, 
-                  backgroundColor: '#FFE082', 
-                  marginVertical: 12 
+                <View style={{
+                  height: 1,
+                  backgroundColor: '#FFE082',
+                  marginVertical: 12
                 }} />
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <View style={{
@@ -317,17 +317,17 @@ export default function VehicleOverviewScreen() {
                     <Ionicons name="calendar-outline" size={20} color="#000" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ 
-                      fontFamily: 'RobotoSlab-Regular', 
-                      fontSize: 12, 
+                    <Text style={{
+                      fontFamily: 'RobotoSlab-Regular',
+                      fontSize: 12,
                       color: '#666',
                       marginBottom: 4
                     }}>
                       End Date
                     </Text>
-                    <Text style={{ 
-                      fontFamily: 'RobotoSlab-Bold', 
-                      fontSize: 16, 
+                    <Text style={{
+                      fontFamily: 'RobotoSlab-Bold',
+                      fontSize: 16,
                       color: '#000000'
                     }}>
                       {formatDate(vehicleData.assignmentEndTime)}
@@ -483,7 +483,7 @@ export default function VehicleOverviewScreen() {
           }}>
             Vehicle Details
           </Text>
-          
+
           {/* License Plate Card */}
           <View style={{
             backgroundColor: '#FFFFFF',
@@ -511,17 +511,17 @@ export default function VehicleOverviewScreen() {
                 <Ionicons name="card-outline" size={24} color="#2196F3" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ 
-                  fontFamily: 'RobotoSlab-Regular', 
-                  fontSize: 12, 
+                <Text style={{
+                  fontFamily: 'RobotoSlab-Regular',
+                  fontSize: 12,
                   color: '#666',
                   marginBottom: 4
                 }}>
                   License Plate
                 </Text>
-                <Text style={{ 
-                  fontFamily: 'RobotoSlab-Bold', 
-                  fontSize: 18, 
+                <Text style={{
+                  fontFamily: 'RobotoSlab-Bold',
+                  fontSize: 18,
                   color: '#000000',
                   letterSpacing: 1
                 }}>
@@ -558,17 +558,17 @@ export default function VehicleOverviewScreen() {
                 <Ionicons name="people-outline" size={24} color="#4CAF50" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ 
-                  fontFamily: 'RobotoSlab-Regular', 
-                  fontSize: 12, 
+                <Text style={{
+                  fontFamily: 'RobotoSlab-Regular',
+                  fontSize: 12,
                   color: '#666',
                   marginBottom: 4
                 }}>
                   Seating Capacity
                 </Text>
-                <Text style={{ 
-                  fontFamily: 'RobotoSlab-Bold', 
-                  fontSize: 18, 
+                <Text style={{
+                  fontFamily: 'RobotoSlab-Bold',
+                  fontSize: 18,
                   color: '#000000'
                 }}>
                   {vehicleData.capacity} seats
@@ -601,24 +601,24 @@ export default function VehicleOverviewScreen() {
                 justifyContent: 'center',
                 marginRight: 12
               }}>
-                <Ionicons 
-                  name={getStatusIcon(vehicleData.status)} 
-                  size={24} 
-                  color={getStatusColor(vehicleData.status)} 
+                <Ionicons
+                  name={getStatusIcon(vehicleData.status)}
+                  size={24}
+                  color={getStatusColor(vehicleData.status)}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ 
-                  fontFamily: 'RobotoSlab-Regular', 
-                  fontSize: 12, 
+                <Text style={{
+                  fontFamily: 'RobotoSlab-Regular',
+                  fontSize: 12,
                   color: '#666',
                   marginBottom: 4
                 }}>
                   Vehicle Status
                 </Text>
-                <Text style={{ 
-                  fontFamily: 'RobotoSlab-Bold', 
-                  fontSize: 18, 
+                <Text style={{
+                  fontFamily: 'RobotoSlab-Bold',
+                  fontSize: 18,
                   color: getStatusColor(vehicleData.status)
                 }}>
                   {getVehicleStatusText(vehicleData.status)}
@@ -649,17 +649,17 @@ export default function VehicleOverviewScreen() {
                   <Ionicons name="information-circle-outline" size={24} color="#FF9800" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ 
-                    fontFamily: 'RobotoSlab-Regular', 
-                    fontSize: 12, 
+                  <Text style={{
+                    fontFamily: 'RobotoSlab-Regular',
+                    fontSize: 12,
                     color: '#666',
                     marginBottom: 4
                   }}>
                     Status Note
                   </Text>
-                  <Text style={{ 
-                    fontFamily: 'RobotoSlab-Medium', 
-                    fontSize: 14, 
+                  <Text style={{
+                    fontFamily: 'RobotoSlab-Medium',
+                    fontSize: 14,
                     color: '#000000',
                     lineHeight: 20
                   }}>
