@@ -32,7 +32,7 @@ const API_BASE_URL = normalizeBaseUrl(RAW_API_BASE_URL);
 // Create an axios instance with default configuration
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 120000, // 2 minutes for face extraction (includes cold start + processing)
   headers: {
     'Content-Type': 'application/json',
   },
