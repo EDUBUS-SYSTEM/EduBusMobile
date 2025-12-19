@@ -422,10 +422,7 @@ export default function TripDetailScreen() {
           onPress: async () => {
             try {
               await endTrip(tripId);
-              await fetchTripDetail();
-              Alert.alert('Success', 'Trip completed successfully', [
-                { text: 'OK', onPress: () => router.replace('/(driver-tabs)/trips-today') },
-              ]);
+              router.replace(`/(driver-tabs)/trip/summary/${tripId}`);
             } catch (error: any) {
               console.error('Error ending trip:', error);
               Alert.alert('Warning', error.message || 'Failed to complete trip. Please try again.');
@@ -559,7 +556,7 @@ export default function TripDetailScreen() {
     if (followBus && centerOnBusTimestamp > 0 && busCoordinate) {
       return {
         centerCoordinate: busCoordinate,
-        zoomLevel: 15,
+        zoomLevel: 18,
         animationDuration: 1000,
       };
     }
